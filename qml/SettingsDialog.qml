@@ -8,7 +8,7 @@ Dialog {
     title: qsTr("settings_title")
     modal: true
     focus: true
-    width: 800 // Немного увеличил ширину для красоты
+    width: 800
     height: 600
     padding: 0
 
@@ -18,20 +18,16 @@ Dialog {
     background: Rectangle {
         color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                        Kirigami.Theme.backgroundColor.g,
-                       Kirigami.Theme.backgroundColor.b, 0.95)
+                       Kirigami.Theme.backgroundColor.b, 0.85)
         radius: 8
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                              Kirigami.Theme.textColor.g,
-                              Kirigami.Theme.textColor.b, 0.2)
+        border.color: "transparent"
     }
 
-    // Ширина правой колонки для контролов
     readonly property int controlWidth: 200
 
     contentItem: RowLayout {
         spacing: 0
 
-        // ЛЕВАЯ ПАНЕЛЬ (Навигация)
         Rectangle {
             Layout.preferredWidth: 200
             Layout.fillHeight: true
@@ -40,10 +36,7 @@ Dialog {
                            Kirigami.Theme.backgroundColor.b, 0.5)
             radius: 8
 
-            Rectangle {
-                width: 8; height: parent.height; anchors.right: parent.right
-                color: parent.color
-            }
+            // Лишний белый прямоугольник удален отсюда
 
             ColumnLayout {
                 anchors.fill: parent
@@ -91,15 +84,13 @@ Dialog {
             }
         }
 
-        // ПРАВАЯ ПАНЕЛЬ (Настройки)
         ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: 24
 
-            // Оборачиваем в Item, чтобы задать точную ширину
             Item {
-                width: parent.width // Растягиваем на всю ширину ScrollView
+                width: parent.width
                 implicitHeight: contentLayout.implicitHeight
 
                 ColumnLayout {
@@ -107,9 +98,6 @@ Dialog {
                     width: parent.width
                     spacing: 24
 
-                    // ==========================================
-                    // --- ОБЩИЕ (General) ---
-                    // ==========================================
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "general"
                         Layout.fillWidth: true
@@ -124,7 +112,6 @@ Dialog {
                             rowSpacing: 16
                             Layout.fillWidth: true
 
-                            // Строка: Remember Volume
                             Label { text: qsTr("settings_remember_volume"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -132,7 +119,6 @@ Dialog {
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.rememberVolume; onToggled: Config.rememberVolume = checked }
                             }
 
-                            // Строка: Default Volume
                             Label { text: qsTr("settings_default_volume"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter; visible: !Config.rememberVolume }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -146,7 +132,6 @@ Dialog {
                                 }
                             }
 
-                            // Строка: Notifications
                             Label { text: qsTr("settings_notifications"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -154,7 +139,6 @@ Dialog {
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.notifications; onToggled: Config.notifications = checked }
                             }
 
-                            // Строка: Single Instance
                             Label { text: qsTr("settings_single_instance"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -164,9 +148,6 @@ Dialog {
                         }
                     }
 
-                    // ==========================================
-                    // --- ПЛЕЙЛИСТ (Playlist) ---
-                    // ==========================================
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "playlist"
                         Layout.fillWidth: true
@@ -181,7 +162,6 @@ Dialog {
                             rowSpacing: 16
                             Layout.fillWidth: true
 
-                            // Строка: Append to current playlist
                             Label { text: qsTr("settings_append_playlist"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -189,7 +169,6 @@ Dialog {
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.appendToPlaylist; onToggled: Config.appendToPlaylist = checked }
                             }
 
-                            // Строка: Playback Mode
                             Label { text: qsTr("settings_play_mode"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -211,9 +190,6 @@ Dialog {
                         }
                     }
 
-                    // ==========================================
-                    // --- ИНТЕРФЕЙС (Interface) ---
-                    // ==========================================
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "interface"
                         Layout.fillWidth: true
@@ -228,7 +204,6 @@ Dialog {
                             rowSpacing: 16
                             Layout.fillWidth: true
 
-                            // Строка: Language
                             Label { text: qsTr("settings_language"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -258,9 +233,6 @@ Dialog {
                         }
                     }
 
-                    // ==========================================
-                    // --- О ПРОГРАММЕ (About) ---
-                    // ==========================================
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "about"
                         Layout.fillWidth: true

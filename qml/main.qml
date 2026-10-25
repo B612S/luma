@@ -139,19 +139,18 @@ ApplicationWindow {
             onClicked: (mouse) => {
                 root.wakeUp()
                 if (mouse.button === Qt.RightButton) {
-                    // 1. Если меню уже открыто, клик правой кнопкой его закрывает
+                    // Если меню уже открыто, клик правой кнопкой его закрывает
                     if (contextMenu.visible) {
                         contextMenu.close();
                         return;
                     }
 
-                    // 2. Запрет на вызов над панелью управления
+                    // Запрет на вызов над панелью управления
                     var controlBarTop = root.height - 20 - controlBar.height;
                     if (mouse.y >= controlBarTop) {
                         return;
                     }
 
-                    // 3. Открытие меню
                     contextMenu.currentPage = "main";
 
                     var menuHeight = contextMenu.getContentHeight();
@@ -200,6 +199,7 @@ ApplicationWindow {
         model: Media.playlist
         isOpen: false
         z: 4
+        rootContextMenu: contextMenu
 
         onIsOpenChanged: {
             hideTimer.restart()
@@ -285,7 +285,15 @@ ApplicationWindow {
         id: contextMenu
         mpv: mpv
         z: 1000
+        parent: Overlay.overlay
         onToggleCropRequested: root.toggleCropRequested()
+
+        // Закрываем меню плейлиста при открытии главного меню
+        onOpened: {
+            if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
+                playlistPanel.closeContextMenu();
+            }
+        }
     }
 
     DropArea {

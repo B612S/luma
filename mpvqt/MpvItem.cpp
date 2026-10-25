@@ -13,7 +13,6 @@
 MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     m_frameDecoder = new FrameDecoder(this);
 
-    // Запускаем таймер троттлинга
     m_positionTimer.start();
 
     connect(mpvController(), &MpvController::propertyChanged, this, &MpvItem::onMpvPropertyChanged);
@@ -81,7 +80,6 @@ void MpvItem::setCropEnabled(bool enabled) {
 void MpvItem::requestThumbnail(double seekTime, const QString &requestId) {
     if (!m_frameDecoder) return;
 
-    // Отменяем предыдущий запрос, если он еще выполняется
     m_frameDecoder->cancelCurrentDecode();
 
     QImage img = m_frameDecoder->decodeFrame(m_source, seekTime);
@@ -100,24 +98,40 @@ void MpvItem::requestThumbnail(double seekTime, const QString &requestId) {
 }
 
 QString MpvItem::getAudioOutput() {
-    QVariant params = getProperty("audio-out-params");
-    if (params.canConvert<QVariantMap>()) {
-        QVariantMap map = params.toMap();
-        if (map.contains("driver")) return map["driver"].toString();
+    // 1. Сначала пробуем узнать текущий активный драйвер (current-ao)
+    QVariant currentAo = getProperty("current-ao");
+    if (currentAo.isValid() && !currentAo.toString().isEmpty()) {
+        return currentAo.toString();
+    }
+
+    // 2. Если пусто, смотрим в настройки "ao" (то, что в конфиге)
+    QVariant aoProp = getProperty("ao");
+    if (aoProp.isValid() && !aoProp.toString().isEmpty()) {
+        QString aoStr = aoProp.toString();
+        if (aoStr.contains(",")) {
+            return aoStr.split(",").first();
+        }
+        return aoStr;
+    }
+
+    return "N/A";
+}
+
+QString MpvItem::getAudioDevice() {
+    QVariant device = getProperty("audio-device");
+    if (device.isValid() && !device.toString().isEmpty()) {
+        return device.toString();
     }
     return "N/A";
 }
 
 void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &value) {
     if (property == "time-pos") {
-        // ТРОТТЛИНГ: Обновляем QML не чаще, чем раз в 200 мс
         if (m_positionTimer.elapsed() > 200) {
             m_position = value.toDouble();
             emit positionChanged();
             m_positionTimer.restart();
         } else {
-            // Все равно обновляем внутреннюю переменную,
-            // чтобы при следующем "тике" отправить актуальное значение
             m_position = value.toDouble();
         }
     }

@@ -9,14 +9,15 @@ Rectangle {
                    Kirigami.Theme.backgroundColor.g,
                    Kirigami.Theme.backgroundColor.b, 0.85)
     radius: 8
-    border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                          Kirigami.Theme.textColor.g,
-                          Kirigami.Theme.textColor.b, 0.2)
+    border.color: "transparent" // Убран бордюр
+
     property var mpv
     property var model: null
     property bool hovered: hoverArea.containsMouse
     property bool isOpen: false
     property bool _processingClick: false
+
+    property var rootContextMenu: null
 
     property bool isDragging: false
     property int draggedIndex: -1
@@ -29,7 +30,7 @@ Rectangle {
     property var fileInfoData: ({})
 
     visible: opacity > 0.0
-    enabled: isOpen // Отключаем клики, когда панель закрыта
+    enabled: isOpen
     opacity: isOpen ? 1.0 : 0.0
 
     Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
@@ -41,11 +42,16 @@ Rectangle {
         }
     }
 
-    // Принудительно закрываем меню и диалоги при скрытии панели
     onIsOpenChanged: {
         if (!isOpen) {
             contextMenu.close();
             infoDialog.close();
+        }
+    }
+
+    function closeContextMenu() {
+        if (contextMenu.visible) {
+            contextMenu.close();
         }
     }
 
@@ -226,8 +232,12 @@ Rectangle {
                     onClicked: (mouse) => {
                         if (panel.isDragging) return;
                         if (mouse.button === Qt.RightButton) {
-                            panel.contextMenuIndex = itemRect.itemIndex;
+                            if (contextMenu.visible && panel.contextMenuIndex === itemRect.itemIndex) {
+                                contextMenu.close();
+                                return;
+                            }
 
+                            panel.contextMenuIndex = itemRect.itemIndex;
                             var globalPos = mapToItem(null, mouse.x, mouse.y);
                             contextMenu.popup(globalPos.x, globalPos.y);
                         } else {
@@ -237,6 +247,8 @@ Rectangle {
                     }
 
                     onDoubleClicked: (mouse) => {
+                        if (mouse.button !== Qt.LeftButton) return; // Защита от двойного клика правой кнопкой
+
                         if (panel.isDragging) return;
                         if (panel._processingClick) return
                             panel._processingClick = true
@@ -302,14 +314,18 @@ Rectangle {
         width: 200
         modal: false
 
+        onOpened: {
+            if (panel.rootContextMenu) {
+                panel.rootContextMenu.close();
+            }
+        }
+
         background: Rectangle {
             color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                            Kirigami.Theme.backgroundColor.g,
                            Kirigami.Theme.backgroundColor.b, 0.95)
             radius: 8
-            border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                                  Kirigami.Theme.textColor.g,
-                                  Kirigami.Theme.textColor.b, 0.2)
+            border.color: "transparent" // Убран бордюр
         }
 
         MenuItem {

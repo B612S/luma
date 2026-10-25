@@ -24,52 +24,7 @@
 #include "core/ThumbnailProvider.hpp"
 #include "mpvqt/MpvItem.hpp"
 
-void ensureMpvConfig() {
-    QString configDir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/luma";
-    QDir().mkpath(configDir);
-    QString configPath = configDir + "/mpv.conf";
-
-    QFile f(configPath);
-    QString content;
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        content = QString::fromUtf8(f.readAll());
-        f.close();
-    }
-
-    bool modified = false;
-
-    if (content.isEmpty()) {
-        content = "# mpv Configuration for Luma\n";
-    }
-
-    if (!content.contains("deinterlace=")) {
-        content += "\n# Автоматический деинтерлейс (включается только для чересстрочного видео)\ndeinterlace=auto\n";
-        modified = true;
-    }
-
-    if (!content.contains("hwdec=")) {
-        content += "\nhwdec=auto\n";
-        modified = true;
-    }
-
-    if (!content.contains("video-sync=")) {
-        content += "\nvideo-sync=display-resample\n";
-        modified = true;
-    }
-
-    if (!content.contains("ytdl=")) {
-        content += "\nytdl=no\n";
-        modified = true;
-    }
-
-    if (modified || !QFile::exists(configPath)) {
-        if (f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-            QTextStream out(&f);
-            out << content;
-            f.close();
-        }
-    }
-}
+// ensureMpvConfig УДАЛЕНА, так как конфиг теперь генерируется в ConfigManager
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
     if (args.size() > 1) {
@@ -92,7 +47,7 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion("1.0.0");
     app.setWindowIcon(QIcon(":/assets/luma.png"));
 
-    ensureMpvConfig();
+    // ensureMpvConfig() ВЫЗОВ УДАЛЕН
 
     ConfigManager config;
     Logger::instance().setMode(config.value("ui/debug_logging", "info").toString());

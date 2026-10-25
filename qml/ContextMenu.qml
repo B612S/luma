@@ -11,7 +11,6 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    // Анимация появления самого меню
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 150; easing.type: Easing.InOutQuad }
     }
@@ -43,13 +42,11 @@ Popup {
         }
 
         // Запускаем анимацию появления для ВСЕГО меню (фона и текста)
-        // Сначала мгновенно делаем меню прозрачным, затем плавно проявляем
         pageFadeAnim.stop()
         menu.opacity = 0.0
         pageFadeAnim.start()
     }
 
-    // Анимация, которая проявляет всё меню целиком
     NumberAnimation {
         id: pageFadeAnim
         target: menu
@@ -245,8 +242,16 @@ Popup {
             width: parent.width
             spacing: 2
 
-            MenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.currentPage = "playback_mode" }
-            MenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; onClicked: menu.currentPage = "aspect_ratio" }
+            MenuButton {
+                text: qsTr("menu_playback_mode");
+                hasArrow: true;
+                onClicked: menu.currentPage = "playback_mode"
+            }
+            MenuButton {
+                text: qsTr("menu_aspect_ratio");
+                hasArrow: true;
+                onClicked: menu.currentPage = "aspect_ratio"
+            }
 
             MenuButton {
                 text: (menu.mpv && menu.mpv.cropEnabled ? "✓ " : "") + qsTr("menu_crop")
@@ -264,10 +269,38 @@ Popup {
             width: parent.width
             spacing: 2
 
-            MenuButton { text: (Media.playMode === "sequential" ? "✓ " : "") + qsTr("playback_sequential"); onClicked: { Media.playMode = "sequential"; menu.close() } }
-            MenuButton { text: (Media.playMode === "repeat" ? "✓ " : "") + qsTr("playback_repeat"); onClicked: { Media.playMode = "repeat"; menu.close() } }
-            MenuButton { text: (Media.playMode === "shuffle" ? "✓ " : "") + qsTr("playback_shuffle"); onClicked: { Media.playMode = "shuffle"; menu.close() } }
-            MenuButton { text: (Media.playMode === "stop" ? "✓ " : "") + qsTr("playback_stop"); onClicked: { Media.playMode = "stop"; menu.close() } }
+            MenuButton {
+                text: (Media.playMode === "sequential" ? "✓ " : "") + qsTr("playback_sequential")
+                onClicked: {
+                    Media.playMode = "sequential";
+                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_sequential"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (Media.playMode === "repeat" ? "✓ " : "") + qsTr("playback_repeat")
+                onClicked: {
+                    Media.playMode = "repeat";
+                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_repeat"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (Media.playMode === "shuffle" ? "✓ " : "") + qsTr("playback_shuffle")
+                onClicked: {
+                    Media.playMode = "shuffle";
+                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_shuffle"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (Media.playMode === "stop" ? "✓ " : "") + qsTr("playback_stop")
+                onClicked: {
+                    Media.playMode = "stop";
+                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_stop"));
+                    menu.close()
+                }
+            }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
@@ -280,12 +313,60 @@ Popup {
             width: parent.width
             spacing: 2
 
-            MenuButton { text: (menu.currentAspect === "original" ? "✓ " : "") + qsTr("aspect_original"); onClicked: { Media.setAspectRatio("original"); menu.currentAspect = "original"; menu.close() } }
-            MenuButton { text: (menu.currentAspect === "16:9" ? "✓ " : "") + "16:9"; onClicked: { Media.setAspectRatio("16:9"); menu.currentAspect = "16:9"; menu.close() } }
-            MenuButton { text: (menu.currentAspect === "4:3" ? "✓ " : "") + "4:3"; onClicked: { Media.setAspectRatio("4:3"); menu.currentAspect = "4:3"; menu.close() } }
-            MenuButton { text: (menu.currentAspect === "21:9" ? "✓ " : "") + "21:9"; onClicked: { Media.setAspectRatio("21:9"); menu.currentAspect = "21:9"; menu.close() } }
-            MenuButton { text: (menu.currentAspect === "1:1" ? "✓ " : "") + "1:1"; onClicked: { Media.setAspectRatio("1:1"); menu.currentAspect = "1:1"; menu.close() } }
-            MenuButton { text: (menu.currentAspect === "9:16" ? "✓ " : "") + "9:16"; onClicked: { Media.setAspectRatio("9:16"); menu.currentAspect = "9:16"; menu.close() } }
+            MenuButton {
+                text: (menu.currentAspect === "original" ? "✓ " : "") + qsTr("aspect_original")
+                onClicked: {
+                    Media.setAspectRatio("original");
+                    menu.currentAspect = "original";
+                    Osd.showInfo(qsTr("osd_aspect").arg(qsTr("aspect_original")));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (menu.currentAspect === "16:9" ? "✓ " : "") + "16:9"
+                onClicked: {
+                    Media.setAspectRatio("16:9");
+                    menu.currentAspect = "16:9";
+                    Osd.showInfo(qsTr("osd_aspect").arg("16:9"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (menu.currentAspect === "4:3" ? "✓ " : "") + "4:3"
+                onClicked: {
+                    Media.setAspectRatio("4:3");
+                    menu.currentAspect = "4:3";
+                    Osd.showInfo(qsTr("osd_aspect").arg("4:3"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (menu.currentAspect === "21:9" ? "✓ " : "") + "21:9"
+                onClicked: {
+                    Media.setAspectRatio("21:9");
+                    menu.currentAspect = "21:9";
+                    Osd.showInfo(qsTr("osd_aspect").arg("21:9"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (menu.currentAspect === "1:1" ? "✓ " : "") + "1:1"
+                onClicked: {
+                    Media.setAspectRatio("1:1");
+                    menu.currentAspect = "1:1";
+                    Osd.showInfo(qsTr("osd_aspect").arg("1:1"));
+                    menu.close()
+                }
+            }
+            MenuButton {
+                text: (menu.currentAspect === "9:16" ? "✓ " : "") + "9:16"
+                onClicked: {
+                    Media.setAspectRatio("9:16");
+                    menu.currentAspect = "9:16";
+                    Osd.showInfo(qsTr("osd_aspect").arg("9:16"));
+                    menu.close()
+                }
+            }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
@@ -293,7 +374,6 @@ Popup {
         }
     }
 
-    // Функция для получения точной высоты меню
     function getContentHeight() {
         return contentColumn.implicitHeight + menu.topPadding + menu.bottomPadding;
     }

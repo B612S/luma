@@ -18,6 +18,7 @@
 <message><source>menu_stats</source><translation>Statistics</translation></message>
 <message><source>menu_playback</source><translation>Playback</translation></message>
 <message><source>menu_playback_mode</source><translation>Mode</translation></message>
+<message><source>osd_playback_mode</source><translation>Playback Mode</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Aspect Ratio</translation></message>
 <message><source>menu_crop</source><translation>Crop</translation></message>
 <message><source>playback_sequential</source><translation>Sequential</translation></message>
@@ -25,6 +26,7 @@
 <message><source>playback_shuffle</source><translation>Shuffle</translation></message>
 <message><source>playback_stop</source><translation>Stop</translation></message>
 <message><source>aspect_original</source><translation>Original</translation></message>
+<message><source>osd_aspect</source><translation>Aspect: %1</translation></message>
 </context>
 
 <context>
@@ -82,6 +84,7 @@
 <message><source>stats_samplerate</source><translation>Samplerate</translation></message>
 <message><source>stats_aud_bitrate</source><translation>Audio Bitrate</translation></message>
 <message><source>stats_ao</source><translation>Audio Output</translation></message>
+<message><source>stats_audio_device</source><translation>Audio Device</translation></message>
 <message><source>stats_avsync</source><translation>A/V Sync</translation></message>
 <message><source>stats_cache</source><translation>Cache</translation></message>
 <message><source>stats_path</source><translation>Path</translation></message>

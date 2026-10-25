@@ -9,9 +9,8 @@ Rectangle {
                    Kirigami.Theme.backgroundColor.g,
                    Kirigami.Theme.backgroundColor.b, 0.85)
     radius: 8
-    border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                          Kirigami.Theme.textColor.g,
-                          Kirigami.Theme.textColor.b, 0.2)
+    border.color: "transparent" // Убран бордюр
+
     property var mpv: null
     property bool isOpen: false
     property real maxHeight: 600
@@ -100,14 +99,24 @@ Rectangle {
             samplerateLabel.text = "<b>" + qsTr("stats_samplerate") + ":</b> " + safeString(mpv.property("audio-params/samplerate")) + " Hz"
             let audBitrate = mpv.property("audio-bitrate");
             audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatBitrate(audBitrate)
-            aoLabel.text = "<b>" + qsTr("stats_ao") + ":</b> " + safeString(mpv.getAudioOutput())
+
+            // Умный запрос Audio Output (сначала пробуем QML, потом C++)
+            let aoParams = mpv.property("audio-out-params");
+            let aoDriver = "N/A";
+            if (aoParams && aoParams.driver) {
+                aoDriver = aoParams.driver;
+            } else {
+                aoDriver = mpv.getAudioOutput();
+            }
+            aoLabel.text = "<b>" + qsTr("stats_ao") + ":</b> " + safeString(aoDriver)
+
+            audioDeviceLabel.text = "<b>" + qsTr("stats_audio_device") + ":</b> " + safeString(mpv.getAudioDevice())
 
             avsyncLabel.text = "<b>" + qsTr("stats_avsync") + ":</b> " + safeNumber(mpv.property("avsync"), 3) + " s"
             cacheLabel.text = "<b>" + qsTr("stats_cache") + ":</b> " + safeNumber(mpv.property("demuxer-cache-duration"), 1) + " s"
         }
     }
 
-    // Невидимая зона для перехвата кликов (чтобы не нажимать на видео под панелью)
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
@@ -157,6 +166,7 @@ Rectangle {
             Label { id: samplerateLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
             Label { id: audBitrateLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
             Label { id: aoLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: audioDeviceLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
@@ -166,7 +176,7 @@ Rectangle {
     }
 
     function safeString(val) {
-        if (val === undefined || val === null) return "N/A";
+        if (val === undefined || val === null || val === "") return "N/A";
         let str = val.toString();
         if (str.includes("ErrorReturn") || str.includes("MPV_ERROR") || str.includes("[object")) return "N/A";
         return str;

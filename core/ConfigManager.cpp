@@ -14,7 +14,7 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
         QFile f(path);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
             QTextStream out(&f);
-            out << "# Luma Configuration\n\n";
+
             out << "[ui]\n";
             out << "remember_volume=true\n";
             out << "default_volume=80\n";
@@ -23,11 +23,32 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
             out << "single_instance=true\n";
             out << "notifications=true\n";
             out << "append_to_playlist=false\n\n";
+
             out << "[playlist]\n";
             out << "mode=sequential\n\n";
+
             out << "[window]\n";
             out << "width=960\n";
             out << "height=640\n";
+
+            f.close();
+        }
+    }
+
+    QString mpvPath = configDir + "/mpv.conf";
+    if (!QFile::exists(mpvPath)) {
+        QFile f(mpvPath);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&f);
+
+            out << "hwdec=auto\n";
+            out << "deinterlace=auto\n";
+            out << "video-sync=display-resample\n";
+            out << "ytdl=auto\n";
+            out << "keep-open=yes\n";
+            out << "cache=yes\n";
+            out << "cache-secs=300\n";
+
             f.close();
         }
     }

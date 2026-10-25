@@ -9,7 +9,7 @@ Dialog {
     modal: true
     focus: true
     width: 450
-    padding: 0 // Убираем внутренний padding диалога, чтобы footer прилегал к краям
+    padding: 0
 
     anchors.centerIn: Overlay.overlay
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -19,16 +19,13 @@ Dialog {
     background: Rectangle {
         color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                        Kirigami.Theme.backgroundColor.g,
-                       Kirigami.Theme.backgroundColor.b, 0.98)
+                       Kirigami.Theme.backgroundColor.b, 0.85)
         radius: 8
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                              Kirigami.Theme.textColor.g,
-                              Kirigami.Theme.textColor.b, 0.2)
+        border.color: "transparent"
     }
 
-    // Контент с отступами
     contentItem: Item {
-        implicitHeight: layout.implicitHeight + 40 // Отступы сверху и снизу для контента
+        implicitHeight: layout.implicitHeight + 40
 
         ColumnLayout {
             id: layout
@@ -124,7 +121,6 @@ Dialog {
         }
     }
 
-    // ИСПОЛЬЗУЕМ FOOTER, КАК В НАСТРОЙКАХ
     footer: DialogButtonBox {
         alignment: Qt.AlignRight
         Button {
@@ -132,7 +128,7 @@ Dialog {
             DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
             onClicked: dialog.close()
         }
-        Item { implicitWidth: 16; implicitHeight: 1 } // Отступ от правого края (как в настройках)
+        Item { implicitWidth: 16; implicitHeight: 1 }
     }
 
     function formatTime(seconds) {

@@ -199,7 +199,6 @@ void MpvController::init()
         qFatal("could not create mpv context");
     }
 
-    // Загружаем пользовательский конфиг ДО инициализации
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
     configPath.append(QStringLiteral("/luma"));
     configPath.append(QStringLiteral("/mpv.conf"));
@@ -211,14 +210,24 @@ void MpvController::init()
 
     mpv_set_wakeup_callback(d_ptr->m_mpv, MpvController::mpvEvents, this);
 
-    // ЖЕСТКАЯ БЛОКИРОВКА: устанавливаем vo=libmpv ПОСЛЕ инициализации.
-    // Это перекрывает любые значения, которые пользователь мог прописать в mpv.conf.
     mpv_set_property_string(d_ptr->m_mpv, "vo", "libmpv");
-
-    // Задаем имя аудиоклиента для PipeWire/PulseAudio, чтобы в системном микшере
-    // (например, в KDE Plasma) приложение отображалось как "luma", а не "mpv".
-    // Это значение также перекрывает mpv.conf.
     mpv_set_property_string(d_ptr->m_mpv, "audio-client-name", "luma");
+
+    char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");
+    if (sync_mode) {
+        if (QString::fromUtf8(sync_mode) == "audio") {
+            mpv_set_property_string(d_ptr->m_mpv, "video-sync", "display-resample");
+        }
+        mpv_free(sync_mode);
+    }
+
+    char *hwdec = mpv_get_property_string(d_ptr->m_mpv, "hwdec");
+    if (hwdec) {
+        if (QString::fromUtf8(hwdec) == "no") {
+            mpv_set_property_string(d_ptr->m_mpv, "hwdec", "auto");
+        }
+        mpv_free(hwdec);
+    }
 
     d_ptr->m_mpvHandleManager = std::make_shared<MpvHandleManager>(d_ptr->m_mpv);
 }

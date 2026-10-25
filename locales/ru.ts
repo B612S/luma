@@ -18,6 +18,7 @@
 <message><source>menu_stats</source><translation>Статистика</translation></message>
 <message><source>menu_playback</source><translation>Воспроизведение</translation></message>
 <message><source>menu_playback_mode</source><translation>Режим</translation></message>
+<message><source>osd_playback_mode</source><translation>Режим воспроизведения</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Соотношение сторон</translation></message>
 <message><source>menu_crop</source><translation>Обрезка</translation></message>
 <message><source>playback_sequential</source><translation>По порядку</translation></message>
@@ -25,6 +26,7 @@
 <message><source>playback_shuffle</source><translation>Перемешать</translation></message>
 <message><source>playback_stop</source><translation>Остановить</translation></message>
 <message><source>aspect_original</source><translation>Оригинальное</translation></message>
+<message><source>osd_aspect</source><translation>Соотношение: %1</translation></message>
 </context>
 
 <context>
@@ -82,6 +84,7 @@
 <message><source>stats_samplerate</source><translation>Частота дискретизации</translation></message>
 <message><source>stats_aud_bitrate</source><translation>Битрейт аудио</translation></message>
 <message><source>stats_ao</source><translation>Аудиовыход</translation></message>
+<message><source>stats_audio_device</source><translation>Аудиоустройство</translation></message>
 <message><source>stats_avsync</source><translation>Синхронизация A/V</translation></message>
 <message><source>stats_cache</source><translation>Кэш</translation></message>
 <message><source>stats_path</source><translation>Путь</translation></message>

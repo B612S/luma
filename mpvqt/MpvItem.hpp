@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE void requestThumbnail(double seekTime, const QString &requestId);
 
     Q_INVOKABLE QString getAudioOutput();
+    Q_INVOKABLE QString getAudioDevice();
     Q_INVOKABLE QVariant property(const QString &name) { return getProperty(name); }
 
 protected:
@@ -77,6 +78,5 @@ private:
 
     FrameDecoder *m_frameDecoder = nullptr;
 
-    // Таймер для троттлинга обновлений позиции
     QElapsedTimer m_positionTimer;
 };

@@ -43,6 +43,7 @@ qt_add_executable(luma
     mpvqt/mpvrenderer.cpp
     mpvqt/MpvItem.cpp
     mpvqt/FrameDecoder.cpp
+
 )
 
 qt_add_qml_module(luma

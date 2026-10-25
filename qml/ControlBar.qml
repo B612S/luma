@@ -10,9 +10,7 @@ Rectangle {
                    Kirigami.Theme.backgroundColor.g,
                    Kirigami.Theme.backgroundColor.b, 0.85)
     radius: 8
-    border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                          Kirigami.Theme.textColor.g,
-                          Kirigami.Theme.textColor.b, 0.2)
+    border.color: "transparent"
 
     property var mpv
     property bool hovered: hoverArea.containsMouse
