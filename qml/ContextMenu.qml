@@ -23,9 +23,7 @@ Popup {
                        Kirigami.Theme.backgroundColor.g,
                        Kirigami.Theme.backgroundColor.b, 0.95)
         radius: 8
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                              Kirigami.Theme.textColor.g,
-                              Kirigami.Theme.textColor.b, 0.2)
+        border.color: "transparent"
     }
 
     property string currentPage: "main"
@@ -41,7 +39,6 @@ Popup {
             currentAspect = Media.getAspectRatio()
         }
 
-        // Запускаем анимацию появления для ВСЕГО меню (фона и текста)
         pageFadeAnim.stop()
         menu.opacity = 0.0
         pageFadeAnim.start()
@@ -242,16 +239,8 @@ Popup {
             width: parent.width
             spacing: 2
 
-            MenuButton {
-                text: qsTr("menu_playback_mode");
-                hasArrow: true;
-                onClicked: menu.currentPage = "playback_mode"
-            }
-            MenuButton {
-                text: qsTr("menu_aspect_ratio");
-                hasArrow: true;
-                onClicked: menu.currentPage = "aspect_ratio"
-            }
+            MenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.currentPage = "playback_mode" }
+            MenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; onClicked: menu.currentPage = "aspect_ratio" }
 
             MenuButton {
                 text: (menu.mpv && menu.mpv.cropEnabled ? "✓ " : "") + qsTr("menu_crop")
@@ -263,7 +252,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "main" }
         }
 
-        // --- СТРАНИЦА РЕЖИМА ВОСПРОИЗВЕДЕНИЯ ---
+        // --- СТРАНИЦА РЕЖИМА ВОСПРОИЗВЕДЕНИЯ (Только для текущей сессии) ---
         Column {
             visible: menu.currentPage === "playback_mode"
             width: parent.width

@@ -34,7 +34,7 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     });
 
     connect(mpvController(), &MpvController::endFile, this, [this](QString reason) {
-        emit fileEnded();
+        emit fileEnded(reason);
     });
 
     setProperty("keepaspect", "yes");
@@ -98,20 +98,10 @@ void MpvItem::requestThumbnail(double seekTime, const QString &requestId) {
 }
 
 QString MpvItem::getAudioOutput() {
-    // 1. Сначала пробуем узнать текущий активный драйвер (current-ao)
     QVariant currentAo = getProperty("current-ao");
+
     if (currentAo.isValid() && !currentAo.toString().isEmpty()) {
         return currentAo.toString();
-    }
-
-    // 2. Если пусто, смотрим в настройки "ao" (то, что в конфиге)
-    QVariant aoProp = getProperty("ao");
-    if (aoProp.isValid() && !aoProp.toString().isEmpty()) {
-        QString aoStr = aoProp.toString();
-        if (aoStr.contains(",")) {
-            return aoStr.split(",").first();
-        }
-        return aoStr;
     }
 
     return "N/A";

@@ -43,9 +43,7 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
 
             out << "hwdec=auto\n";
             out << "deinterlace=auto\n";
-            out << "video-sync=display-resample\n";
             out << "ytdl=auto\n";
-            out << "keep-open=yes\n";
             out << "cache=yes\n";
             out << "cache-secs=300\n";
 

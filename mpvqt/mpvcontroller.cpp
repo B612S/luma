@@ -199,6 +199,10 @@ void MpvController::init()
         qFatal("could not create mpv context");
     }
 
+    // Отключаем стандартные конфиги, чтобы не было конфликтов
+    mpv_set_option_string(d_ptr->m_mpv, "config", "no");
+
+    // Загружаем пользовательский конфиг
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
     configPath.append(QStringLiteral("/luma"));
     configPath.append(QStringLiteral("/mpv.conf"));
@@ -210,9 +214,15 @@ void MpvController::init()
 
     mpv_set_wakeup_callback(d_ptr->m_mpv, MpvController::mpvEvents, this);
 
+    // ЖЕСТКАЯ БЛОКИРОВКА (перекрывает mpv.conf)
     mpv_set_property_string(d_ptr->m_mpv, "vo", "libmpv");
     mpv_set_property_string(d_ptr->m_mpv, "audio-client-name", "luma");
 
+    // КРИТИЧНО: Запрещаем keep-open, чтобы mpv всегда слал EOF
+    // и автоматический переход на следующий файл работал.
+    mpv_set_property_string(d_ptr->m_mpv, "keep-open", "no");
+
+    // Умные настройки (применяем только если пользователь их не менял)
     char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");
     if (sync_mode) {
         if (QString::fromUtf8(sync_mode) == "audio") {

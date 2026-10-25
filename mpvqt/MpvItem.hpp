@@ -57,7 +57,7 @@ signals:
     void mutedChanged();
     void sourceChanged();
     void videoDisabledChanged();
-    void fileEnded();
+    void fileEnded(const QString &reason); // <--- Добавлен аргумент reason
     void deinterlaceChanged();
     void cropEnabledChanged();
     void thumbnailReady(const QString &requestId);

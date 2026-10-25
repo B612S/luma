@@ -184,7 +184,10 @@ Dialog {
                                     ]
                                     textRole: "text"; valueRole: "value"
                                     currentIndex: { let idx = model.findIndex(item => item.value === Config.playlistMode); return idx !== -1 ? idx : 0 }
-                                    onActivated: (index) => { Config.playlistMode = model[index].value; Media.playMode = model[index].value }
+                                    onActivated: (index) => {
+                                        Config.playlistMode = model[index].value;
+                                        Media.playMode = model[index].value;
+                                    }
                                 }
                             }
                         }

@@ -130,31 +130,25 @@ QVariantMap MediaManager::getFileInfo(const QString &path) {
     QFileInfo fi(path);
     if (!fi.exists()) return info;
 
-    // 1. Базовые данные из файловой системы
     info["path"] = fi.absoluteFilePath();
     info["size"] = fi.size();
     info["size_str"] = QString::number(fi.size() / (1024.0 * 1024.0), 'f', 2) + " MiB";
     info["name"] = fi.fileName();
 
-    // 2. Данные из FFmpeg
     AVFormatContext *fmt_ctx = nullptr;
     if (avformat_open_input(&fmt_ctx, path.toUtf8().constData(), nullptr, nullptr) == 0) {
         if (avformat_find_stream_info(fmt_ctx, nullptr) >= 0) {
-            // Длительность
             double duration = (double)fmt_ctx->duration / AV_TIME_BASE;
             info["duration"] = duration;
 
-            // Формат контейнера
             if (fmt_ctx->iformat && fmt_ctx->iformat->long_name) {
                 info["format"] = QString::fromUtf8(fmt_ctx->iformat->long_name);
             } else {
                 info["format"] = "N/A";
             }
 
-            // Общий битрейт (ИСПРАВЛЕНО: приведение типов)
-            info["bitrate"] = static_cast<qlonglong>(fmt_ctx->bit_rate / 1000); // в kbps
+            info["bitrate"] = static_cast<qlonglong>(fmt_ctx->bit_rate / 1000);
 
-            // Ищем видеопоток
             int video_stream_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
             if (video_stream_idx >= 0) {
                 AVStream *stream = fmt_ctx->streams[video_stream_idx];
@@ -162,7 +156,6 @@ QVariantMap MediaManager::getFileInfo(const QString &path) {
 
                 info["width"] = codecpar->width;
                 info["height"] = codecpar->height;
-                // ИСПРАВЛЕНО
                 info["video_bitrate"] = static_cast<qlonglong>(codecpar->bit_rate / 1000);
 
                 const AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
@@ -178,13 +171,11 @@ QVariantMap MediaManager::getFileInfo(const QString &path) {
                 info["video_codec"] = "N/A";
             }
 
-            // Ищем аудиопоток
             int audio_stream_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
             if (audio_stream_idx >= 0) {
                 AVStream *stream = fmt_ctx->streams[audio_stream_idx];
                 AVCodecParameters *codecpar = stream->codecpar;
 
-                // ИСПРАВЛЕНО
                 info["audio_bitrate"] = static_cast<qlonglong>(codecpar->bit_rate / 1000);
                 info["sample_rate"] = codecpar->sample_rate;
                 info["channels"] = codecpar->ch_layout.nb_channels;
@@ -204,7 +195,6 @@ QVariantMap MediaManager::getFileInfo(const QString &path) {
         }
         avformat_close_input(&fmt_ctx);
     } else {
-        // Если FFmpeg не смог открыть файл, ставим заглушки
         info["duration"] = 0;
         info["format"] = "N/A";
         info["width"] = 0;
@@ -362,7 +352,10 @@ void MediaManager::playIndex(int index) {
     QString file = m_playlist->fileAt(index);
     if (file.isEmpty()) return;
 
-    if (file == m_lastPlayedFile && m_lastPlayedTimer.isValid() && m_lastPlayedTimer.elapsed() < 200) return;
+    // Защита от запуска того же файла (если он уже играет)
+    if (file == m_lastPlayedFile && m_lastPlayedTimer.isValid() && m_lastPlayedTimer.elapsed() < 100) {
+        return;
+    }
     m_lastPlayedFile = file;
     m_lastPlayedTimer.start();
 
@@ -391,18 +384,26 @@ void MediaManager::playNext() {
 
     if (m_playMode == "repeat") {
         if (current >= 0) playIndex(current);
-    } else if (m_playMode == "shuffle") {
+    }
+    else if (m_playMode == "shuffle") {
+        int next = current + 1;
+        if (next >= count) {
+            m_playlist->setShuffle(true);
+            next = 0;
+        }
+        playIndex(next);
+    }
+    else if (m_playMode == "stop") {
+        if (m_mpv) m_mpv->setPaused(true);
+    }
+    else {
+        // Sequential (по порядку)
         int next = current + 1;
         if (next < count) {
             playIndex(next);
         } else {
             if (m_mpv) m_mpv->setPaused(true);
         }
-    } else if (m_playMode == "stop") {
-        if (m_mpv) m_mpv->setPaused(true);
-    } else {
-        int next = current + 1;
-        if (next < count) playIndex(next);
     }
 }
 

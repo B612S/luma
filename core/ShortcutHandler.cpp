@@ -43,14 +43,19 @@ ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *me
     });
 
     if (m_mpv) {
-        connect(m_mpv, &MpvItem::fileEnded, this, [this]() {
-            if (m_media && m_media->isManualSwitch()) return;
+        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &reason) {
+            // Реагируем ТОЛЬКО на естественное окончание файла (EOF)
+            if (reason != "eof") return;
             if (m_ignoreEndFile) return;
-            if (m_media) m_media->playNext();
+
+            // Небольшая задержка, чтобы mpv успел полностью закрыть файл
+            QTimer::singleShot(100, this, [this]() {
+                if (m_media) m_media->playNext();
+            });
         });
-            connect(m_mpv, &MpvItem::sourceChanged, this, &ShortcutHandler::onFileChanged);
-            connect(m_mpv, &MpvItem::positionChanged, this, &ShortcutHandler::onPositionChanged);
-            connect(m_mpv, &MpvItem::volumeChanged, this, &ShortcutHandler::onVolumeChanged);
+        connect(m_mpv, &MpvItem::sourceChanged, this, &ShortcutHandler::onFileChanged);
+        connect(m_mpv, &MpvItem::positionChanged, this, &ShortcutHandler::onPositionChanged);
+        connect(m_mpv, &MpvItem::volumeChanged, this, &ShortcutHandler::onVolumeChanged);
     }
 
     QTimer::singleShot(1000, this, [this]() { m_isInternalVolume = false; });
@@ -188,17 +193,10 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
 
         case ShortcutAction::FrameForward:
             if (!autoRepeat && m_mpv) {
-                // 1. Блокируем сигналы, чтобы UI не мигал
                 bool oldState = m_mpv->blockSignals(true);
-
-                // 2. Запоминаем и глушим
                 bool wasMuted = m_mpv->muted();
                 m_mpv->setMuted(true);
-
-                // 3. Делаем шаг
                 m_mpv->command(QStringList() << "frame-step");
-
-                // 4. Возвращаем как было через 50 мс
                 QTimer::singleShot(50, this, [this, wasMuted, oldState]() {
                     if (m_mpv) {
                         m_mpv->setMuted(wasMuted);
@@ -207,7 +205,6 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
                 });
             }
             break;
-
 
         case ShortcutAction::VolumeUp:
             if (!autoRepeat) startVolume(5.0);  else m_volStep = 5.0;
@@ -265,7 +262,6 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             if (!autoRepeat) cycleAudio();
             break;
         case ShortcutAction::CycleDeinterlace:
-            // Удалено, деинтерлейс теперь автоматический
             break;
         case ShortcutAction::CycleAspectRatio:
             if (!autoRepeat) cycleAspectRatio();
@@ -359,7 +355,6 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 void ShortcutHandler::toggleCrop() {
     if (!m_mpv) return;
 
-    // ================= ВЫКЛЮЧЕНИЕ =================
     if (m_cropEnabled) {
         m_cropEnabled = false;
         m_cropPending = false;
@@ -388,7 +383,6 @@ void ShortcutHandler::toggleCrop() {
         return;
     }
 
-    // ================= ВКЛЮЧЕНИЕ =================
     if (m_cropPending) return;
     m_cropPending = true;
 
