@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Luma
+GenericName=Video Player
+Comment=Lightweight video player
+Exec=luma %F
+Icon=luma
+Terminal=false
+Categories=AudioVideo;Player;Video;
+MimeType=video/mp4;video/x-matroska;video/webm;video/avi;
+StartupWMClass=luma
