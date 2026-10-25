@@ -1,4 +1,11 @@
-*.tar.zst
-
-src/
+# Build artifacts
+build/
 pkg/
+src/
+*.pkg.tar.zst
+*.deb
+*.AppImage
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
