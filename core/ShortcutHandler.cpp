@@ -185,9 +185,29 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
         case ShortcutAction::FrameBackward:
             if (!autoRepeat && m_mpv) m_mpv->command(QStringList() << "frame-back-step");
             break;
+
         case ShortcutAction::FrameForward:
-            if (!autoRepeat && m_mpv) m_mpv->command(QStringList() << "frame-step");
+            if (!autoRepeat && m_mpv) {
+                // 1. Блокируем сигналы, чтобы UI не мигал
+                bool oldState = m_mpv->blockSignals(true);
+
+                // 2. Запоминаем и глушим
+                bool wasMuted = m_mpv->muted();
+                m_mpv->setMuted(true);
+
+                // 3. Делаем шаг
+                m_mpv->command(QStringList() << "frame-step");
+
+                // 4. Возвращаем как было через 50 мс
+                QTimer::singleShot(50, this, [this, wasMuted, oldState]() {
+                    if (m_mpv) {
+                        m_mpv->setMuted(wasMuted);
+                        m_mpv->blockSignals(oldState);
+                    }
+                });
+            }
             break;
+
 
         case ShortcutAction::VolumeUp:
             if (!autoRepeat) startVolume(5.0);  else m_volStep = 5.0;

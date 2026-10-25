@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="luma_qml_src/assets/luma.png" width="128" height="128" alt="Luma Logo" />
+  <img src="assets/luma.png" width="128" height="128" alt="Luma Logo" />
 </p>
 
 <h1 align="center">Luma</h1>

@@ -57,6 +57,7 @@ qt_add_qml_module(luma
         qml/StatsPanel.qml
         qml/AboutDialog.qml
         qml/SettingsDialog.qml
+        qml/MediaInfoDialog.qml
     SOURCES
         mpvqt/MpvItem.hpp
         mpvqt/FrameDecoder.hpp
@@ -79,13 +80,13 @@ qt_add_resources(luma "assets"
 
 qt_add_translations(luma
     TS_FILES
-        locales/luma_en.ts
-        locales/luma_ru.ts
+        locales/en.ts
+        locales/ru.ts
 )
 
 install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/luma_en.qm
-    ${CMAKE_CURRENT_BINARY_DIR}/luma_ru.qm
+    ${CMAKE_CURRENT_BINARY_DIR}/en.qm
+    ${CMAKE_CURRENT_BINARY_DIR}/ru.qm
     DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/translations
 )
 

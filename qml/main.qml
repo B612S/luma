@@ -139,16 +139,49 @@ ApplicationWindow {
             onClicked: (mouse) => {
                 root.wakeUp()
                 if (mouse.button === Qt.RightButton) {
-                    contextMenu.x = mouse.x;
-                    contextMenu.y = mouse.y;
-                    contextMenu.currentPage = "main"
+                    // 1. Если меню уже открыто, клик правой кнопкой его закрывает
+                    if (contextMenu.visible) {
+                        contextMenu.close();
+                        return;
+                    }
+
+                    // 2. Запрет на вызов над панелью управления
+                    var controlBarTop = root.height - 20 - controlBar.height;
+                    if (mouse.y >= controlBarTop) {
+                        return;
+                    }
+
+                    // 3. Открытие меню
+                    contextMenu.currentPage = "main";
+
+                    var menuHeight = contextMenu.getContentHeight();
+                    var menuWidth = contextMenu.width;
+
+                    var globalPos = mapToItem(null, mouse.x, mouse.y);
+                    var px = globalPos.x;
+                    var py = globalPos.y;
+
+                    if (px + menuWidth > root.width) {
+                        px = root.width - menuWidth - 10;
+                    }
+                    if (py + menuHeight > root.height) {
+                        py = globalPos.y - menuHeight;
+                    }
+
+                    px = Math.max(10, px);
+                    py = Math.max(10, py);
+
+                    contextMenu.x = px;
+                    contextMenu.y = py;
                     contextMenu.open();
                 }
             }
 
-            onDoubleClicked: {
-                if (root.visibility === Window.FullScreen) root.showNormal()
-                    else root.showFullScreen()
+            onDoubleClicked: (mouse) => {
+                if (mouse.button === Qt.LeftButton) {
+                    if (root.visibility === Window.FullScreen) root.showNormal()
+                        else root.showFullScreen()
+                }
             }
         }
     }
@@ -207,9 +240,9 @@ ApplicationWindow {
         anchors.topMargin: 2
         anchors.left: parent.left
         anchors.right: parent.right
-        z: 1
 
         visible: root.showTitle
+        enabled: false
 
         Label {
             id: titleLabel
@@ -251,7 +284,7 @@ ApplicationWindow {
     ContextMenu {
         id: contextMenu
         mpv: mpv
-        z: 20
+        z: 1000
         onToggleCropRequested: root.toggleCropRequested()
     }
 
@@ -264,10 +297,6 @@ ApplicationWindow {
                 if (urlString) Media.openFile(urlString);
             }
         }
-    }
-
-    AboutDialog {
-        id: aboutDialog
     }
 
     SettingsDialog {

@@ -2,6 +2,7 @@
 #include "mpvabstractitem.h"
 #include <QVariant>
 #include <QRectF>
+#include <QElapsedTimer>
 
 class FrameDecoder;
 
@@ -75,4 +76,7 @@ private:
     bool   m_cropEnabled = false;
 
     FrameDecoder *m_frameDecoder = nullptr;
+
+    // Таймер для троттлинга обновлений позиции
+    QElapsedTimer m_positionTimer;
 };

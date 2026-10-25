@@ -2,17 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU">
 <context>
-<name>AboutDialog</name>
-<message><source>about_title</source><translation>О программе</translation></message>
-<message><source>about_version</source><translation>Версия %1</translation></message>
-<message><source>about_description</source><translation>Легковесный видеоплеер на базе mpv и Qt/QML.</translation></message>
-<message><source>about_links</source><translation>Ссылки:</translation></message>
-<message><source>about_github</source><translation>Репозиторий на GitHub</translation></message>
-<message><source>about_mpv</source><translation>Работает на mpv</translation></message>
-<message><source>about_close</source><translation>Закрыть</translation></message>
-</context>
-
-<context>
 <name>ContextMenu</name>
 <message><source>menu_open</source><translation>Открыть</translation></message>
 <message><source>menu_open_file</source><translation>Открыть файл</translation></message>
@@ -20,7 +9,6 @@
 <message><source>menu_open_url</source><translation>Открыть ссылку</translation></message>
 <message><source>menu_back</source><translation>Назад</translation></message>
 <message><source>menu_exit</source><translation>Выход</translation></message>
-<message><source>menu_about</source><translation>О программе</translation></message>
 <message><source>menu_settings</source><translation>Настройки</translation></message>
 <message><source>menu_audio</source><translation>Аудио</translation></message>
 <message><source>menu_video</source><translation>Видео</translation></message>
@@ -52,13 +40,29 @@
 <message><source>settings_single_instance</source><translation>Один экземпляр</translation></message>
 <message><source>settings_play_mode</source><translation>Режим воспроизведения</translation></message>
 <message><source>settings_append_playlist</source><translation>Добавлять в текущий плейлист</translation></message>
-<message><source>settings_no_options</source><translation>Настроек пока нет.</translation></message>
 <message><source>settings_close</source><translation>Закрыть</translation></message>
-
-<!-- НАЗВАНИЯ ЯЗЫКОВ -->
+<message><source>settings_about</source><translation>О программе</translation></message>
 <message><source>lang_en</source><translation>English</translation></message>
 <message><source>lang_ru</source><translation>Русский</translation></message>
 
+<message><source>about_title</source><translation>О программе</translation></message>
+<message><source>about_version</source><translation>Версия %1</translation></message>
+<message><source>about_description</source><translation>Легковесный видеоплеер на базе mpv и Qt/QML.</translation></message>
+<message><source>about_links</source><translation>Ссылки:</translation></message>
+<message><source>about_github</source><translation>Репозиторий на GitHub</translation></message>
+<message><source>about_mpv</source><translation>Работает на mpv</translation></message>
+<message><source>about_kirigami</source><translation>Работает на Kirigami</translation></message>
+<message><source>about_mpvqt</source><translation>На базе mpvqt</translation></message>
+<message><source>about_close</source><translation>Закрыть</translation></message>
+</context>
+
+<context>
+<name>PlaylistPanel</name>
+<message><source>playlist_play</source><translation>Играть</translation></message>
+<message><source>playlist_shuffle</source><translation>Перемешать все</translation></message>
+<message><source>playlist_open_folder</source><translation>Открыть в %1</translation></message>
+<message><source>playlist_remove</source><translation>Удалить из плейлиста</translation></message>
+<message><source>playlist_info</source><translation>Информация</translation></message>
 </context>
 
 <context>
@@ -67,19 +71,20 @@
 <message><source>stats_size</source><translation>Размер</translation></message>
 <message><source>stats_format</source><translation>Формат</translation></message>
 <message><source>stats_duration</source><translation>Длительность</translation></message>
-<message><source>stats_video</source><translation>Видео</translation></message>
+<message><source>stats_video</source><translation>Кодек видео</translation></message>
 <message><source>stats_resolution</source><translation>Разрешение</translation></message>
 <message><source>stats_fps</source><translation>Кадры/с</translation></message>
 <message><source>stats_vid_bitrate</source><translation>Битрейт видео</translation></message>
 <message><source>stats_hwdec</source><translation>Аппаратное декодирование</translation></message>
 <message><source>stats_dropped</source><translation>Пропущено</translation></message>
-<message><source>stats_audio</source><translation>Аудио</translation></message>
+<message><source>stats_audio</source><translation>Кодек аудио</translation></message>
 <message><source>stats_channels</source><translation>Каналы</translation></message>
 <message><source>stats_samplerate</source><translation>Частота дискретизации</translation></message>
 <message><source>stats_aud_bitrate</source><translation>Битрейт аудио</translation></message>
 <message><source>stats_ao</source><translation>Аудиовыход</translation></message>
 <message><source>stats_avsync</source><translation>Синхронизация A/V</translation></message>
 <message><source>stats_cache</source><translation>Кэш</translation></message>
+<message><source>stats_path</source><translation>Путь</translation></message>
 </context>
 
 <context>

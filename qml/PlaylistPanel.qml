@@ -25,11 +25,12 @@ Rectangle {
     property real dragGlobalY: -1
     property real dragZoneHeight: 40
 
-    // Для плавной прокрутки колесиком
-    property real wheelTargetY: -1
+    property int contextMenuIndex: -1
+    property var fileInfoData: ({})
 
-    opacity: isOpen ? 1.0 : 0.0
     visible: opacity > 0.0
+    enabled: isOpen // Отключаем клики, когда панель закрыта
+    opacity: isOpen ? 1.0 : 0.0
 
     Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
 
@@ -37,6 +38,14 @@ Rectangle {
         if (opacity > 0.0) {
             visible = true;
             if (isOpen) scrollToCurrent();
+        }
+    }
+
+    // Принудительно закрываем меню и диалоги при скрытии панели
+    onIsOpenChanged: {
+        if (!isOpen) {
+            contextMenu.close();
+            infoDialog.close();
         }
     }
 
@@ -65,7 +74,6 @@ Rectangle {
         function onCurrentIndexChanged() { listView.currentIndex = panel.model.currentIndex; }
     }
 
-    // Следим за состоянием Drag (страховка)
     Connections {
         target: dragArea
         function onDragActiveChanged() {
@@ -82,7 +90,6 @@ Rectangle {
         panel.dragGlobalY = -1;
         autoScrollTimer.stop();
 
-        // Принудительно возвращаем Y всем элементам
         for (var i = 0; i < listView.count; i++) {
             var item = listView.itemAtIndex(i);
             if (item && typeof item.itemIndex !== "undefined") {
@@ -112,22 +119,12 @@ Rectangle {
         }
     }
 
-    // Анимация для колесика
-    NumberAnimation {
+    PropertyAnimation {
         id: wheelAnim
         target: listView
         property: "contentY"
-        duration: 150
+        duration: 100
         easing.type: Easing.OutQuad
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.AllButtons
-        propagateComposedEvents: false
-        onPressed: (mouse) => { mouse.accepted = true }
-        onClicked: (mouse) => { mouse.accepted = true }
-        onDoubleClicked: (mouse) => { mouse.accepted = true }
     }
 
     MouseArea {
@@ -152,20 +149,15 @@ Rectangle {
             boundsBehavior: Flickable.StopAtBounds
             focus: true
             interactive: !panel.isDragging
+            cacheBuffer: 400
 
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (event) => {
-                    // Вычисляем, куда хотим прокрутить
                     var maxY = Math.max(0, listView.contentHeight - listView.height);
-
-                    // Если анимация уже идет, берем её конечную точку как базу, иначе текущую
                     var baseY = wheelAnim.running ? wheelAnim.to : listView.contentY;
-
-                    // Новая цель
                     var newTargetY = Math.max(0, Math.min(maxY, baseY - event.angleDelta.y));
 
-                    // Запускаем/перезапускаем анимацию к новой цели
                     wheelAnim.stop();
                     wheelAnim.from = listView.contentY;
                     wheelAnim.to = newTargetY;
@@ -189,21 +181,15 @@ Rectangle {
                 property int itemIndex: index
                 property bool isReady: panel.readyIndex === itemIndex
                 property bool isBeingDragged: panel.draggedIndex === itemIndex
+                property bool isCurrent: model.isCurrent
 
                 z: isBeingDragged ? 2 : 0
 
                 color: {
                     if (isBeingDragged) return Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.4);
                     if (isReady) return Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25);
+                    if (dragArea.containsMouse) return Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1);
                     return "transparent";
-                }
-
-                // Фиксация Y во время драга
-                y: {
-                    if (panel.isDragging && panel.draggedIndex === itemIndex) {
-                        return itemRect.y;
-                    }
-                    return itemIndex * height;
                 }
 
                 Text {
@@ -214,7 +200,7 @@ Rectangle {
                     text: model.display
                     color: Kirigami.Theme.textColor
                     font.pixelSize: 14
-                    font.weight: model.isCurrent ? Font.Bold : Font.Medium
+                    font.weight: isCurrent ? Font.Bold : Font.Medium
                     elide: Text.ElideRight
                     wrapMode: Text.NoWrap
                 }
@@ -229,6 +215,8 @@ Rectangle {
                     hoverEnabled: true
                     propagateComposedEvents: false
 
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+
                     drag.target: (panel.readyIndex === itemRect.itemIndex) ? itemRect : null
                     drag.axis: Drag.YAxis
 
@@ -237,8 +225,15 @@ Rectangle {
 
                     onClicked: (mouse) => {
                         if (panel.isDragging) return;
-                        listView.currentIndex = itemRect.itemIndex
-                        if (panel.parent) panel.parent.forceActiveFocus()
+                        if (mouse.button === Qt.RightButton) {
+                            panel.contextMenuIndex = itemRect.itemIndex;
+
+                            var globalPos = mapToItem(null, mouse.x, mouse.y);
+                            contextMenu.popup(globalPos.x, globalPos.y);
+                        } else {
+                            listView.currentIndex = itemRect.itemIndex
+                            if (panel.parent) panel.parent.forceActiveFocus()
+                        }
                     }
 
                     onDoubleClicked: (mouse) => {
@@ -253,7 +248,9 @@ Rectangle {
                     onPressed: (mouse) => {
                         pressX = mouse.x;
                         pressY = mouse.y;
-                        dragHoldTimer.start();
+                        if (mouse.button === Qt.LeftButton) {
+                            dragHoldTimer.start();
+                        }
                     }
 
                     onPositionChanged: (mouse) => {
@@ -298,5 +295,72 @@ Rectangle {
                 }
             }
         }
+    }
+
+    Menu {
+        id: contextMenu
+        width: 200
+        modal: false
+
+        background: Rectangle {
+            color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                           Kirigami.Theme.backgroundColor.g,
+                           Kirigami.Theme.backgroundColor.b, 0.95)
+            radius: 8
+            border.color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                  Kirigami.Theme.textColor.g,
+                                  Kirigami.Theme.textColor.b, 0.2)
+        }
+
+        MenuItem {
+            text: qsTr("playlist_play")
+            onTriggered: Media.playIndex(panel.contextMenuIndex)
+        }
+
+        MenuItem {
+            text: qsTr("playlist_shuffle")
+            visible: Media.playMode === "shuffle"
+            onTriggered: {
+                Media.playlist.setShuffle(true);
+            }
+        }
+
+        MenuSeparator {}
+
+        MenuItem {
+            text: qsTr("playlist_info")
+            onTriggered: {
+                let path = Media.playlist.fileAt(panel.contextMenuIndex);
+                panel.fileInfoData = Media.getFileInfo(path);
+                infoDialog.open();
+            }
+        }
+
+        MenuItem {
+            text: qsTr("playlist_open_folder").arg(Media.getDefaultFileManagerName())
+            onTriggered: {
+                let path = Media.playlist.fileAt(panel.contextMenuIndex);
+                Media.openInFileManager(path);
+            }
+        }
+
+        MenuSeparator {}
+
+        MenuItem {
+            text: qsTr("playlist_remove")
+            contentItem: Text {
+                text: parent.text
+                color: Kirigami.Theme.negativeTextColor
+                font.pixelSize: 14
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: 8
+            }
+            onTriggered: Media.removeFromPlaylist(panel.contextMenuIndex)
+        }
+    }
+
+    MediaInfoDialog {
+        id: infoDialog
+        fileInfo: panel.fileInfoData
     }
 }

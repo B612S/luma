@@ -14,6 +14,15 @@
 #include <QDBusConnection>
 #include <QElapsedTimer>
 #include <QTimer>
+#include <QDesktopServices>
+#include <QProcess>
+#include <QSettings>
+#include <QLocale>
+
+extern "C" {
+    #include <libavformat/avformat.h>
+    #include <libavcodec/avcodec.h>
+}
 
 MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
 : QObject(parent), m_mpv(mpv), m_playlist(new PlaylistModel(this))
@@ -35,8 +44,6 @@ void MediaManager::setPlayMode(const QString &mode) {
     m_playMode = mode;
 
     if (m_playlist) {
-        // При переключении на shuffle перемешиваем текущий список.
-        // При переключении на другой режим возвращаем оригинальный порядок.
         m_playlist->setShuffle(mode == "shuffle");
     }
 
@@ -89,6 +96,151 @@ void MediaManager::_sendNotification(const QString &body) {
                                  QVariantMap({{"desktop-entry", "luma"}}), (int)-1);
 }
 
+QString MediaManager::getDefaultFileManagerName() {
+    QProcess process;
+    process.start("xdg-mime", QStringList() << "query" << "default" << "inode/directory");
+    process.waitForFinished(1000);
+
+    QString desktopFile = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    if (desktopFile.isEmpty()) {
+        return "File Manager";
+    }
+
+    QStringList searchPaths = {
+        QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation),
+        "/usr/share/applications",
+        "/usr/local/share/applications"
+    };
+
+    for (const QString &path : searchPaths) {
+        QFileInfo fi(path + "/" + desktopFile);
+        if (fi.exists()) {
+            QSettings desktop(fi.absoluteFilePath(), QSettings::IniFormat);
+            desktop.beginGroup("Desktop Entry");
+            QString name = desktop.value("Name[" + QLocale::system().name() + "]", desktop.value("Name")).toString();
+            if (!name.isEmpty()) return name;
+        }
+    }
+
+    return desktopFile.remove(".desktop");
+}
+
+QVariantMap MediaManager::getFileInfo(const QString &path) {
+    QVariantMap info;
+    QFileInfo fi(path);
+    if (!fi.exists()) return info;
+
+    // 1. Базовые данные из файловой системы
+    info["path"] = fi.absoluteFilePath();
+    info["size"] = fi.size();
+    info["size_str"] = QString::number(fi.size() / (1024.0 * 1024.0), 'f', 2) + " MiB";
+    info["name"] = fi.fileName();
+
+    // 2. Данные из FFmpeg
+    AVFormatContext *fmt_ctx = nullptr;
+    if (avformat_open_input(&fmt_ctx, path.toUtf8().constData(), nullptr, nullptr) == 0) {
+        if (avformat_find_stream_info(fmt_ctx, nullptr) >= 0) {
+            // Длительность
+            double duration = (double)fmt_ctx->duration / AV_TIME_BASE;
+            info["duration"] = duration;
+
+            // Формат контейнера
+            if (fmt_ctx->iformat && fmt_ctx->iformat->long_name) {
+                info["format"] = QString::fromUtf8(fmt_ctx->iformat->long_name);
+            } else {
+                info["format"] = "N/A";
+            }
+
+            // Общий битрейт (ИСПРАВЛЕНО: приведение типов)
+            info["bitrate"] = static_cast<qlonglong>(fmt_ctx->bit_rate / 1000); // в kbps
+
+            // Ищем видеопоток
+            int video_stream_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+            if (video_stream_idx >= 0) {
+                AVStream *stream = fmt_ctx->streams[video_stream_idx];
+                AVCodecParameters *codecpar = stream->codecpar;
+
+                info["width"] = codecpar->width;
+                info["height"] = codecpar->height;
+                // ИСПРАВЛЕНО
+                info["video_bitrate"] = static_cast<qlonglong>(codecpar->bit_rate / 1000);
+
+                const AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
+                if (codec) {
+                    info["video_codec"] = QString::fromUtf8(codec->long_name);
+                } else {
+                    info["video_codec"] = "Unknown";
+                }
+            } else {
+                info["width"] = 0;
+                info["height"] = 0;
+                info["video_bitrate"] = 0;
+                info["video_codec"] = "N/A";
+            }
+
+            // Ищем аудиопоток
+            int audio_stream_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+            if (audio_stream_idx >= 0) {
+                AVStream *stream = fmt_ctx->streams[audio_stream_idx];
+                AVCodecParameters *codecpar = stream->codecpar;
+
+                // ИСПРАВЛЕНО
+                info["audio_bitrate"] = static_cast<qlonglong>(codecpar->bit_rate / 1000);
+                info["sample_rate"] = codecpar->sample_rate;
+                info["channels"] = codecpar->ch_layout.nb_channels;
+
+                const AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
+                if (codec) {
+                    info["audio_codec"] = QString::fromUtf8(codec->long_name);
+                } else {
+                    info["audio_codec"] = "Unknown";
+                }
+            } else {
+                info["audio_bitrate"] = 0;
+                info["sample_rate"] = 0;
+                info["channels"] = 0;
+                info["audio_codec"] = "N/A";
+            }
+        }
+        avformat_close_input(&fmt_ctx);
+    } else {
+        // Если FFmpeg не смог открыть файл, ставим заглушки
+        info["duration"] = 0;
+        info["format"] = "N/A";
+        info["width"] = 0;
+        info["height"] = 0;
+        info["video_codec"] = "N/A";
+        info["audio_codec"] = "N/A";
+    }
+
+    return info;
+}
+
+void MediaManager::openInFileManager(const QString &path) {
+    if (path.isEmpty()) return;
+    QFileInfo fi(path);
+    if (!fi.exists()) return;
+
+    QDesktopServices::openUrl(QUrl::fromLocalFile(fi.absolutePath()));
+}
+
+void MediaManager::removeFromPlaylist(int index) {
+    if (!m_playlist) return;
+
+    if (index == m_playlist->currentIndex()) {
+        int nextIndex = m_playlist->currentIndex();
+        m_playlist->removeItem(index);
+
+        if (nextIndex >= 0 && nextIndex < m_playlist->rowCount()) {
+            playIndex(nextIndex);
+        } else {
+            if (m_mpv) m_mpv->command(QStringList() << "stop");
+        }
+    } else {
+        m_playlist->removeItem(index);
+    }
+}
+
 void MediaManager::addToPlaylist(const QString &path) {
     if (!m_mpv) return;
 
@@ -97,14 +249,12 @@ void MediaManager::addToPlaylist(const QString &path) {
         QFileInfo fi(cleanPath);
     if (!fi.exists()) return;
 
-    // Если файл уже есть в плейлисте, просто играем его
     int existingIndex = m_playlist->indexOf(cleanPath);
     if (existingIndex >= 0) {
         playIndex(existingIndex);
         return;
     }
 
-    // Собираем файлы (из папки или один файл)
     QStringList newFiles;
     if (fi.isDir()) {
         QDir dir(cleanPath);
@@ -120,30 +270,23 @@ void MediaManager::addToPlaylist(const QString &path) {
 
     if (newFiles.isEmpty()) return;
 
-    // Получаем текущий список
     QStringList currentFiles;
     for (int i = 0; i < m_playlist->rowCount(); ++i) {
         currentFiles << m_playlist->fileAt(i);
     }
 
-    // Добавляем только те, которых еще нет
     for (const QString &f : newFiles) {
         if (!currentFiles.contains(f)) {
             currentFiles << f;
         }
     }
 
-    // ВАЖНО: Устанавливаем в качестве текущего файла именно тот, который открыли,
-    // чтобы в режиме shuffle он встал на первое место.
     m_playlist->setFiles(currentFiles, cleanPath);
 
-    // Если режим shuffle, перемешиваем.
-    // Так как m_currentPlayingFile теперь cleanPath, он встанет первым, а остальное перемешается.
     if (m_playMode == "shuffle") {
         m_playlist->setShuffle(true);
     }
 
-    // Играем этот файл (он теперь на индексе 0 в режиме shuffle)
     int newIdx = m_playlist->indexOf(cleanPath);
     if (newIdx >= 0) {
         playIndex(newIdx);
@@ -164,7 +307,6 @@ void MediaManager::openFile(const QString &path) {
         QFileInfo fi(cleanPath);
     if (!fi.exists()) return;
 
-    // Если включена настройка добавления в существующий плейлист и там уже есть файлы
     if (m_config && m_config->appendToPlaylist() && m_playlist->rowCount() > 0) {
         addToPlaylist(cleanPath);
         return;
@@ -250,19 +392,15 @@ void MediaManager::playNext() {
     if (m_playMode == "repeat") {
         if (current >= 0) playIndex(current);
     } else if (m_playMode == "shuffle") {
-        // В shuffle режиме мы просто идем по уже перемешанному списку
         int next = current + 1;
         if (next < count) {
             playIndex(next);
         } else {
-            // Если дошли до конца перемешанного списка, можно либо остановиться,
-            // либо перемешать заново. Давайте просто остановимся.
             if (m_mpv) m_mpv->setPaused(true);
         }
     } else if (m_playMode == "stop") {
         if (m_mpv) m_mpv->setPaused(true);
     } else {
-        // sequential
         int next = current + 1;
         if (next < count) playIndex(next);
     }
@@ -270,19 +408,22 @@ void MediaManager::playNext() {
 
 void MediaManager::playPrev() {
     if (!m_mpv) return;
-    QString currentFile = m_playlist->currentFile();
-    if (!m_history.isEmpty() && m_history.last() == currentFile) m_history.removeLast();
 
-    if (!m_history.isEmpty()) {
-        QString prevFile = m_history.last();
-        m_history.removeLast();
-        if (QFileInfo::exists(prevFile)) {
-            for (int i = 0; i < m_playlist->rowCount(); ++i) {
-                if (QFileInfo(m_playlist->fileAt(i)).absoluteFilePath() == QFileInfo(prevFile).absoluteFilePath()) {
-                    playIndex(i); return;
-                }
-            }
+    int current = m_playlist->currentIndex();
+    int count = m_playlist->rowCount();
+
+    if (count == 0) return;
+
+    if (current <= 0) {
+        if (current == 0) {
+            m_mpv->seekExact(0.0);
         }
+        return;
+    }
+
+    int prev = current - 1;
+    if (prev >= 0) {
+        playIndex(prev);
     }
 }
 

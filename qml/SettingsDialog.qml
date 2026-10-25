@@ -8,8 +8,8 @@ Dialog {
     title: qsTr("settings_title")
     modal: true
     focus: true
-    width: 750
-    height: 550
+    width: 800 // Немного увеличил ширину для красоты
+    height: 600
     padding: 0
 
     anchors.centerIn: Overlay.overlay
@@ -25,12 +25,13 @@ Dialog {
                               Kirigami.Theme.textColor.b, 0.2)
     }
 
-    readonly property int controlWidth: 180
+    // Ширина правой колонки для контролов
+    readonly property int controlWidth: 200
 
     contentItem: RowLayout {
         spacing: 0
 
-        // ЛЕВАЯ ПАНЕЛЬ
+        // ЛЕВАЯ ПАНЕЛЬ (Навигация)
         Rectangle {
             Layout.preferredWidth: 200
             Layout.fillHeight: true
@@ -84,160 +85,282 @@ Dialog {
                 CategoryButton { text: qsTr("settings_general"); isActive: settingsDialog.currentCategory === "general"; onClicked: settingsDialog.currentCategory = "general" }
                 CategoryButton { text: qsTr("settings_playlist"); isActive: settingsDialog.currentCategory === "playlist"; onClicked: settingsDialog.currentCategory = "playlist" }
                 CategoryButton { text: qsTr("settings_interface"); isActive: settingsDialog.currentCategory === "interface"; onClicked: settingsDialog.currentCategory = "interface" }
+                CategoryButton { text: qsTr("settings_about"); isActive: settingsDialog.currentCategory === "about"; onClicked: settingsDialog.currentCategory = "about" }
 
                 Item { Layout.fillHeight: true }
             }
         }
 
-        // ПРАВАЯ ПАНЕЛЬ
+        // ПРАВАЯ ПАНЕЛЬ (Настройки)
         ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: 24
 
-            ColumnLayout {
-                width: parent.width
-                spacing: 24
+            // Оборачиваем в Item, чтобы задать точную ширину
+            Item {
+                width: parent.width // Растягиваем на всю ширину ScrollView
+                implicitHeight: contentLayout.implicitHeight
 
-                // --- ОБЩИЕ ---
                 ColumnLayout {
-                    visible: settingsDialog.currentCategory === "general"
-                    Layout.fillWidth: true
-                    spacing: 16
+                    id: contentLayout
+                    width: parent.width
+                    spacing: 24
 
-                    Label { text: qsTr("settings_general"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
-
-                    // Строка: Remember Volume
-                    RowLayout {
+                    // ==========================================
+                    // --- ОБЩИЕ (General) ---
+                    // ==========================================
+                    ColumnLayout {
+                        visible: settingsDialog.currentCategory === "general"
                         Layout.fillWidth: true
-                        Label { text: qsTr("settings_remember_volume"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.rememberVolume; onToggled: Config.rememberVolume = checked }
-                        }
-                    }
+                        spacing: 16
 
-                    // Строка: Default Volume
-                    RowLayout {
-                        Layout.fillWidth: true
-                        visible: !Config.rememberVolume
-                        Label { text: qsTr("settings_default_volume"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            SpinBox {
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                font.pixelSize: 14
-                                from: 0; to: 100; stepSize: 5; value: Config.defaultVolume; onValueModified: Config.defaultVolume = value
+                        Label { text: qsTr("settings_general"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            // Строка: Remember Volume
+                            Label { text: qsTr("settings_remember_volume"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.rememberVolume; onToggled: Config.rememberVolume = checked }
                             }
-                        }
-                    }
 
-                    // Строка: Notifications
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: qsTr("settings_notifications"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.notifications; onToggled: Config.notifications = checked }
-                        }
-                    }
-
-                    // Строка: Single Instance
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: qsTr("settings_single_instance"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.singleInstance; onToggled: Config.singleInstance = checked }
-                        }
-                    }
-                }
-
-                // --- ПЛЕЙЛИСТ ---
-                ColumnLayout {
-                    visible: settingsDialog.currentCategory === "playlist"
-                    Layout.fillWidth: true
-                    spacing: 16
-
-                    Label { text: qsTr("settings_playlist"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
-
-                    // Строка: Append to current playlist
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: qsTr("settings_append_playlist"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.appendToPlaylist; onToggled: Config.appendToPlaylist = checked }
-                        }
-                    }
-
-                    // Строка: Playback Mode
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: qsTr("settings_play_mode"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            ComboBox {
-                                anchors.fill: parent
-                                font.pixelSize: 14
-                                model: [
-                                    { text: qsTranslate("ContextMenu", "playback_sequential"), value: "sequential" },
-                                    { text: qsTranslate("ContextMenu", "playback_repeat"), value: "repeat" },
-                                    { text: qsTranslate("ContextMenu", "playback_shuffle"), value: "shuffle" },
-                                    { text: qsTranslate("ContextMenu", "playback_stop"), value: "stop" }
-                                ]
-                                textRole: "text"; valueRole: "value"
-                                currentIndex: { let idx = model.findIndex(item => item.value === Config.playlistMode); return idx !== -1 ? idx : 0 }
-                                onActivated: (index) => { Config.playlistMode = model[index].value; Media.playMode = model[index].value }
-                            }
-                        }
-                    }
-                }
-
-                // --- ИНТЕРФЕЙС ---
-                ColumnLayout {
-                    visible: settingsDialog.currentCategory === "interface"
-                    Layout.fillWidth: true
-                    spacing: 16
-
-                    Label { text: qsTr("settings_interface"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
-
-                    // Строка: Language
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: qsTr("settings_language"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                        Item {
-                            Layout.preferredWidth: settingsDialog.controlWidth
-                            Layout.preferredHeight: 40
-                            ComboBox {
-                                id: langCombo
-                                anchors.fill: parent
-                                font.pixelSize: 14
-                                model: [
-                                    { value: "en", text: qsTr("lang_en") },
-                                    { value: "ru", text: qsTr("lang_ru") }
-                                ]
-                                textRole: "text"
-                                valueRole: "value"
-                                currentIndex: {
-                                    let idx = model.findIndex(item => item.value === Config.language);
-                                    return idx !== -1 ? idx : 0;
+                            // Строка: Default Volume
+                            Label { text: qsTr("settings_default_volume"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter; visible: !Config.rememberVolume }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                visible: !Config.rememberVolume
+                                SpinBox {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    font.pixelSize: 14
+                                    from: 0; to: 100; stepSize: 5; value: Config.defaultVolume; onValueModified: Config.defaultVolume = value
                                 }
-                                onActivated: (index) => {
-                                    let newLang = model[index].value;
-                                    if (Config.language !== newLang) {
-                                        Config.language = newLang;
+                            }
+
+                            // Строка: Notifications
+                            Label { text: qsTr("settings_notifications"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.notifications; onToggled: Config.notifications = checked }
+                            }
+
+                            // Строка: Single Instance
+                            Label { text: qsTr("settings_single_instance"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.singleInstance; onToggled: Config.singleInstance = checked }
+                            }
+                        }
+                    }
+
+                    // ==========================================
+                    // --- ПЛЕЙЛИСТ (Playlist) ---
+                    // ==========================================
+                    ColumnLayout {
+                        visible: settingsDialog.currentCategory === "playlist"
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        Label { text: qsTr("settings_playlist"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            // Строка: Append to current playlist
+                            Label { text: qsTr("settings_append_playlist"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.appendToPlaylist; onToggled: Config.appendToPlaylist = checked }
+                            }
+
+                            // Строка: Playback Mode
+                            Label { text: qsTr("settings_play_mode"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                ComboBox {
+                                    anchors.fill: parent
+                                    font.pixelSize: 14
+                                    model: [
+                                        { text: qsTranslate("ContextMenu", "playback_sequential"), value: "sequential" },
+                                        { text: qsTranslate("ContextMenu", "playback_repeat"), value: "repeat" },
+                                        { text: qsTranslate("ContextMenu", "playback_shuffle"), value: "shuffle" },
+                                        { text: qsTranslate("ContextMenu", "playback_stop"), value: "stop" }
+                                    ]
+                                    textRole: "text"; valueRole: "value"
+                                    currentIndex: { let idx = model.findIndex(item => item.value === Config.playlistMode); return idx !== -1 ? idx : 0 }
+                                    onActivated: (index) => { Config.playlistMode = model[index].value; Media.playMode = model[index].value }
+                                }
+                            }
+                        }
+                    }
+
+                    // ==========================================
+                    // --- ИНТЕРФЕЙС (Interface) ---
+                    // ==========================================
+                    ColumnLayout {
+                        visible: settingsDialog.currentCategory === "interface"
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        Label { text: qsTr("settings_interface"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            // Строка: Language
+                            Label { text: qsTr("settings_language"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                ComboBox {
+                                    id: langCombo
+                                    anchors.fill: parent
+                                    font.pixelSize: 14
+                                    model: [
+                                        { value: "en", text: qsTr("lang_en") },
+                                        { value: "ru", text: qsTr("lang_ru") }
+                                    ]
+                                    textRole: "text"
+                                    valueRole: "value"
+                                    currentIndex: {
+                                        let idx = model.findIndex(item => item.value === Config.language);
+                                        return idx !== -1 ? idx : 0;
                                     }
+                                    onActivated: (index) => {
+                                        let newLang = model[index].value;
+                                        if (Config.language !== newLang) {
+                                            Config.language = newLang;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ==========================================
+                    // --- О ПРОГРАММЕ (About) ---
+                    // ==========================================
+                    ColumnLayout {
+                        visible: settingsDialog.currentCategory === "about"
+                        Layout.fillWidth: true
+                        spacing: 16
+
+                        Label { text: qsTr("about_title"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: 16
+                            Layout.topMargin: 16
+
+                            Image {
+                                source: "qrc:/assets/luma.png"
+                                Layout.preferredWidth: 64
+                                Layout.preferredHeight: 64
+                                fillMode: Image.PreserveAspectFit
+                            }
+
+                            ColumnLayout {
+                                spacing: 2
+                                Label {
+                                    text: "Luma"
+                                    font.pixelSize: 28
+                                    font.weight: Font.Bold
+                                    color: Kirigami.Theme.textColor
+                                }
+                                Label {
+                                    text: qsTr("about_version").arg(Qt.application.version || "1.0")
+                                    font.pixelSize: 14
+                                    color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.7)
+                                }
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("about_description")
+                            color: Kirigami.Theme.textColor
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Layout.topMargin: 16
+
+                            Label {
+                                text: qsTr("about_links")
+                                font.weight: Font.Bold
+                                color: Kirigami.Theme.textColor
+                            }
+
+                            Label {
+                                text: '<a href="https://github.com/B612S/luma">' + qsTr("about_github") + '</a>'
+                                textFormat: Text.RichText
+                                color: Kirigami.Theme.highlightColor
+                                onLinkActivated: Qt.openUrlExternally(link)
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.NoButton
+                                }
+                            }
+
+                            Label {
+                                text: '<a href="https://mpv.io/">' + qsTr("about_mpv") + '</a>'
+                                textFormat: Text.RichText
+                                color: Kirigami.Theme.highlightColor
+                                onLinkActivated: Qt.openUrlExternally(link)
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.NoButton
+                                }
+                            }
+
+                            Label {
+                                text: '<a href="https://invent.kde.org/frameworks/kirigami">' + qsTr("about_kirigami") + '</a>'
+                                textFormat: Text.RichText
+                                color: Kirigami.Theme.highlightColor
+                                onLinkActivated: Qt.openUrlExternally(link)
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.NoButton
+                                }
+                            }
+
+                            Label {
+                                text: '<a href="https://invent.kde.org/libraries/mpvqt">' + qsTr("about_mpvqt") + '</a>'
+                                textFormat: Text.RichText
+                                color: Kirigami.Theme.highlightColor
+                                onLinkActivated: Qt.openUrlExternally(link)
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.NoButton
                                 }
                             }
                         }

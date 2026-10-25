@@ -2,17 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
-<name>AboutDialog</name>
-<message><source>about_title</source><translation>About</translation></message>
-<message><source>about_version</source><translation>Version %1</translation></message>
-<message><source>about_description</source><translation>Lightweight video player based on mpv and Qt/QML.</translation></message>
-<message><source>about_links</source><translation>Links:</translation></message>
-<message><source>about_github</source><translation>GitHub Repository</translation></message>
-<message><source>about_mpv</source><translation>Powered by mpv</translation></message>
-<message><source>about_close</source><translation>Close</translation></message>
-</context>
-
-<context>
 <name>ContextMenu</name>
 <message><source>menu_open</source><translation>Open</translation></message>
 <message><source>menu_open_file</source><translation>Open File</translation></message>
@@ -20,7 +9,6 @@
 <message><source>menu_open_url</source><translation>Open URL</translation></message>
 <message><source>menu_back</source><translation>Back</translation></message>
 <message><source>menu_exit</source><translation>Exit</translation></message>
-<message><source>menu_about</source><translation>About Luma</translation></message>
 <message><source>menu_settings</source><translation>Settings</translation></message>
 <message><source>menu_audio</source><translation>Audio</translation></message>
 <message><source>menu_video</source><translation>Video</translation></message>
@@ -52,13 +40,29 @@
 <message><source>settings_single_instance</source><translation>Single Instance</translation></message>
 <message><source>settings_play_mode</source><translation>Playback Mode</translation></message>
 <message><source>settings_append_playlist</source><translation>Append to current playlist</translation></message>
-<message><source>settings_no_options</source><translation>No options available yet.</translation></message>
 <message><source>settings_close</source><translation>Close</translation></message>
-
-<!-- НАЗВАНИЯ ЯЗЫКОВ -->
+<message><source>settings_about</source><translation>About</translation></message>
 <message><source>lang_en</source><translation>English</translation></message>
 <message><source>lang_ru</source><translation>Русский</translation></message>
 
+<message><source>about_title</source><translation>About</translation></message>
+<message><source>about_version</source><translation>Version %1</translation></message>
+<message><source>about_description</source><translation>Lightweight video player based on mpv and Qt/QML.</translation></message>
+<message><source>about_links</source><translation>Links:</translation></message>
+<message><source>about_github</source><translation>GitHub Repository</translation></message>
+<message><source>about_mpv</source><translation>Powered by mpv</translation></message>
+<message><source>about_kirigami</source><translation>Powered by Kirigami</translation></message>
+<message><source>about_mpvqt</source><translation>Based on mpvqt</translation></message>
+<message><source>about_close</source><translation>Close</translation></message>
+</context>
+
+<context>
+<name>PlaylistPanel</name>
+<message><source>playlist_play</source><translation>Play</translation></message>
+<message><source>playlist_shuffle</source><translation>Shuffle all</translation></message>
+<message><source>playlist_open_folder</source><translation>Open in %1</translation></message>
+<message><source>playlist_remove</source><translation>Remove from playlist</translation></message>
+<message><source>playlist_info</source><translation>Information</translation></message>
 </context>
 
 <context>
@@ -67,19 +71,20 @@
 <message><source>stats_size</source><translation>Size</translation></message>
 <message><source>stats_format</source><translation>Format</translation></message>
 <message><source>stats_duration</source><translation>Duration</translation></message>
-<message><source>stats_video</source><translation>Video</translation></message>
+<message><source>stats_video</source><translation>Video Codec</translation></message>
 <message><source>stats_resolution</source><translation>Resolution</translation></message>
 <message><source>stats_fps</source><translation>FPS</translation></message>
-<message><source>stats_vid_bitrate</source><translation>Vid Bitrate</translation></message>
+<message><source>stats_vid_bitrate</source><translation>Video Bitrate</translation></message>
 <message><source>stats_hwdec</source><translation>HW Decoder</translation></message>
 <message><source>stats_dropped</source><translation>Dropped</translation></message>
-<message><source>stats_audio</source><translation>Audio</translation></message>
+<message><source>stats_audio</source><translation>Audio Codec</translation></message>
 <message><source>stats_channels</source><translation>Channels</translation></message>
 <message><source>stats_samplerate</source><translation>Samplerate</translation></message>
-<message><source>stats_aud_bitrate</source><translation>Aud Bitrate</translation></message>
+<message><source>stats_aud_bitrate</source><translation>Audio Bitrate</translation></message>
 <message><source>stats_ao</source><translation>Audio Output</translation></message>
 <message><source>stats_avsync</source><translation>A/V Sync</translation></message>
 <message><source>stats_cache</source><translation>Cache</translation></message>
+<message><source>stats_path</source><translation>Path</translation></message>
 </context>
 
 <context>

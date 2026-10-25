@@ -39,6 +39,11 @@ public:
     Q_INVOKABLE void playPrev();
     Q_INVOKABLE void playIndex(int index);
 
+    Q_INVOKABLE void openInFileManager(const QString &path);
+    Q_INVOKABLE void removeFromPlaylist(int index);
+    Q_INVOKABLE QString getDefaultFileManagerName();
+    Q_INVOKABLE QVariantMap getFileInfo(const QString &path);
+
     Q_INVOKABLE void openFileDialog();
     Q_INVOKABLE void openFolderDialog();
     Q_INVOKABLE void openUrlDialog();

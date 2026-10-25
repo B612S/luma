@@ -115,3 +115,35 @@ void PlaylistModel::moveItem(int from, int to) {
     endMoveRows();
     m_originalFiles = m_files;
 }
+
+void PlaylistModel::removeItem(int index) {
+    if (index < 0 || index >= m_files.size()) return;
+
+    // Запоминаем, был ли удален текущий трек
+    bool wasCurrent = (m_currentIndex == index);
+
+    beginRemoveRows(QModelIndex(), index, index);
+    QString file = m_files.takeAt(index);
+    m_originalFiles.removeAll(file);
+    endRemoveRows();
+
+    if (wasCurrent) {
+        if (m_files.isEmpty()) {
+            m_currentIndex = -1;
+            m_currentPlayingFile.clear();
+        } else {
+            // Если удалили текущий, новый текущий — тот, что встал на его место
+            // (или последний, если удалили последний)
+            m_currentIndex = qMin(index, m_files.size() - 1);
+            m_currentPlayingFile = m_files[m_currentIndex];
+            // Сообщаем QML, что у нового текущего элемента изменились данные
+            emit dataChanged(this->index(m_currentIndex), this->index(m_currentIndex));
+        }
+        emit currentIndexChanged();
+    } else if (m_currentIndex > index) {
+        m_currentIndex--;
+        emit currentIndexChanged();
+        // Если текущий трек сместился, нужно обновить его отображение (жирный шрифт)
+        emit dataChanged(this->index(m_currentIndex), this->index(m_currentIndex));
+    }
+}

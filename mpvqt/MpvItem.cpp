@@ -13,6 +13,9 @@
 MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     m_frameDecoder = new FrameDecoder(this);
 
+    // Запускаем таймер троттлинга
+    m_positionTimer.start();
+
     connect(mpvController(), &MpvController::propertyChanged, this, &MpvItem::onMpvPropertyChanged);
 
     connect(mpvController(), &MpvController::fileLoaded, this, [this]() {
@@ -106,7 +109,18 @@ QString MpvItem::getAudioOutput() {
 }
 
 void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &value) {
-    if (property == "time-pos") { m_position = value.toDouble(); emit positionChanged(); }
+    if (property == "time-pos") {
+        // ТРОТТЛИНГ: Обновляем QML не чаще, чем раз в 200 мс
+        if (m_positionTimer.elapsed() > 200) {
+            m_position = value.toDouble();
+            emit positionChanged();
+            m_positionTimer.restart();
+        } else {
+            // Все равно обновляем внутреннюю переменную,
+            // чтобы при следующем "тике" отправить актуальное значение
+            m_position = value.toDouble();
+        }
+    }
     else if (property == "duration") { m_duration = value.toDouble(); emit durationChanged(); }
     else if (property == "pause") { m_paused = value.toBool(); emit pausedChanged(); }
     else if (property == "volume") { m_volume = value.toDouble(); emit volumeChanged(); }

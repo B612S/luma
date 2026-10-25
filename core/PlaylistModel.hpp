@@ -17,6 +17,7 @@ public:
     Q_INVOKABLE QString currentFile() const;
     Q_INVOKABLE void setShuffle(bool shuffle);
     Q_INVOKABLE void moveItem(int from, int to);
+    Q_INVOKABLE void removeItem(int index);
 
     bool contains(const QString &path) const { return m_files.contains(path); }
     int indexOf(const QString &path) const { return m_files.indexOf(path); }

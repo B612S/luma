@@ -11,6 +11,7 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+    // Анимация появления самого меню
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 150; easing.type: Easing.InOutQuad }
     }
@@ -34,13 +35,29 @@ Popup {
     property var mpv: null
     property string currentAspect: "original"
 
-    // Восстановленный сигнал
     signal toggleCropRequested()
 
     onCurrentPageChanged: {
         if (currentPage === "aspect_ratio") {
             currentAspect = Media.getAspectRatio()
         }
+
+        // Запускаем анимацию появления для ВСЕГО меню (фона и текста)
+        // Сначала мгновенно делаем меню прозрачным, затем плавно проявляем
+        pageFadeAnim.stop()
+        menu.opacity = 0.0
+        pageFadeAnim.start()
+    }
+
+    // Анимация, которая проявляет всё меню целиком
+    NumberAnimation {
+        id: pageFadeAnim
+        target: menu
+        property: "opacity"
+        from: 0.0
+        to: 1.0
+        duration: 150
+        easing.type: Easing.InOutQuad
     }
 
     component MenuButton: Rectangle {
@@ -133,7 +150,6 @@ Popup {
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
             MenuButton { text: qsTr("menu_settings"); onClicked: { menu.close(); settingsDialog.open() } }
-            MenuButton { text: qsTr("menu_about"); onClicked: { menu.close(); aboutDialog.open() } }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
@@ -275,5 +291,10 @@ Popup {
 
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "playback" }
         }
+    }
+
+    // Функция для получения точной высоты меню
+    function getContentHeight() {
+        return contentColumn.implicitHeight + menu.topPadding + menu.bottomPadding;
     }
 }

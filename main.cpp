@@ -125,13 +125,12 @@ int main(int argc, char *argv[]) {
 
     if (!isPrimaryInstance) return 0;
 
-    // --- ДИНАМИЧЕСКИЙ ПЕРЕВОДЧИК ---
     QTranslator *translator = new QTranslator(&app);
 
     auto loadLanguage = [&](const QString &lang) {
         app.removeTranslator(translator);
-        QString sysPath = "/usr/share/luma/translations/luma_" + lang + ".qm";
-        QString localPath = QCoreApplication::applicationDirPath() + "/luma_" + lang + ".qm";
+        QString sysPath = "/usr/share/luma/translations/" + lang + ".qm";
+        QString localPath = QCoreApplication::applicationDirPath() + "/" + lang + ".qm";
 
         if (translator->load(sysPath) || translator->load(localPath)) {
             app.installTranslator(translator);
