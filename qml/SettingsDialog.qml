@@ -213,9 +213,12 @@ Dialog {
                                     id: langCombo
                                     anchors.fill: parent
                                     font.pixelSize: 14
+                                    // Используем нативные названия языков (эндонимы)
                                     model: [
-                                        { value: "en", text: qsTr("lang_en") },
-                                        { value: "ru", text: qsTr("lang_ru") }
+                                        { value: "en", text: "English" },
+                                        { value: "ru", text: "Русский" },
+                                        { value: "ja", text: "日本語" },
+                                        { value: "zh_CN", text: "简体中文" }
                                     ]
                                     textRole: "text"
                                     valueRole: "value"
@@ -232,14 +235,14 @@ Dialog {
                                 }
                             }
 
-                            // --- НОВАЯ НАСТРОЙКА ---
+                            // --- НАСТРОЙКА ЗАКРЕПЛЕНИЯ ПАНЕЛИ ---
                             Label { text: qsTr("settings_pin_controls"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
                                 Layout.preferredHeight: 40
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.pinControls; onToggled: Config.pinControls = checked }
                             }
-                            // -----------------------
+                            // ------------------------------------
                         }
                     }
 

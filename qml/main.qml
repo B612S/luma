@@ -14,7 +14,6 @@ ApplicationWindow {
     color: "black"
 
     property bool controlsVisible: true
-    property bool showTitle: false
     signal toggleCropRequested()
 
     readonly property int bottomZoneHeight: 70
@@ -81,9 +80,9 @@ ApplicationWindow {
 
             root.cursorVisible = false;
 
+            // Панель скрывается только если она не закреплена
             if (!Config.pinControls) {
                 root.controlsVisible = false;
-                root.showTitle = false;
             }
         }
     }
@@ -129,14 +128,6 @@ ApplicationWindow {
         }
     }
 
-    Connections {
-        target: Media
-        function onFileChanged() {
-            root.showTitle = true;
-            idleTimer.restart();
-        }
-    }
-
     // ---------- Видео ----------
     MpvItem {
         id: mpv
@@ -144,9 +135,9 @@ ApplicationWindow {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
+        // Прижимаем видео строго к верхней границе панели
         anchors.bottom: Config.pinControls ? controlBar.top : parent.bottom
         volume: Config.volume
-
         z: 0
 
         Connections {
@@ -273,44 +264,17 @@ ApplicationWindow {
         z: 2
     }
 
-    // Название видео
-    Item {
-        id: titleSpace
-        anchors.bottom: controlBar.top
-        anchors.bottomMargin: 2
-        anchors.top: playlistPanel.bottom
-        anchors.topMargin: 2
-        anchors.left: parent.left
-        anchors.right: parent.right
-
-        // Название не показываем в режиме закрепления
-        visible: root.showTitle && !Config.pinControls
-        enabled: false
-
-        Label {
-            id: titleLabel
-            anchors.fill: parent
-            text: Media.currentFileName !== "" ? Media.currentFileName : ""
-            color: "white"
-            font.pixelSize: 12
-            font.weight: Font.Bold
-            elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-
-            visible: text !== ""
-            style: Text.Outline
-            styleColor: "black"
-        }
-    }
-
     // ПАНЕЛЬ УПРАВЛЕНИЯ
     ControlBar {
         id: controlBar
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: 20
+        anchors.leftMargin: Config.pinControls ? 0 : 20
+        anchors.rightMargin: Config.pinControls ? 0 : 20
+        anchors.bottomMargin: Config.pinControls ? 0 : 20
+
+        pinned: Config.pinControls
         mpv: mpv
         isOpen: root.controlsVisible || Config.pinControls
         isPlaylistOpen: playlistPanel.isOpen

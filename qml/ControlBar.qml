@@ -6,10 +6,17 @@ import org.kde.kirigami as Kirigami
 Rectangle {
     id: root
     height: 56
+
+    // Флаг закрепления (приходит из main.qml)
+    property bool pinned: false
+
     color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                    Kirigami.Theme.backgroundColor.g,
                    Kirigami.Theme.backgroundColor.b, 0.85)
-    radius: 8
+
+    // В закрепленном режиме (док) скруглений нет, в обычном — есть
+    radius: pinned ? 0 : 8
+
     border.color: "transparent"
 
     property var mpv
@@ -25,7 +32,6 @@ Rectangle {
     visible: opacity > 0
     opacity: 1.0
 
-    // Текущая позиция/длительность с учетом кастинга
     property double displayPosition: CastManager.casting ? CastManager.remotePosition : (mpv.position || 0)
     property double displayDuration: CastManager.casting ? CastManager.remoteDuration : (mpv.duration || 0)
     property bool displayPaused: CastManager.casting ? !CastManager.isRemotePlaying : mpv.paused
@@ -247,7 +253,7 @@ Rectangle {
                 Connections {
                     target: seekSlider
                     function onValueChanged() {
-                        if (seekSlider.seeking && !CastManager.casting) { // Отключаем превью при кастинге
+                        if (seekSlider.seeking && !CastManager.casting) {
                             seekTooltip.pendingTime = seekSlider.value;
                             thumbDebounce.restart();
                         }

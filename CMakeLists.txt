@@ -93,11 +93,15 @@ qt_add_translations(luma
     TS_FILES
         locales/en.ts
         locales/ru.ts
+        locales/ja.ts
+        locales/zh_CN.ts
 )
 
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/en.qm
     ${CMAKE_CURRENT_BINARY_DIR}/ru.qm
+    ${CMAKE_CURRENT_BINARY_DIR}/ja.qm
+    ${CMAKE_CURRENT_BINARY_DIR}/zh_CN.qm
     DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/translations
 )
 
