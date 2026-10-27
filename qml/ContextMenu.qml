@@ -33,6 +33,7 @@ Popup {
     property string currentAspect: "original"
 
     signal toggleCropRequested()
+    signal togglePlaylistRequested()
 
     onCurrentPageChanged: {
         if (currentPage === "aspect_ratio") {
@@ -138,6 +139,11 @@ Popup {
             MenuButton { text: qsTr("menu_playback"); hasArrow: true; isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false; onClicked: menu.currentPage = "playback" }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+            MenuButton {
+                text: qsTr("menu_playlist")
+                onClicked: { menu.togglePlaylistRequested(); menu.close() }
+            }
 
             MenuButton { text: qsTr("menu_stats"); onClicked: { statsPanel.isOpen = !statsPanel.isOpen; menu.close() } }
 

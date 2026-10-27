@@ -27,6 +27,7 @@
 <message><source>playback_stop</source><translation>Остановить</translation></message>
 <message><source>aspect_original</source><translation>Оригинальное</translation></message>
 <message><source>osd_aspect</source><translation>Соотношение: %1</translation></message>
+<message><source>menu_playlist</source><translation>Плейлист</translation></message>
 </context>
 
 <context>

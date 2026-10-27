@@ -27,6 +27,7 @@
 <message><source>playback_stop</source><translation>Stop</translation></message>
 <message><source>aspect_original</source><translation>Original</translation></message>
 <message><source>osd_aspect</source><translation>Aspect: %1</translation></message>
+<message><source>menu_playlist</source><translation>Playlist</translation></message>
 </context>
 
 <context>

@@ -287,8 +287,11 @@ ApplicationWindow {
         z: 1000
         parent: Overlay.overlay
         onToggleCropRequested: root.toggleCropRequested()
+        onTogglePlaylistRequested: {
+            playlistPanel.isOpen = !playlistPanel.isOpen
+            if (!playlistPanel.isOpen) hideTimer.restart()
+        }
 
-        // Закрываем меню плейлиста при открытии главного меню
         onOpened: {
             if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
                 playlistPanel.closeContextMenu();

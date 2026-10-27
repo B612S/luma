@@ -208,10 +208,20 @@ QVariantMap MediaManager::getFileInfo(const QString &path) {
 
 void MediaManager::openInFileManager(const QString &path) {
     if (path.isEmpty()) return;
+
     QFileInfo fi(path);
     if (!fi.exists()) return;
 
-    QDesktopServices::openUrl(QUrl::fromLocalFile(fi.absolutePath()));
+    QString folderPath = fi.absolutePath();
+
+    QProcess process;
+    process.setProgram("xdg-open");
+    process.setArguments({folderPath});
+
+    if (!process.startDetached()) {
+        // Если xdg-open не сработал, пробуем QDesktopServices
+        QDesktopServices::openUrl(QUrl::fromLocalFile(folderPath));
+    }
 }
 
 void MediaManager::removeFromPlaylist(int index) {
