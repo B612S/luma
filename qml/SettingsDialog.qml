@@ -36,8 +36,6 @@ Dialog {
                            Kirigami.Theme.backgroundColor.b, 0.5)
             radius: 8
 
-            // Лишний белый прямоугольник удален отсюда
-
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 12
@@ -233,6 +231,15 @@ Dialog {
                                     }
                                 }
                             }
+
+                            // --- НОВАЯ НАСТРОЙКА ---
+                            Label { text: qsTr("settings_pin_controls"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.pinControls; onToggled: Config.pinControls = checked }
+                            }
+                            // -----------------------
                         }
                     }
 

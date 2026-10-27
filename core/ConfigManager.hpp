@@ -13,6 +13,7 @@ class ConfigManager : public QObject {
     Q_PROPERTY(bool appendToPlaylist READ appendToPlaylist WRITE setAppendToPlaylist NOTIFY appendToPlaylistChanged)
     Q_PROPERTY(bool singleInstance READ singleInstance WRITE setSingleInstance NOTIFY singleInstanceChanged)
     Q_PROPERTY(bool notifications READ notifications WRITE setNotifications NOTIFY notificationsChanged)
+    Q_PROPERTY(bool pinControls READ pinControls WRITE setPinControls NOTIFY pinControlsChanged)
 
 public:
     explicit ConfigManager(QObject *parent = nullptr);
@@ -41,6 +42,9 @@ public:
     bool notifications() const;
     void setNotifications(bool enabled);
 
+    bool pinControls() const;
+    void setPinControls(bool enabled);
+
     Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
     Q_INVOKABLE void setValue(const QString &key, const QVariant &value);
 
@@ -55,6 +59,7 @@ signals:
     void appendToPlaylistChanged();
     void singleInstanceChanged();
     void notificationsChanged();
+    void pinControlsChanged();
 
 private:
     QSettings *m_settings;

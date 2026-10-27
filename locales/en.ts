@@ -56,7 +56,6 @@
 <message><source>settings_about</source><translation>About</translation></message>
 <message><source>lang_en</source><translation>English</translation></message>
 <message><source>lang_ru</source><translation>Русский</translation></message>
-
 <message><source>about_title</source><translation>About</translation></message>
 <message><source>about_version</source><translation>Version %1</translation></message>
 <message><source>about_description</source><translation>Lightweight video player based on mpv and Qt/QML.</translation></message>
@@ -66,6 +65,7 @@
 <message><source>about_kirigami</source><translation>Powered by Kirigami</translation></message>
 <message><source>about_mpvqt</source><translation>Based on mpvqt</translation></message>
 <message><source>about_close</source><translation>Close</translation></message>
+<message><source>settings_pin_controls</source><translation>Pin controls panel</translation></message>
 </context>
 
 <context>

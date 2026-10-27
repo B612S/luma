@@ -89,16 +89,19 @@ Rectangle {
                 videoLabel.text = "<b>" + qsTr("stats_video") + ":</b> " + _staticVideoCodec
                 resLabel.text = "<b>" + qsTr("stats_resolution") + ":</b> " + _staticWidth + "x" + _staticHeight
                 fpsLabel.text = "<b>" + qsTr("stats_fps") + ":</b> " + safeNumber(mpv.property("container-fps"), 2)
+
                 let vidBitrate = mpv.property("video-bitrate");
             vidBitrateLabel.text = "<b>" + qsTr("stats_vid_bitrate") + ":</b> " + formatBitrate(vidBitrate)
+
             hwdecLabel.text = "<b>" + qsTr("stats_hwdec") + ":</b> " + safeString(mpv.property("hwdec-current"))
             droppedLabel.text = "<b>" + qsTr("stats_dropped") + ":</b> " + safeNumber(mpv.property("frame-drop-count"), 0)
 
             audioLabel.text = "<b>" + qsTr("stats_audio") + ":</b> " + _staticAudioCodec
             channelsLabel.text = "<b>" + qsTr("stats_channels") + ":</b> " + safeString(mpv.property("audio-params/channel-count"))
             samplerateLabel.text = "<b>" + qsTr("stats_samplerate") + ":</b> " + safeString(mpv.property("audio-params/samplerate")) + " Hz"
+
             let audBitrate = mpv.property("audio-bitrate");
-            audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatBitrate(audBitrate)
+            audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatAudioBitrate(audBitrate)
 
             // Умный запрос Audio Output (сначала пробуем QML, потом C++)
             let aoParams = mpv.property("audio-out-params");
@@ -118,11 +121,14 @@ Rectangle {
     }
 
     MouseArea {
+        id: hoverArea
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
         propagateComposedEvents: true
     }
+
+    property bool hovered: hoverArea.containsMouse
 
     Flickable {
         id: flickable
@@ -195,10 +201,24 @@ Rectangle {
         return mb.toFixed(2) + " MiB";
     }
 
+    // Корректное форматирование битрейта (mpv отдает в bps)
     function formatBitrate(bps) {
-        if (!bps || isNaN(bps)) return "0 kbps";
-        if (bps > 100000) bps = bps / 1000;
-        return bps.toFixed(0) + " kbps";
+        if (!bps || isNaN(bps) || bps <= 0) return "0 kbps";
+
+        if (bps >= 1000000) {
+            return (bps / 1000000).toFixed(2) + " Mbps";
+        }
+        return (bps / 1000).toFixed(0) + " kbps";
+    }
+
+    // Защита от глюков mpv (иногда выдает огромные значения аудио на старте)
+    function formatAudioBitrate(bps) {
+        if (!bps || isNaN(bps) || bps <= 0) return "0 kbps";
+
+        const kbps = bps / 1000;
+        if (kbps > 1500) return "N/A"; // Аудио > 1500 kbps — это баг mpv
+
+        return kbps.toFixed(0) + " kbps";
     }
 
     function formatTime(seconds) {

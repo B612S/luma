@@ -17,62 +17,75 @@ ApplicationWindow {
     property bool showTitle: false
     signal toggleCropRequested()
 
+    readonly property int bottomZoneHeight: 70
+
+    property real cursorY: root.height
+    property bool cursorVisible: true
+    property real lastMouseX: -1
+    property real lastMouseY: -1
+
     Component.onCompleted: {
         root.requestActivate()
-        hideTimer.start()
-    }
-
-    function isContextMenuVisible() {
-        if (typeof contextMenu !== "undefined" && contextMenu !== null) {
-            return contextMenu.visible;
+        if (Config.pinControls) {
+            root.controlsVisible = true;
         }
-        return false;
+        idleTimer.start()
     }
 
-    function isStatsOpen() {
-        if (typeof statsPanel !== "undefined" && statsPanel !== null) {
-            return statsPanel.isOpen;
+    Connections {
+        target: Config
+        function onPinControlsChanged() {
+            if (Config.pinControls) {
+                root.controlsVisible = true;
+            }
         }
-        return false;
     }
 
-    HoverHandler {
-        id: windowHover
+    function isInteracting() {
+        if (typeof controlBar === "undefined" || controlBar === null) return false;
+        return controlBar.hovered || controlBar.isSeeking || controlBar.isVolumeSeeking;
     }
 
-    Timer {
-        id: hideTimer
-        interval: 2500
-        repeat: false
-        onTriggered: {
-            var isOverControls = (typeof controlBar !== "undefined" && controlBar !== null && controlBar.hovered);
-            var isMouseInBottomZone = windowHover.point.position.y > root.height - 90;
+    function wakeCursor() {
+        root.cursorVisible = true;
+        idleTimer.restart();
+    }
 
-            var noVideo = (mpv.duration <= 0);
-            var isPaused = mpv.paused;
+    function onCursorMoved() {
+        root.cursorVisible = true;
+        idleTimer.restart();
 
-            if (isOverControls || isMouseInBottomZone ||
-                (typeof controlBar !== "undefined" && controlBar && (controlBar.isSeeking || controlBar.isVolumeSeeking)) ||
-                isContextMenuVisible() || isPaused || noVideo) {
-                hideTimer.restart()
-                } else {
-                    root.controlsVisible = false
-                }
+        const inBottomZone = root.cursorY > root.height - root.bottomZoneHeight;
+        if (inBottomZone && !root.controlsVisible) {
+            root.controlsVisible = true;
         }
     }
 
     Timer {
-        id: titleHideTimer
-        interval: 4000
+        id: idleTimer
+        interval: 2000
         repeat: false
         onTriggered: {
-            root.showTitle = false;
-        }
-    }
+            if (root.isInteracting()) { idleTimer.restart(); return; }
 
-    function wakeUp() {
-        if (!root.controlsVisible) root.controlsVisible = true
-            hideTimer.restart()
+            const noVideo = (mpv.duration <= 0);
+            const isPaused = mpv.paused;
+
+            if (noVideo || isPaused) {
+                idleTimer.restart();
+                return;
+            }
+
+            const inBottomZone = root.cursorY > root.height - root.bottomZoneHeight;
+            if (inBottomZone) { idleTimer.restart(); return; }
+
+            root.cursorVisible = false;
+
+            if (!Config.pinControls) {
+                root.controlsVisible = false;
+                root.showTitle = false;
+            }
+        }
     }
 
     Connections {
@@ -80,14 +93,15 @@ ApplicationWindow {
         function onPausedChanged() {
             if (mpv.paused) {
                 root.controlsVisible = true;
-                hideTimer.stop();
+                root.cursorVisible = true;
+                idleTimer.stop();
             } else if (mpv.duration > 0) {
-                hideTimer.start();
+                idleTimer.start();
             }
         }
         function onDurationChanged() {
-            if (mpv.duration > 0) {
-                if (root.controlsVisible) hideTimer.start();
+            if (mpv.duration > 0 && root.controlsVisible) {
+                idleTimer.restart();
             }
         }
     }
@@ -95,19 +109,22 @@ ApplicationWindow {
     Connections {
         target: controlBar
         function onIsSeekingChanged() {
-            if (controlBar.isSeeking) hideTimer.stop()
-                else hideTimer.start()
+            if (controlBar.isSeeking) { idleTimer.stop(); root.cursorVisible = true; }
+            else idleTimer.start();
         }
         function onIsVolumeSeekingChanged() {
-            if (controlBar.isVolumeSeeking) hideTimer.stop()
-                else hideTimer.start()
+            if (controlBar.isVolumeSeeking) { idleTimer.stop(); root.cursorVisible = true; }
+            else idleTimer.start();
         }
         function onHoveredChanged() {
             if (controlBar.hovered) {
-                hideTimer.stop()
-                root.controlsVisible = true
+                idleTimer.stop();
+                root.controlsVisible = true;
+                root.cursorVisible = true;
             } else {
-                hideTimer.start()
+                if (root.controlsVisible) {
+                    idleTimer.restart();
+                }
             }
         }
     }
@@ -116,18 +133,22 @@ ApplicationWindow {
         target: Media
         function onFileChanged() {
             root.showTitle = true;
-            titleHideTimer.restart();
+            idleTimer.restart();
         }
     }
 
-    // ВИДЕО
+    // ---------- Видео ----------
     MpvItem {
         id: mpv
         objectName: "mpv"
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: Config.pinControls ? controlBar.top : parent.bottom
         volume: Config.volume
 
-        // Ставим локальный плеер на паузу при старте трансляции
+        z: 0
+
         Connections {
             target: CastManager
             function onCastingChanged() {
@@ -138,16 +159,39 @@ ApplicationWindow {
         }
 
         MouseArea {
+            id: videoMouseArea
             anchors.fill: parent
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
 
-            cursorShape: (root.controlsVisible || mpv.duration <= 0 || mpv.paused) ? Qt.ArrowCursor : Qt.BlankCursor
+            cursorShape: root.cursorVisible ? Qt.ArrowCursor : Qt.BlankCursor
 
-            onPositionChanged: root.wakeUp()
+            onPositionChanged: (mouse) => {
+                if (Math.abs(mouse.x - root.lastMouseX) < 3 &&
+                    Math.abs(mouse.y - root.lastMouseY) < 3) {
+                    return;
+                    }
+                    root.lastMouseX = mouse.x;
+                root.lastMouseY = mouse.y;
+
+                const globalPos = mapToItem(null, mouse.x, mouse.y);
+                root.cursorY = globalPos.y;
+
+                if (contextMenu.visible && !contextMenu.cursorWasVisible) {
+                    return;
+                }
+
+                root.onCursorMoved();
+            }
+
+            onExited: {
+                root.cursorY = -1;
+                root.lastMouseX = -1;
+                root.lastMouseY = -1;
+                idleTimer.restart();
+            }
 
             onClicked: (mouse) => {
-                root.wakeUp()
                 if (mouse.button === Qt.RightButton) {
                     if (contextMenu.visible) {
                         contextMenu.close();
@@ -155,9 +199,7 @@ ApplicationWindow {
                     }
 
                     var controlBarTop = root.height - 20 - controlBar.height;
-                    if (mouse.y >= controlBarTop) {
-                        return;
-                    }
+                    if (mouse.y >= controlBarTop) return;
 
                     contextMenu.currentPage = "main";
 
@@ -168,12 +210,8 @@ ApplicationWindow {
                     var px = globalPos.x;
                     var py = globalPos.y;
 
-                    if (px + menuWidth > root.width) {
-                        px = root.width - menuWidth - 10;
-                    }
-                    if (py + menuHeight > root.height) {
-                        py = globalPos.y - menuHeight;
-                    }
+                    if (px + menuWidth > root.width) px = root.width - menuWidth - 10;
+                    if (py + menuHeight > root.height) py = globalPos.y - menuHeight;
 
                     px = Math.max(10, px);
                     py = Math.max(10, py);
@@ -186,8 +224,8 @@ ApplicationWindow {
 
             onDoubleClicked: (mouse) => {
                 if (mouse.button === Qt.LeftButton) {
-                    if (root.visibility === Window.FullScreen) root.showNormal()
-                        else root.showFullScreen()
+                    if (root.visibility === Window.FullScreen) root.showNormal();
+                    else root.showFullScreen();
                 }
             }
         }
@@ -208,10 +246,6 @@ ApplicationWindow {
         isOpen: false
         z: 4
         rootContextMenu: contextMenu
-
-        onIsOpenChanged: {
-            hideTimer.restart()
-        }
     }
 
     // СТАТИСТИКА
@@ -249,7 +283,8 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
 
-        visible: root.showTitle
+        // Название не показываем в режиме закрепления
+        visible: root.showTitle && !Config.pinControls
         enabled: false
 
         Label {
@@ -277,14 +312,14 @@ ApplicationWindow {
         anchors.right: parent.right
         anchors.margins: 20
         mpv: mpv
-        isOpen: root.controlsVisible
+        isOpen: root.controlsVisible || Config.pinControls
         isPlaylistOpen: playlistPanel.isOpen
         z: 10
 
         onPlaylistToggleRequested: {
             if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
-                playlistPanel.isOpen = !playlistPanel.isOpen
-                if (!playlistPanel.isOpen) hideTimer.restart()
+                playlistPanel.isOpen = !playlistPanel.isOpen;
+                idleTimer.restart();
             }
         }
     }
@@ -296,14 +331,22 @@ ApplicationWindow {
         parent: Overlay.overlay
         onToggleCropRequested: root.toggleCropRequested()
         onTogglePlaylistRequested: {
-            playlistPanel.isOpen = !playlistPanel.isOpen
-            if (!playlistPanel.isOpen) hideTimer.restart()
+            playlistPanel.isOpen = !playlistPanel.isOpen;
+            idleTimer.restart();
         }
+
+        property bool cursorWasVisible: true
 
         onOpened: {
             if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
                 playlistPanel.closeContextMenu();
             }
+            cursorWasVisible = root.cursorVisible;
+            root.cursorY = -1;
+            idleTimer.restart();
+        }
+        onClosed: {
+            idleTimer.restart();
         }
     }
 

@@ -56,7 +56,6 @@
 <message><source>settings_about</source><translation>О программе</translation></message>
 <message><source>lang_en</source><translation>English</translation></message>
 <message><source>lang_ru</source><translation>Русский</translation></message>
-
 <message><source>about_title</source><translation>О программе</translation></message>
 <message><source>about_version</source><translation>Версия %1</translation></message>
 <message><source>about_description</source><translation>Легковесный видеоплеер на базе mpv и Qt/QML.</translation></message>
@@ -66,6 +65,7 @@
 <message><source>about_kirigami</source><translation>Работает на Kirigami</translation></message>
 <message><source>about_mpvqt</source><translation>На базе mpvqt</translation></message>
 <message><source>about_close</source><translation>Закрыть</translation></message>
+<message><source>settings_pin_controls</source><translation>Закрепить панель управления</translation></message>
 </context>
 
 <context>

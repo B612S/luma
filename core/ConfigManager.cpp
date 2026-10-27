@@ -22,7 +22,8 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
             out << "language=en\n";
             out << "single_instance=true\n";
             out << "notifications=true\n";
-            out << "append_to_playlist=false\n\n";
+            out << "append_to_playlist=false\n";
+            out << "pin_controls=false\n\n";
 
             out << "[playlist]\n";
             out << "mode=sequential\n\n";
@@ -122,6 +123,15 @@ void ConfigManager::setNotifications(bool enabled) {
     if (notifications() == enabled) return;
     m_settings->setValue("ui/notifications", enabled);
     emit notificationsChanged();
+}
+
+bool ConfigManager::pinControls() const {
+    return m_settings->value("ui/pin_controls", false).toBool();
+}
+void ConfigManager::setPinControls(bool enabled) {
+    if (pinControls() == enabled) return;
+    m_settings->setValue("ui/pin_controls", enabled);
+    emit pinControlsChanged();
 }
 
 QVariant ConfigManager::value(const QString &key, const QVariant &defaultValue) const {
