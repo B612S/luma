@@ -127,6 +127,16 @@ ApplicationWindow {
         anchors.fill: parent
         volume: Config.volume
 
+        // Ставим локальный плеер на паузу при старте трансляции
+        Connections {
+            target: CastManager
+            function onCastingChanged() {
+                if (CastManager.casting) {
+                    mpv.paused = true;
+                }
+            }
+        }
+
         MouseArea {
             anchors.fill: parent
             hoverEnabled: true
@@ -139,13 +149,11 @@ ApplicationWindow {
             onClicked: (mouse) => {
                 root.wakeUp()
                 if (mouse.button === Qt.RightButton) {
-                    // Если меню уже открыто, клик правой кнопкой его закрывает
                     if (contextMenu.visible) {
                         contextMenu.close();
                         return;
                     }
 
-                    // Запрет на вызов над панелью управления
                     var controlBarTop = root.height - 20 - controlBar.height;
                     if (mouse.y >= controlBarTop) {
                         return;

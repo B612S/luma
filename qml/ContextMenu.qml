@@ -39,6 +39,9 @@ Popup {
         if (currentPage === "aspect_ratio") {
             currentAspect = Media.getAspectRatio()
         }
+        if (currentPage === "renderer") {
+            CastManager.discovery.refresh()
+        }
 
         pageFadeAnim.stop()
         menu.opacity = 0.0
@@ -74,9 +77,13 @@ Popup {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.leftMargin: 12
+            elide: Text.ElideRight
+            anchors.right: arrowLabel.left
+            anchors.rightMargin: 12
         }
 
         Text {
+            id: arrowLabel
             text: ">"
             visible: btn.hasArrow
             color: btn.isEnabled ? Kirigami.Theme.textColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.4)
@@ -247,6 +254,7 @@ Popup {
 
             MenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.currentPage = "playback_mode" }
             MenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; onClicked: menu.currentPage = "aspect_ratio" }
+            MenuButton { text: qsTr("menu_renderer"); hasArrow: true; onClicked: menu.currentPage = "renderer" }
 
             MenuButton {
                 text: (menu.mpv && menu.mpv.cropEnabled ? "✓ " : "") + qsTr("menu_crop")
@@ -258,7 +266,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "main" }
         }
 
-        // --- СТРАНИЦА РЕЖИМА ВОСПРОИЗВЕДЕНИЯ (Только для текущей сессии) ---
+        // --- СТРАНИЦА РЕЖИМА ВОСПРОИЗВЕДЕНИЯ ---
         Column {
             visible: menu.currentPage === "playback_mode"
             width: parent.width
@@ -364,6 +372,85 @@ Popup {
             }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+            MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "playback" }
+        }
+
+        // --- СТРАНИЦА RENDERER (CHROMECAST) ---
+        Column {
+            visible: menu.currentPage === "renderer"
+            width: parent.width
+            spacing: 2
+
+            // Кнопка поиска / остановки
+            MenuButton {
+                text: CastManager.casting ? qsTr("menu_stop_cast") : qsTr("menu_refresh_devices")
+                onClicked: {
+                    if (CastManager.casting) {
+                        CastManager.stopCast()
+                        Osd.showInfo(qsTr("osd_cast_stopped"))
+                    } else {
+                        CastManager.discovery.refresh()
+                    }
+                }
+            }
+
+            // РАЗДЕЛИТЕЛЬ МЕЖДУ ПОИСКОМ И СПИСКОМ УСТРОЙСТВ
+            Rectangle {
+                width: parent.width; height: 1
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)
+            }
+
+            // Индикатор загрузки (под разделителем)
+            MenuButton {
+                visible: CastManager.discovery.scanning
+                text: qsTr("menu_searching_devices")
+                isEnabled: false
+            }
+
+            // Список найденных устройств
+            Repeater {
+                model: CastManager.discovery.devices
+                MenuButton {
+                    text: modelData.name
+                    onClicked: {
+                        let filePath = Media.playlist.currentFile()
+                        if (!filePath) {
+                            Osd.showInfo(qsTr("osd_cast_no_file"))
+                            return
+                        }
+                        CastManager.castTo(modelData.address, modelData.port, filePath)
+                        Osd.showInfo(qsTr("osd_cast_started").arg(modelData.name))
+                        menu.close()
+                    }
+                }
+            }
+
+            // Сообщение, если ничего не найдено
+            MenuButton {
+                visible: !CastManager.discovery.scanning && CastManager.discovery.devices.length === 0
+                text: qsTr("menu_no_devices")
+                isEnabled: false
+            }
+
+            // Статус активной трансляции
+            Rectangle {
+                visible: CastManager.casting
+                width: parent.width; height: 1
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)
+            }
+
+            MenuButton {
+                visible: CastManager.casting
+                text: "✓ " + qsTr("menu_casting")
+                isEnabled: false
+            }
+
+            // РАЗДЕЛИТЕЛЬ ПЕРЕД "BACK"
+            Rectangle {
+                width: parent.width; height: 1
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)
+            }
 
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "playback" }
         }

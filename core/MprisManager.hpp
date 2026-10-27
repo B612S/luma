@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QVariantMap>
 #include <QDBusObjectPath>
+#include <QTimer>
 #include "mpvqt/MpvItem.hpp"
 
 class MediaManager;
@@ -41,7 +42,10 @@ class MprisManager : public QObject {
     Q_PROPERTY(bool Shuffle READ getShuffle WRITE setShuffle)
 
 public:
-    explicit MprisManager(MpvItem *mpv, MediaManager *media, QObject *parent = nullptr);
+    explicit MprisManager(MpvItem *mpv = nullptr,
+                          MediaManager *media = nullptr,
+                          QObject *parent = nullptr);
+    ~MprisManager() override;
 
     // Root Interface getters
     QString getIdentity() const { return "Luma"; }
@@ -62,12 +66,12 @@ public:
     double getMinimumRate() const { return 1.0; }
     double getMaximumRate() const { return 1.0; }
 
-    bool getCanGoNext() const { return true; }
-    bool getCanGoPrevious() const { return true; }
-    bool getCanPlay() const { return true; }
-    bool getCanPause() const { return true; }
-    bool getCanSeek() const { return true; }
-    bool getCanControl() const { return true; }
+    bool getCanGoNext() const { return m_mpv != nullptr; }
+    bool getCanGoPrevious() const { return m_mpv != nullptr; }
+    bool getCanPlay() const { return m_mpv != nullptr; }
+    bool getCanPause() const { return m_mpv != nullptr; }
+    bool getCanSeek() const { return m_mpv != nullptr; }
+    bool getCanControl() const { return m_mpv != nullptr; }
 
     bool getFullscreen() const { return false; }
     void setFullscreen(bool) {}
@@ -100,6 +104,11 @@ private slots:
     void sendCanProperties();
 
 private:
-    MpvItem *m_mpv;
-    MediaManager *m_media;
+    void registerOnBus();
+    void connectMpvSignals();
+
+    MpvItem *m_mpv = nullptr;
+    MediaManager *m_media = nullptr;
+    QTimer *m_posTimer = nullptr;
+    bool m_busRegistered = false;
 };

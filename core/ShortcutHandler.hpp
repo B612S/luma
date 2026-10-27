@@ -9,16 +9,26 @@
 #include "MediaManager.hpp"
 #include "ShortcutAction.hpp"
 
+class CastManager;
+
 class ShortcutHandler : public QObject {
     Q_OBJECT
 public:
-    explicit ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *media,
-                             QQuickWindow *window, QObject *parent = nullptr);
+    explicit ShortcutHandler(MpvItem *mpv = nullptr,
+                             OsdManager *osd = nullptr,
+                             MediaManager *media = nullptr,
+                             QQuickWindow *window = nullptr,
+                             QObject *parent = nullptr);
+    ~ShortcutHandler() override;
+
+    void setWindow(QQuickWindow *window);
+    void setCastManager(CastManager *cast) { m_castManager = cast; }
+    void setSliderSeeking(bool seeking);
+
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 public slots:
     void toggleCrop();
-    void setSliderSeeking(bool seeking);
 
 signals:
     void togglePlaylist();
@@ -39,14 +49,16 @@ private:
     void onPositionChanged();
     void onVolumeChanged();
 
-    MpvItem *m_mpv;
-    OsdManager *m_osd;
-    MediaManager *m_media;
-    QQuickWindow *m_window;
+    MpvItem *m_mpv = nullptr;
+    OsdManager *m_osd = nullptr;
+    MediaManager *m_media = nullptr;
+    CastManager *m_castManager = nullptr;
+    QPointer<QQuickWindow> m_window;
 
-    QTimer *m_seekTimer;
-    QTimer *m_volTimer;
-    QTimer *m_volResetTimer;
+    QTimer *m_seekTimer = nullptr;
+    QTimer *m_volTimer = nullptr;
+    QTimer *m_volResetTimer = nullptr;
+    QTimer *m_wheelDebounceTimer = nullptr;
 
     double m_seekStep = 0.0;
     double m_targetSeekTime = 0.0;
@@ -60,7 +72,7 @@ private:
 
     int m_aspectIndex = 0;
 
-    // --- Auto Crop state ---
+    // Auto Crop state
     bool m_cropEnabled = false;
     bool m_cropPending = false;
 
@@ -68,5 +80,4 @@ private:
     QPointer<QQuickItem> m_statsItem;
 
     double m_wheelVolumeDelta = 0.0;
-    QTimer *m_wheelDebounceTimer;
 };

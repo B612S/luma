@@ -28,6 +28,15 @@
 <message><source>aspect_original</source><translation>Оригинальное</translation></message>
 <message><source>osd_aspect</source><translation>Соотношение: %1</translation></message>
 <message><source>menu_playlist</source><translation>Плейлист</translation></message>
+<message><source>menu_renderer</source><translation>Устройство вывода</translation></message>
+<message><source>menu_searching_devices</source><translation>Поиск устройств...</translation></message>
+<message><source>menu_refresh_devices</source><translation>Найти устройства</translation></message>
+<message><source>menu_stop_cast</source><translation>Остановить трансляцию</translation></message>
+<message><source>menu_no_devices</source><translation>Chromecast не найден</translation></message>
+<message><source>menu_casting</source><translation>Идёт трансляция</translation></message>
+<message><source>osd_cast_started</source><translation>Трансляция на %1</translation></message>
+<message><source>osd_cast_stopped</source><translation>Трансляция остановлена</translation></message>
+<message><source>osd_cast_no_file</source><translation>Нет файла для трансляции</translation></message>
 </context>
 
 <context>

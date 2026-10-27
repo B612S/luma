@@ -28,6 +28,15 @@
 <message><source>aspect_original</source><translation>Original</translation></message>
 <message><source>osd_aspect</source><translation>Aspect: %1</translation></message>
 <message><source>menu_playlist</source><translation>Playlist</translation></message>
+<message><source>menu_renderer</source><translation>Renderer</translation></message>
+<message><source>menu_searching_devices</source><translation>Searching for devices...</translation></message>
+<message><source>menu_refresh_devices</source><translation>Search for devices</translation></message>
+<message><source>menu_stop_cast</source><translation>Stop casting</translation></message>
+<message><source>menu_no_devices</source><translation>No Chromecast found</translation></message>
+<message><source>menu_casting</source><translation>Casting</translation></message>
+<message><source>osd_cast_started</source><translation>Casting to %1</translation></message>
+<message><source>osd_cast_stopped</source><translation>Casting stopped</translation></message>
+<message><source>osd_cast_no_file</source><translation>No file to cast</translation></message>
 </context>
 
 <context>

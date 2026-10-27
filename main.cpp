@@ -22,9 +22,8 @@
 #include "core/ShortcutHandler.hpp"
 #include "core/Logger.hpp"
 #include "core/ThumbnailProvider.hpp"
+#include "core/CastManager.hpp"
 #include "mpvqt/MpvItem.hpp"
-
-// ensureMpvConfig УДАЛЕНА, так как конфиг теперь генерируется в ConfigManager
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
     if (args.size() > 1) {
@@ -46,8 +45,6 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("luma");
     app.setApplicationVersion("1.0.0");
     app.setWindowIcon(QIcon(":/assets/luma.png"));
-
-    // ensureMpvConfig() ВЫЗОВ УДАЛЕН
 
     ConfigManager config;
     Logger::instance().setMode(config.value("ui/debug_logging", "info").toString());
@@ -97,7 +94,11 @@ int main(int argc, char *argv[]) {
     MediaManager media(nullptr, &app);
     media.setConfig(&config);
     media.setPlayMode(config.playlistMode());
+
     OsdManager osd(nullptr, &app);
+
+    // Chromecast Manager
+    CastManager castManager;
 
     QQmlApplicationEngine engine;
 
@@ -106,7 +107,9 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("Config", &config);
     engine.rootContext()->setContextProperty("Media", &media);
     engine.rootContext()->setContextProperty("Osd", &osd);
+    engine.rootContext()->setContextProperty("CastManager", &castManager);
 
+    // Путь загрузки QML остается неизменным
     engine.load(QUrl(QStringLiteral("qrc:/luma/qml/main.qml")));
     if (engine.rootObjects().isEmpty()) return -1;
 
@@ -115,7 +118,7 @@ int main(int argc, char *argv[]) {
     // --- СЛУШАЕМ СМЕНУ ЯЗЫКА ---
     QObject::connect(&config, &ConfigManager::languageChanged, [&]() {
         loadLanguage(config.language());
-        engine.retranslate(); // Мгновенно обновляем QML
+        engine.retranslate();
     });
 
     int w = config.value("window/width", 960).toInt();
@@ -123,6 +126,7 @@ int main(int argc, char *argv[]) {
     root->setWidth(w);
     root->setHeight(h);
 
+    // Ищем наш MpvItem в QML
     auto mpv = root->findChild<MpvItem*>("mpv");
     if (mpv) {
         media.setMpv(mpv);
@@ -134,8 +138,13 @@ int main(int argc, char *argv[]) {
             mpv->setVolume(config.defaultVolume());
         }
 
+        // Оптимизация: передаем &app, чтобы избежать утечки и падений при выходе
         auto *shortcuts = new ShortcutHandler(mpv, &osd, &media, root, &app);
-        app.installEventFilter(shortcuts);
+        shortcuts->setCastManager(&castManager);
+
+        // ВАЖНО: ShortcutHandler сам вызывает installEventFilter внутри setWindow() в конструкторе.
+        // Убираем дублирующий вызов app.installEventFilter(shortcuts); чтобы избежать двойной обработки клавиш.
+
         engine.rootContext()->setContextProperty("shortcuts", shortcuts);
 
         QObject::connect(root, SIGNAL(toggleCropRequested()), shortcuts, SLOT(toggleCrop()));
@@ -153,6 +162,7 @@ int main(int argc, char *argv[]) {
                     root->show();
                 });
 
+                // Передаем &app, чтобы MPRIS корректно удалился при выходе
                 new MprisManager(mpv, &media, &app);
     }
 
@@ -177,6 +187,7 @@ int main(int argc, char *argv[]) {
     QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
         config.saveWindowSize(root->width(), root->height());
         config.setPlaylistMode(media.playMode());
+        castManager.stopCast();
 
         if (mpv && config.rememberVolume()) {
             config.setVolume(static_cast<int>(mpv->volume()));

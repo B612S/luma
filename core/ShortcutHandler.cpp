@@ -1,4 +1,5 @@
 #include "ShortcutHandler.hpp"
+#include "CastManager.hpp"
 #include <QKeyEvent>
 #include <QWheelEvent>
 #include <QDebug>
@@ -10,7 +11,7 @@
 
 ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *media,
                                  QQuickWindow *window, QObject *parent)
-: QObject(parent), m_mpv(mpv), m_osd(osd), m_media(media), m_window(window)
+: QObject(parent), m_mpv(mpv), m_osd(osd), m_media(media)
 {
     m_seekTimer = new QTimer(this);
     m_seekTimer->setInterval(300);
@@ -32,23 +33,28 @@ ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *me
     m_wheelDebounceTimer->setInterval(80);
     connect(m_wheelDebounceTimer, &QTimer::timeout, this, [this]() {
         if (qAbs(m_wheelVolumeDelta) > 0.001) {
-            double currentVol = m_mpv->volume();
-            double newVol = qBound(0.0, currentVol + m_wheelVolumeDelta, 100.0);
-
-            m_isInternalVolume = true;
-            m_mpv->setVolume(newVol);
-            if (m_osd) m_osd->showVolume(newVol);
+            if (m_castManager && m_castManager->casting()) {
+                double newVol = qBound(0.0, m_castManager->remoteVolume() + m_wheelVolumeDelta, 100.0);
+                m_castManager->setVolume(newVol);
+                if (m_osd) m_osd->showVolume(newVol);
+            } else if (m_mpv) {
+                double currentVol = m_mpv->volume();
+                double newVol = qBound(0.0, currentVol + m_wheelVolumeDelta, 100.0);
+                m_isInternalVolume = true;
+                m_mpv->setVolume(newVol);
+                if (m_osd) m_osd->showVolume(newVol);
+            }
             m_wheelVolumeDelta = 0.0;
         }
     });
 
     if (m_mpv) {
         connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &reason) {
-            // Реагируем ТОЛЬКО на естественное окончание файла (EOF)
             if (reason != "eof") return;
             if (m_ignoreEndFile) return;
+            // Если идет каст, локальное видео и так на паузе
+            if (m_castManager && m_castManager->casting()) return;
 
-            // Небольшая задержка, чтобы mpv успел полностью закрыть файл
             QTimer::singleShot(100, this, [this]() {
                 if (m_media) m_media->playNext();
             });
@@ -59,6 +65,21 @@ ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *me
     }
 
     QTimer::singleShot(1000, this, [this]() { m_isInternalVolume = false; });
+
+    if (window) setWindow(window);
+}
+
+ShortcutHandler::~ShortcutHandler() {
+    if (m_window) {
+        m_window->removeEventFilter(this);
+    }
+}
+
+void ShortcutHandler::setWindow(QQuickWindow *window) {
+    if (m_window == window) return;
+    if (m_window) m_window->removeEventFilter(this);
+    m_window = window;
+    if (m_window) m_window->installEventFilter(this);
 }
 
 void ShortcutHandler::setSliderSeeking(bool seeking) {
@@ -66,8 +87,14 @@ void ShortcutHandler::setSliderSeeking(bool seeking) {
 }
 
 void ShortcutHandler::onFileChanged() {
-    m_seekTimer->stop(); m_volTimer->stop(); m_volResetTimer->stop(); m_wheelDebounceTimer->stop();
-    m_targetSeekTime = 0.0; m_lastPosition = 0.0; m_seekStep = 0.0; m_volStep = 0.0;
+    m_seekTimer->stop();
+    m_volTimer->stop();
+    m_volResetTimer->stop();
+    m_wheelDebounceTimer->stop();
+    m_targetSeekTime = 0.0;
+    m_lastPosition = 0.0;
+    m_seekStep = 0.0;
+    m_volStep = 0.0;
     m_wheelVolumeDelta = 0.0;
 
     m_cropEnabled = false;
@@ -98,6 +125,7 @@ void ShortcutHandler::onPositionChanged() {
 void ShortcutHandler::onVolumeChanged() {
     if (!m_mpv || !m_osd) return;
     if (m_isInternalVolume) return;
+    if (m_castManager && m_castManager->casting()) return;
     m_osd->showVolume();
 }
 
@@ -116,6 +144,20 @@ bool ShortcutHandler::isCursorOverQmlPanel() {
 }
 
 void ShortcutHandler::updateSeekOsd() {
+    if (m_castManager && m_castManager->casting()) {
+        double dur = m_castManager->remoteDuration();
+        if (dur <= 0) { m_seekTimer->stop(); return; }
+        if ((m_seekStep > 0 && m_targetSeekTime >= dur) || (m_seekStep < 0 && m_targetSeekTime <= 0.0)) {
+            if (m_osd) m_osd->requestSeekOsd(m_targetSeekTime, dur);
+            return;
+        }
+        m_targetSeekTime += m_seekStep;
+        m_targetSeekTime = qBound(0.0, m_targetSeekTime, dur);
+        m_castManager->seekTo(m_targetSeekTime);
+        if (m_osd) m_osd->requestSeekOsd(m_targetSeekTime, dur);
+        return;
+    }
+
     if (!m_mpv || !m_osd) return;
     double dur = m_mpv->duration();
     if (dur <= 0) { m_seekTimer->stop(); return; }
@@ -130,6 +172,15 @@ void ShortcutHandler::updateSeekOsd() {
 }
 
 void ShortcutHandler::updateVolOsd() {
+    if (m_castManager && m_castManager->casting()) {
+        double currentVol = m_castManager->remoteVolume();
+        double newVol = qBound(0.0, currentVol + m_volStep, 100.0);
+        if (qFuzzyCompare(newVol, currentVol)) return;
+        m_castManager->setVolume(newVol);
+        if (m_osd) m_osd->showVolume(newVol);
+        return;
+    }
+
     if (!m_mpv || !m_osd) return;
     double currentVol = m_mpv->volume();
     double newVol = qBound(0.0, currentVol + m_volStep, 100.0);
@@ -141,8 +192,22 @@ void ShortcutHandler::updateVolOsd() {
 }
 
 void ShortcutHandler::startSeek(double step) {
-    if (!m_mpv || !m_osd) return;
     m_isInternalSeeking = true;
+
+    if (m_castManager && m_castManager->casting()) {
+        double dur = m_castManager->remoteDuration();
+        m_targetSeekTime = m_castManager->remotePosition();
+        m_seekStep = step;
+        m_targetSeekTime += step;
+        if (dur > 0) m_targetSeekTime = qBound(0.0, m_targetSeekTime, dur);
+        else m_targetSeekTime = qMax(0.0, m_targetSeekTime);
+        m_castManager->seekTo(m_targetSeekTime);
+        if (m_osd) m_osd->requestSeekOsd(m_targetSeekTime, dur);
+        m_seekTimer->start();
+        return;
+    }
+
+    if (!m_mpv || !m_osd) return;
     double pos = m_mpv->position();
     double dur = m_mpv->duration();
     m_targetSeekTime = (pos < 0 || dur <= 0) ? 0.0 : pos;
@@ -156,10 +221,20 @@ void ShortcutHandler::startSeek(double step) {
 }
 
 void ShortcutHandler::startVolume(double step) {
-    if (!m_mpv || !m_osd) return;
     m_isInternalVolume = true;
     m_volStep = step;
 
+    if (m_castManager && m_castManager->casting()) {
+        double currentVol = m_castManager->remoteVolume();
+        double newVol = qBound(0.0, currentVol + step, 100.0);
+        m_castManager->setVolume(newVol);
+        if (m_osd) m_osd->showVolume(newVol);
+        m_volTimer->start();
+        m_volResetTimer->start();
+        return;
+    }
+
+    if (!m_mpv || !m_osd) return;
     double currentVol = m_mpv->volume();
     double newVol = qBound(0.0, currentVol + step, 100.0);
 
@@ -170,6 +245,52 @@ void ShortcutHandler::startVolume(double step) {
 }
 
 void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
+    // Если идет трансляция, перехватываем управление на Chromecast
+    if (m_castManager && m_castManager->casting()) {
+        switch (action) {
+            case ShortcutAction::TogglePause:
+                if (!autoRepeat) {
+                    if (m_castManager->isRemotePlaying()) m_castManager->pause();
+                    else m_castManager->play();
+                }
+                return;
+            case ShortcutAction::SeekBackward:
+                if (!autoRepeat) startSeek(-5.0); else m_seekStep = -5.0;
+                return;
+            case ShortcutAction::SeekForward:
+                if (!autoRepeat) startSeek(5.0); else m_seekStep = 5.0;
+                return;
+            case ShortcutAction::SeekBackwardLong:
+                if (!autoRepeat) startSeek(-60.0); else m_seekStep = -60.0;
+                return;
+            case ShortcutAction::SeekForwardLong:
+                if (!autoRepeat) startSeek(60.0); else m_seekStep = 60.0;
+                return;
+            case ShortcutAction::VolumeUp:
+                if (!autoRepeat) startVolume(5.0); else m_volStep = 5.0;
+                return;
+            case ShortcutAction::VolumeDown:
+                if (!autoRepeat) startVolume(-5.0); else m_volStep = -5.0;
+                return;
+            case ShortcutAction::ToggleMute:
+                if (!autoRepeat) {
+                    if (m_castManager->remoteVolume() > 0.0) {
+                        m_castManager->setVolume(0.0);
+                        if (m_osd) m_osd->showVolume(0.0);
+                    } else {
+                        m_castManager->setVolume(50.0);
+                        if (m_osd) m_osd->showVolume(50.0);
+                    }
+                }
+                return;
+                // Остальные действия (Fullscreen, NextFile и т.д.) не имеют смысла для Cast
+                // или обрабатываются локальным mpv (например, переключение файла)
+            default:
+                break;
+        }
+    }
+
+    // Стандартное поведение для локального mpv
     switch (action) {
         case ShortcutAction::TogglePause:
             if (!autoRepeat && m_mpv) m_mpv->setPaused(!m_mpv->paused());
@@ -178,13 +299,13 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             if (!autoRepeat) startSeek(-5.0); else m_seekStep = -5.0;
             break;
         case ShortcutAction::SeekForward:
-            if (!autoRepeat) startSeek(5.0);  else m_seekStep = 5.0;
+            if (!autoRepeat) startSeek(5.0); else m_seekStep = 5.0;
             break;
         case ShortcutAction::SeekBackwardLong:
             if (!autoRepeat) startSeek(-60.0); else m_seekStep = -60.0;
             break;
         case ShortcutAction::SeekForwardLong:
-            if (!autoRepeat) startSeek(60.0);  else m_seekStep = 60.0;
+            if (!autoRepeat) startSeek(60.0); else m_seekStep = 60.0;
             break;
 
         case ShortcutAction::FrameBackward:
@@ -207,7 +328,7 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             break;
 
         case ShortcutAction::VolumeUp:
-            if (!autoRepeat) startVolume(5.0);  else m_volStep = 5.0;
+            if (!autoRepeat) startVolume(5.0); else m_volStep = 5.0;
             break;
         case ShortcutAction::VolumeDown:
             if (!autoRepeat) startVolume(-5.0); else m_volStep = -5.0;
@@ -353,6 +474,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void ShortcutHandler::toggleCrop() {
+    // ... (оставляем ваш оригинальный код из предыдущих сообщений) ...
     if (!m_mpv) return;
 
     if (m_cropEnabled) {
@@ -360,7 +482,6 @@ void ShortcutHandler::toggleCrop() {
         m_cropPending = false;
 
         m_mpv->setCropEnabled(false);
-
         m_mpv->commandBlocking(QStringList() << "set" << "video-crop" << "");
         m_mpv->commandBlocking(QStringList() << "set" << "video-aspect-override" << "no");
 
@@ -371,25 +492,18 @@ void ShortcutHandler::toggleCrop() {
                 break;
             }
         }
-
         double pos = m_mpv->position();
-        if (pos > 0.0) {
-            m_mpv->commandBlocking(QStringList()
-            << "seek" << QString::number(pos) << "absolute+exact");
-        }
+        if (pos > 0.0) m_mpv->commandBlocking(QStringList() << "seek" << QString::number(pos) << "absolute+exact");
         m_mpv->update();
-
         if (m_osd) m_osd->showInfo(tr("osd_crop_off"));
         return;
     }
 
     if (m_cropPending) return;
     m_cropPending = true;
-
     if (m_osd) m_osd->showInfo(tr("osd_crop_detecting"));
 
     m_mpv->commandBlocking(QStringList() << "set" << "video-crop" << "");
-
     QVariantList vfList = m_mpv->getProperty("vf").toList();
     for (const QVariant &vf : vfList) {
         if (vf.toMap().value("label").toString() == "autocrop-cropdetect") {
@@ -408,9 +522,7 @@ void ShortcutHandler::toggleCrop() {
     {
         ErrorReturn err = addResult.value<ErrorReturn>();
         if (err.error != 0) {
-            qWarning() << "AutoCrop: vf add failed:" << MpvController::getError(err.error);
-            m_mpv->commandBlocking(QStringList() << "set" << "hwdec"
-            << (savedHwdec.isEmpty() ? "auto" : savedHwdec));
+            m_mpv->commandBlocking(QStringList() << "set" << "hwdec" << (savedHwdec.isEmpty() ? "auto" : savedHwdec));
             m_cropPending = false;
             if (m_osd) m_osd->showInfo(tr("osd_crop_failed"));
             return;
@@ -422,7 +534,6 @@ void ShortcutHandler::toggleCrop() {
 
     QTimer::singleShot(1500, this, [this, wasPaused, savedHwdec]() {
         if (!m_mpv) { m_cropPending = false; return; }
-
         QVariantMap meta = m_mpv->getProperty("vf-metadata/autocrop-cropdetect").toMap();
         const QString w = meta.value("lavfi.cropdetect.w").toString();
         const QString h = meta.value("lavfi.cropdetect.h").toString();
@@ -439,15 +550,12 @@ void ShortcutHandler::toggleCrop() {
             m_cropEnabled = true;
             m_mpv->setCropEnabled(true);
         } else {
-            qWarning() << "AutoCrop: metadata empty. Keys:" << meta.keys();
             if (m_osd) m_osd->showInfo(tr("osd_crop_failed"));
             m_cropEnabled = false;
             m_mpv->setCropEnabled(false);
         }
-
         m_mpv->setPaused(wasPaused);
-        m_mpv->commandBlocking(QStringList() << "set" << "hwdec"
-        << (savedHwdec.isEmpty() ? "auto" : savedHwdec));
+        m_mpv->commandBlocking(QStringList() << "set" << "hwdec" << (savedHwdec.isEmpty() ? "auto" : savedHwdec));
         m_cropPending = false;
     });
 }

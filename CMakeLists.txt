@@ -17,7 +17,7 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(MPV REQUIRED mpv)
 
-# FFmpeg для превью
+# FFmpeg для превью и Cast
 pkg_check_modules(AVFORMAT REQUIRED libavformat)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
 pkg_check_modules(SWSCALE REQUIRED libswscale)
@@ -38,12 +38,17 @@ qt_add_executable(luma
     core/ShortcutAction.cpp
     core/ShortcutHandler.cpp
     core/ThumbnailProvider.hpp
+    # --- Cast ---
+    core/CastDiscovery.cpp
+    core/CastStreamServer.cpp
+    core/CastV2Client.cpp
+    core/CastManager.cpp
+    # --- mpvqt ---
     mpvqt/mpvabstractitem.cpp
     mpvqt/mpvcontroller.cpp
     mpvqt/mpvrenderer.cpp
     mpvqt/MpvItem.cpp
     mpvqt/FrameDecoder.cpp
-
 )
 
 qt_add_qml_module(luma
@@ -71,6 +76,11 @@ qt_add_qml_module(luma
         core/OsdManager.hpp
         core/Logger.hpp
         core/ThumbnailProvider.hpp
+        # --- Cast ---
+        core/CastDiscovery.hpp
+        core/CastStreamServer.hpp
+        core/CastV2Client.hpp
+        core/CastManager.hpp
 )
 
 qt_add_resources(luma "assets"

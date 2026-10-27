@@ -16,7 +16,7 @@ Rectangle {
     property bool hovered: hoverArea.containsMouse
     property bool isSeeking: false
     property bool isVolumeSeeking: false
-    property bool hasVideo: (mpv.duration > 0)
+    property bool hasVideo: CastManager.casting || (mpv.duration > 0)
 
     property bool isPlaylistOpen: false
     signal playlistToggleRequested()
@@ -24,6 +24,12 @@ Rectangle {
     property bool isOpen: true
     visible: opacity > 0
     opacity: 1.0
+
+    // Текущая позиция/длительность с учетом кастинга
+    property double displayPosition: CastManager.casting ? CastManager.remotePosition : (mpv.position || 0)
+    property double displayDuration: CastManager.casting ? CastManager.remoteDuration : (mpv.duration || 0)
+    property bool displayPaused: CastManager.casting ? !CastManager.isRemotePlaying : mpv.paused
+    property double displayVolume: CastManager.casting ? CastManager.remoteVolume : (mpv.volume || 0)
 
     NumberAnimation {
         id: fadeAnim
@@ -102,18 +108,24 @@ Rectangle {
             Layout.preferredHeight: 36
             Kirigami.Icon {
                 anchors.centerIn: parent
-                source: mpv.paused ? "media-playback-start" : "media-playback-pause"
+                source: root.displayPaused ? "media-playback-start" : "media-playback-pause"
                 color: Kirigami.Theme.textColor
                 width: 22
                 height: 22
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked: mpv.paused = !mpv.paused
+                onClicked: {
+                    if (CastManager.casting) {
+                        if (CastManager.isRemotePlaying) CastManager.pause()
+                            else CastManager.play()
+                    } else {
+                        mpv.paused = !mpv.paused
+                    }
+                }
             }
         }
 
-        // Контейнер для слайдера и всплывающей подсказки
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 36
@@ -122,12 +134,12 @@ Rectangle {
                 id: seekSlider
                 anchors.fill: parent
                 from: 0
-                to: mpv.duration || 0
+                to: root.displayDuration
                 focus: false
                 enabled: root.hasVideo
 
                 property bool seeking: false
-                value: seeking ? value : (mpv.position || 0)
+                value: seeking ? value : root.displayPosition
 
                 onPressedChanged: {
                     if (pressed && root.hasVideo) {
@@ -135,8 +147,12 @@ Rectangle {
                         root.isSeeking = true
                         shortcuts.setSliderSeeking(true)
                     } else {
-                        mpv.seekExact(value)
-                        Osd.requestTimeOsd(value, mpv.duration)
+                        if (CastManager.casting) {
+                            CastManager.seekTo(value)
+                        } else {
+                            mpv.seekExact(value)
+                        }
+                        Osd.requestTimeOsd(value, root.displayDuration)
 
                         seekDelayTimer.start()
                         shortcuts.setSliderSeeking(false)
@@ -182,7 +198,6 @@ Rectangle {
                 }
             }
 
-            // Всплывающая подсказка
             Rectangle {
                 id: seekTooltip
                 visible: seekSlider.seeking
@@ -232,7 +247,7 @@ Rectangle {
                 Connections {
                     target: seekSlider
                     function onValueChanged() {
-                        if (seekSlider.seeking) {
+                        if (seekSlider.seeking && !CastManager.casting) { // Отключаем превью при кастинге
                             seekTooltip.pendingTime = seekSlider.value;
                             thumbDebounce.restart();
                         }
@@ -247,6 +262,7 @@ Rectangle {
                     height: 90
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: false
+                    visible: !CastManager.casting
                 }
 
                 Rectangle {
@@ -266,9 +282,8 @@ Rectangle {
             }
         }
 
-        // Время воспроизведения
         Label {
-            text: formatTime(mpv.position) + " / " + formatTime(mpv.duration)
+            text: formatTime(root.displayPosition) + " / " + formatTime(root.displayDuration)
             color: Kirigami.Theme.textColor
             font.pixelSize: 13
             font.weight: Font.Medium
@@ -279,7 +294,8 @@ Rectangle {
             Layout.preferredHeight: 30
             Kirigami.Icon {
                 anchors.centerIn: parent
-                source: (mpv.muted || mpv.volume === 0) ? "audio-volume-muted" : "audio-volume-high"
+                source: (CastManager.casting ? (CastManager.remoteVolume === 0) : (mpv.muted || mpv.volume === 0))
+                ? "audio-volume-muted" : "audio-volume-high"
                 color: Kirigami.Theme.textColor
                 width: 22
                 height: 22
@@ -287,13 +303,23 @@ Rectangle {
             MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    if (mpv.volume === 0) {
-                        mpv.volume = 50;
-                        mpv.muted = false;
+                    if (CastManager.casting) {
+                        if (CastManager.remoteVolume > 0) {
+                            CastManager.setVolume(0)
+                            Osd.showVolume(0)
+                        } else {
+                            CastManager.setVolume(50)
+                            Osd.showVolume(50)
+                        }
                     } else {
-                        mpv.muted = !mpv.muted;
+                        if (mpv.volume === 0) {
+                            mpv.volume = 50;
+                            mpv.muted = false;
+                        } else {
+                            mpv.muted = !mpv.muted;
+                        }
+                        Osd.showVolume()
                     }
-                    Osd.showVolume()
                 }
             }
         }
@@ -306,11 +332,15 @@ Rectangle {
             Layout.preferredWidth: 120
 
             property bool seeking: false
-            value: mpv.volume || 0
+            value: root.displayVolume
 
             onMoved: {
                 if (seeking) {
-                    mpv.volume = value
+                    if (CastManager.casting) {
+                        CastManager.setVolume(value)
+                    } else {
+                        mpv.volume = value
+                    }
                     Osd.showVolume(value)
                 }
             }
@@ -321,7 +351,11 @@ Rectangle {
                     root.isVolumeSeeking = true
                     Osd.showVolume()
                 } else {
-                    mpv.volume = value
+                    if (CastManager.casting) {
+                        CastManager.setVolume(value)
+                    } else {
+                        mpv.volume = value
+                    }
                     Osd.showVolume()
                     volDelayTimer.start()
                 }
