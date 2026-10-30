@@ -80,15 +80,6 @@ Rectangle {
         function onCurrentIndexChanged() { listView.currentIndex = panel.model.currentIndex; }
     }
 
-    Connections {
-        target: dragArea
-        function onDragActiveChanged() {
-            if (!dragArea.drag.active && panel.isDragging) {
-                panel.endDrag();
-            }
-        }
-    }
-
     function endDrag() {
         panel.isDragging = false;
         panel.readyIndex = -1;

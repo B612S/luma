@@ -97,7 +97,6 @@ int main(int argc, char *argv[]) {
 
     OsdManager osd(nullptr, &app);
 
-    // Chromecast Manager
     CastManager castManager;
 
     QQmlApplicationEngine engine;
@@ -109,13 +108,11 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("Osd", &osd);
     engine.rootContext()->setContextProperty("CastManager", &castManager);
 
-    // Путь загрузки QML остается неизменным
-    engine.load(QUrl(QStringLiteral("qrc:/luma/qml/main.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/luma/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) return -1;
 
     auto root = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
 
-    // --- СЛУШАЕМ СМЕНУ ЯЗЫКА ---
     QObject::connect(&config, &ConfigManager::languageChanged, [&]() {
         loadLanguage(config.language());
         engine.retranslate();
@@ -126,7 +123,6 @@ int main(int argc, char *argv[]) {
     root->setWidth(w);
     root->setHeight(h);
 
-    // Ищем наш MpvItem в QML
     auto mpv = root->findChild<MpvItem*>("mpv");
     if (mpv) {
         media.setMpv(mpv);
@@ -138,12 +134,8 @@ int main(int argc, char *argv[]) {
             mpv->setVolume(config.defaultVolume());
         }
 
-        // Оптимизация: передаем &app, чтобы избежать утечки и падений при выходе
         auto *shortcuts = new ShortcutHandler(mpv, &osd, &media, root, &app);
         shortcuts->setCastManager(&castManager);
-
-        // ВАЖНО: ShortcutHandler сам вызывает installEventFilter внутри setWindow() в конструкторе.
-        // Убираем дублирующий вызов app.installEventFilter(shortcuts); чтобы избежать двойной обработки клавиш.
 
         engine.rootContext()->setContextProperty("shortcuts", shortcuts);
 
@@ -162,7 +154,6 @@ int main(int argc, char *argv[]) {
                     root->show();
                 });
 
-                // Передаем &app, чтобы MPRIS корректно удалился при выходе
                 new MprisManager(mpv, &media, &app);
     }
 

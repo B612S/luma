@@ -38,12 +38,10 @@ qt_add_executable(luma
     core/ShortcutAction.cpp
     core/ShortcutHandler.cpp
     core/ThumbnailProvider.hpp
-    # --- Cast ---
     core/CastDiscovery.cpp
     core/CastStreamServer.cpp
     core/CastV2Client.cpp
     core/CastManager.cpp
-    # --- mpvqt ---
     mpvqt/mpvabstractitem.cpp
     mpvqt/mpvcontroller.cpp
     mpvqt/mpvrenderer.cpp
@@ -55,13 +53,12 @@ qt_add_qml_module(luma
     URI luma
     VERSION 1.0
     QML_FILES
-        qml/main.qml
+        qml/Main.qml
         qml/ControlBar.qml
         qml/PlaylistPanel.qml
         qml/OsdToast.qml
         qml/ContextMenu.qml
         qml/StatsPanel.qml
-        qml/AboutDialog.qml
         qml/SettingsDialog.qml
         qml/MediaInfoDialog.qml
     SOURCES
@@ -76,7 +73,6 @@ qt_add_qml_module(luma
         core/OsdManager.hpp
         core/Logger.hpp
         core/ThumbnailProvider.hpp
-        # --- Cast ---
         core/CastDiscovery.hpp
         core/CastStreamServer.hpp
         core/CastV2Client.hpp
