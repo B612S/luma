@@ -7,16 +7,12 @@ Rectangle {
     id: root
     height: 56
 
-    // Флаг закрепления (приходит из main.qml)
     property bool pinned: false
 
     color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                    Kirigami.Theme.backgroundColor.g,
                    Kirigami.Theme.backgroundColor.b, 0.85)
-
-    // В закрепленном режиме (док) скруглений нет, в обычном — есть
     radius: pinned ? 0 : 8
-
     border.color: "transparent"
 
     property var mpv
@@ -32,8 +28,11 @@ Rectangle {
     visible: opacity > 0
     opacity: 1.0
 
+    property double displayDuration: CastManager.casting
+    ? (CastManager.remoteDuration > 0 ? CastManager.remoteDuration : (mpv.duration || 0))
+    : (mpv.duration || 0)
+
     property double displayPosition: CastManager.casting ? CastManager.remotePosition : (mpv.position || 0)
-    property double displayDuration: CastManager.casting ? CastManager.remoteDuration : (mpv.duration || 0)
     property bool displayPaused: CastManager.casting ? !CastManager.isRemotePlaying : mpv.paused
     property double displayVolume: CastManager.casting ? CastManager.remoteVolume : (mpv.volume || 0)
 
@@ -158,20 +157,20 @@ Rectangle {
                         } else {
                             mpv.seekExact(value)
                         }
-                        Osd.requestTimeOsd(value, root.displayDuration)
 
                         seekDelayTimer.start()
                         shortcuts.setSliderSeeking(false)
-                        Qt.callLater(() => { Osd.endTemporaryOsd() })
                     }
                 }
 
                 Timer {
                     id: seekDelayTimer
-                    interval: 200
+                    interval: 300
                     onTriggered: {
                         seekSlider.seeking = false
                         root.isSeeking = false
+                        Osd.requestTimeOsd(seekSlider.value, root.displayDuration)
+                        Qt.callLater(() => { Osd.endTemporaryOsd() })
                     }
                 }
 
@@ -208,7 +207,6 @@ Rectangle {
                 id: seekTooltip
                 visible: seekSlider.seeking
                 z: 100
-
                 width: 160
                 height: 90 + 24
                 radius: 6
@@ -245,7 +243,7 @@ Rectangle {
                     function onThumbnailReady(id) {
                         if (id.startsWith(seekTooltip.currentThumbId)) {
                             previewImage.source = ""
-                            previewImage.source = "image://thumbnail/" + id
+                            previewImage.source = "image://thumbnail/" + id;
                         }
                     }
                 }
@@ -337,15 +335,18 @@ Rectangle {
             focus: false
             Layout.preferredWidth: 120
 
+            // Локальная переменная для отображения, чтобы не дергать mpv напрямую
+            property real localValue: root.displayVolume
             property bool seeking: false
-            value: root.displayVolume
+
+            value: seeking ? value : localValue
 
             onMoved: {
                 if (seeking) {
                     if (CastManager.casting) {
-                        CastManager.setVolume(value)
+                        CastManager.setVolume(value) // Отправляем в Chromecast
                     } else {
-                        mpv.volume = value
+                        mpv.volume = value           // Отправляем в локальный mpv
                     }
                     Osd.showVolume(value)
                 }
@@ -363,6 +364,8 @@ Rectangle {
                         mpv.volume = value
                     }
                     Osd.showVolume()
+
+                    localValue = value
                     volDelayTimer.start()
                 }
             }
@@ -373,6 +376,26 @@ Rectangle {
                 onTriggered: {
                     volSlider.seeking = false
                     root.isVolumeSeeking = false
+                }
+            }
+
+            // Синхронизация с Chromecast
+            Connections {
+                target: CastManager
+                function onRemoteStatusChanged() {
+                    if (CastManager.casting && !volSlider.seeking) {
+                        volSlider.localValue = CastManager.remoteVolume;
+                    }
+                }
+            }
+
+            // Синхронизация с mpv (только если НЕТ каста)
+            Connections {
+                target: mpv
+                function onVolumeChanged() {
+                    if (!CastManager.casting && !volSlider.seeking) {
+                        volSlider.localValue = mpv.volume;
+                    }
                 }
             }
 

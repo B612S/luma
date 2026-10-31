@@ -67,8 +67,8 @@ ApplicationWindow {
         onTriggered: {
             if (root.isInteracting()) { idleTimer.restart(); return; }
 
-            const noVideo = (mpv.duration <= 0);
-            const isPaused = mpv.paused;
+            const noVideo = (mpv.duration <= 0) && !CastManager.casting;
+            const isPaused = CastManager.casting ? !CastManager.isRemotePlaying : mpv.paused;
 
             if (noVideo || isPaused) {
                 idleTimer.restart();
@@ -80,7 +80,6 @@ ApplicationWindow {
 
             root.cursorVisible = false;
 
-            // Панель скрывается только если она не закреплена
             if (!Config.pinControls) {
                 root.controlsVisible = false;
             }
@@ -90,7 +89,7 @@ ApplicationWindow {
     Connections {
         target: mpv
         function onPausedChanged() {
-            if (mpv.paused) {
+            if (mpv.paused && !CastManager.casting) {
                 root.controlsVisible = true;
                 root.cursorVisible = true;
                 idleTimer.stop();
@@ -135,19 +134,15 @@ ApplicationWindow {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        // Прижимаем видео строго к верхней границе панели
         anchors.bottom: Config.pinControls ? controlBar.top : parent.bottom
-        volume: Config.volume
-        z: 0
 
-        Connections {
-            target: CastManager
-            function onCastingChanged() {
-                if (CastManager.casting) {
-                    mpv.paused = true;
-                }
-            }
-        }
+        // ПЕРЕДАЕМ СОСТОЯНИЕ КАСТА НАПРЯМУЮ В C++
+        // В C++ этот сеттер отключит vid и aid, а также заблокирует изменение громкости
+        isCasting: CastManager.casting
+
+        z: 0
+        visible: !CastManager.casting
+        enabled: !CastManager.casting
 
         MouseArea {
             id: videoMouseArea
@@ -218,6 +213,55 @@ ApplicationWindow {
                     if (root.visibility === Window.FullScreen) root.showNormal();
                     else root.showFullScreen();
                 }
+            }
+        }
+    }
+
+    // ---------- Черный экран-заглушка при касте ----------
+    Rectangle {
+        anchors.fill: parent
+        color: "black"
+        visible: CastManager.casting
+        z: 1
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton) {
+                    if (contextMenu.visible) {
+                        contextMenu.close();
+                        return;
+                    }
+                    contextMenu.currentPage = "main";
+                    contextMenu.open();
+                }
+            }
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 16
+
+            Text {
+                text: qsTr("Трансляция на ТВ")
+                color: "gray"
+                font.pixelSize: 24
+                font.weight: Font.Bold
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Text {
+                text: Media.playlist.currentFile().split('/').pop()
+                color: "white"
+                font.pixelSize: 18
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Text {
+                text: qsTr("Управление доступно в нижней панели")
+                color: "gray"
+                font.pixelSize: 14
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: CastManager.isRemotePlaying
             }
         }
     }

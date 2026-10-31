@@ -2,6 +2,7 @@
 build/
 pkg/
 src/
+AppDir/
 *.pkg.tar.zst
 *.deb
 *.AppImage

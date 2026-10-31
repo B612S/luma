@@ -61,6 +61,7 @@ Popup {
     component MenuButton: Rectangle {
         id: btn
         property string text: ""
+        property string tooltipText: ""
         property bool hasArrow: false
         property bool isEnabled: true
         signal clicked()
@@ -99,6 +100,11 @@ Popup {
             hoverEnabled: true
             onClicked: { if (btn.isEnabled) btn.clicked() }
         }
+
+        // Тултип для отображения IP-адреса и другой информации
+        ToolTip.visible: hoverArea.containsMouse && btn.tooltipText !== ""
+        ToolTip.text: btn.tooltipText
+        ToolTip.delay: 500
     }
 
     Column {
@@ -408,11 +414,12 @@ Popup {
                 isEnabled: false
             }
 
-            // Список найденных устройств
+            // Список найденных устройств (в тултипе показываем IP-адрес)
             Repeater {
                 model: CastManager.discovery.devices
                 MenuButton {
                     text: modelData.name
+                    tooltipText: modelData.address
                     onClicked: {
                         let filePath = Media.playlist.currentFile()
                         if (!filePath) {

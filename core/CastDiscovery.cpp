@@ -1,6 +1,7 @@
 #include "CastDiscovery.hpp"
 #include <QDebug>
 #include <QTimer>
+#include <QSet>
 
 CastDiscovery::CastDiscovery(QObject *parent) : QObject(parent) {}
 
@@ -22,9 +23,8 @@ void CastDiscovery::refresh() {
                 m_process = nullptr;
             });
 
-    // avahi-browse -rt _googlecast._tcp  ->  ищем строки с address = [...]
     m_process->start("avahi-browse", QStringList() << "-rt" << "_googlecast._tcp");
-    // Таймаут на случай, если avahi-browse не установлен
+
     QTimer::singleShot(5000, this, [this]() {
         if (m_process && m_process->state() == QProcess::Running) {
             m_process->kill();
@@ -33,29 +33,37 @@ void CastDiscovery::refresh() {
 }
 
 void CastDiscovery::parseAvahiOutput(const QString &output) {
-    // Парсим блоки вида:
-    // = eth0 IPv4 Upstairs-Chromecast    _googlecast._tcp local
-    //    hostname = [Upstairs-Chromecast.local]
-    //    address = [192.168.0.52]
-    //    port = [8009]
-    //    txt = ["fn=Upstairs-Chromecast" ...]
     QString currentName;
     QString currentAddress;
     int currentPort = 8009;
+
+    // Для дедупликации: "address:port"
+    QSet<QString> seen;
+
+    auto flushDevice = [&]() {
+        if (currentName.isEmpty() || currentAddress.isEmpty()) return;
+
+        if (currentAddress.startsWith("127.") || currentAddress == "::1") return;
+
+        // Дедупликация: если такое устройство уже есть, пропускаем
+        const QString key = currentAddress + ":" + QString::number(currentPort);
+        if (seen.contains(key)) return;
+
+        seen.insert(key);
+
+        QVariantMap dev;
+        dev["name"] = currentName;
+        dev["address"] = currentAddress;
+        dev["port"] = currentPort;
+        m_devices.append(dev);
+    };
 
     const QStringList lines = output.split('\n');
     for (const QString &line : lines) {
         QString trimmed = line.trimmed();
 
         if (trimmed.startsWith("=") && trimmed.contains("_googlecast._tcp")) {
-            // Начало нового устройства — сохраняем предыдущее
-            if (!currentName.isEmpty() && !currentAddress.isEmpty()) {
-                QVariantMap dev;
-                dev["name"] = currentName;
-                dev["address"] = currentAddress;
-                dev["port"] = currentPort;
-                m_devices.append(dev);
-            }
+            flushDevice();
             currentName.clear();
             currentAddress.clear();
             currentPort = 8009;
@@ -76,7 +84,6 @@ void CastDiscovery::parseAvahiOutput(const QString &output) {
             }
         }
         else if (trimmed.startsWith("txt = [")) {
-            // Извлекаем fn= из TXT-записи
             int fnPos = trimmed.indexOf("fn=");
             if (fnPos >= 0) {
                 int start = fnPos + 3;
@@ -86,14 +93,7 @@ void CastDiscovery::parseAvahiOutput(const QString &output) {
             }
         }
     }
-    // Последнее устройство
-    if (!currentName.isEmpty() && !currentAddress.isEmpty()) {
-        QVariantMap dev;
-        dev["name"] = currentName;
-        dev["address"] = currentAddress;
-        dev["port"] = currentPort;
-        m_devices.append(dev);
-    }
+    flushDevice();
 
     emit devicesChanged();
 }

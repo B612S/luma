@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDebug>
+#include <QTimer>
 
 CastV2Client::CastV2Client(QObject *parent) : QObject(parent) {
     m_heartbeatTimer = new QTimer(this);
@@ -24,6 +25,7 @@ void CastV2Client::connectToDevice(const QString &address, quint16 port) {
 
     m_transportId.clear();
     m_sessionId.clear();
+    m_mediaSessionId = -1;
     m_loadSent = false;
     m_launchRequested = false;
 
@@ -41,6 +43,7 @@ void CastV2Client::connectToDevice(const QString &address, quint16 port) {
         m_statusPollTimer->stop();
         m_transportId.clear();
         m_sessionId.clear();
+        m_mediaSessionId = -1;
         m_isPlaying = false;
         emit playbackStatusChanged();
     });
@@ -61,11 +64,9 @@ void CastV2Client::startSession(const QString &mediaUrl, const QString &mediaTit
 void CastV2Client::onEncrypted() {
     emit connected();
     m_heartbeatTimer->start();
-    sendMessage("sender-0", "receiver-0", "urn:x-cast:com.google.cast.tp.connection", R"({"type":"CONNECT"})");
 
-    if (!m_pendingMediaUrl.isEmpty()) {
-        sendLaunchReceiver();
-    }
+    sendMessage("sender-0", "receiver-0", "urn:x-cast:com.google.cast.tp.connection", R"({"type":"CONNECT"})");
+    sendLaunchReceiver();
 }
 
 void CastV2Client::sendLaunchReceiver() {
@@ -76,6 +77,7 @@ void CastV2Client::sendLaunchReceiver() {
     obj["type"] = "LAUNCH";
     obj["appId"] = "CC1AD845";
     obj["requestId"] = m_requestId++;
+
     sendMessage("sender-0", "receiver-0", "urn:x-cast:com.google.cast.receiver",
                 QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
 }
@@ -88,6 +90,7 @@ void CastV2Client::sendLoadMedia() {
     media["contentId"] = m_pendingMediaUrl;
     media["contentType"] = "application/vnd.apple.mpegurl";
     media["streamType"] = "BUFFERED";
+
     QJsonObject metadata;
     metadata["metadataType"] = 0;
     metadata["title"] = m_pendingMediaTitle;
@@ -98,6 +101,7 @@ void CastV2Client::sendLoadMedia() {
     obj["requestId"] = m_requestId++;
     obj["media"] = media;
     obj["autoplay"] = true;
+    obj["currentTime"] = 0;
 
     sendMessage("sender-0", m_transportId, "urn:x-cast:com.google.cast.media",
                 QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
@@ -108,6 +112,7 @@ void CastV2Client::play() {
     QJsonObject obj;
     obj["type"] = "PLAY";
     obj["requestId"] = m_requestId++;
+    if (m_mediaSessionId > 0) obj["mediaSessionId"] = m_mediaSessionId;
     sendMessage("sender-0", m_transportId, "urn:x-cast:com.google.cast.media",
                 QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
 }
@@ -117,18 +122,26 @@ void CastV2Client::pause() {
     QJsonObject obj;
     obj["type"] = "PAUSE";
     obj["requestId"] = m_requestId++;
+    if (m_mediaSessionId > 0) obj["mediaSessionId"] = m_mediaSessionId;
     sendMessage("sender-0", m_transportId, "urn:x-cast:com.google.cast.media",
                 QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
 }
 
 void CastV2Client::seekTo(double seconds) {
     if (m_transportId.isEmpty()) return;
+
     QJsonObject obj;
     obj["type"] = "SEEK";
     obj["requestId"] = m_requestId++;
     obj["currentTime"] = seconds;
+    obj["mediaSessionId"] = (m_mediaSessionId > 0) ? m_mediaSessionId : 1;
+    obj["resumeState"] = "PLAYBACK_START";
+
     sendMessage("sender-0", m_transportId, "urn:x-cast:com.google.cast.media",
                 QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
+
+    // Задержка, чтобы ТВ успел обработать
+    QTimer::singleShot(300, this, &CastV2Client::pollStatus);
 }
 
 void CastV2Client::setVolume(double level) {
@@ -162,6 +175,7 @@ void CastV2Client::stop() {
     }
     m_transportId.clear();
     m_sessionId.clear();
+    m_mediaSessionId = -1;
     m_pendingMediaUrl.clear();
     m_loadSent = false;
     m_launchRequested = false;
@@ -225,8 +239,9 @@ void CastV2Client::onReadyRead() {
                 if (app["appId"].toString() == "CC1AD845") {
                     m_transportId = app["transportId"].toString();
                     m_sessionId = app["sessionId"].toString();
+
                     sendMessage("sender-0", m_transportId, "urn:x-cast:com.google.cast.tp.connection", R"({"type":"CONNECT"})");
-                    QTimer::singleShot(300, this, [this]() { sendLoadMedia(); });
+                    sendLoadMedia();
                     break;
                 }
             }
@@ -235,8 +250,12 @@ void CastV2Client::onReadyRead() {
             QJsonArray statusArr = obj["status"].toArray();
             if (!statusArr.isEmpty()) {
                 QJsonObject st = statusArr[0].toObject();
-                QString playerState = st["playerState"].toString();
 
+                if (st.contains("mediaSessionId")) {
+                    m_mediaSessionId = st["mediaSessionId"].toInt();
+                }
+
+                QString playerState = st["playerState"].toString();
                 bool wasPlaying = m_isPlaying;
                 m_isPlaying = (playerState == "PLAYING");
 
@@ -250,9 +269,9 @@ void CastV2Client::onReadyRead() {
                     volChanged = true;
                 }
 
-                if (!m_statusPollTimer->isActive() && m_isPlaying) {
+                if (m_mediaSessionId != -1 && !m_statusPollTimer->isActive()) {
                     m_statusPollTimer->start();
-                } else if (!m_isPlaying) {
+                } else if (m_mediaSessionId == -1) {
                     m_statusPollTimer->stop();
                 }
 
@@ -263,10 +282,14 @@ void CastV2Client::onReadyRead() {
                 if (playerState == "PLAYING" || playerState == "BUFFERING") {
                     emit mediaLoaded();
                 }
+            } else {
+                m_mediaSessionId = -1;
+                m_statusPollTimer->stop();
             }
         }
-        else if (type == "LOAD_FAILED") {
-            emit errorOccurred("Chromecast rejected LOAD: " + jsonPayload);
+        else if (type == "LOAD_FAILED" || type == "INVALID_REQUEST" || type == "ERROR") {
+            qWarning() << "CastV2Client ERROR:" << jsonPayload;
+            emit errorOccurred("Chromecast rejected media: " + jsonPayload);
         }
     }
 }

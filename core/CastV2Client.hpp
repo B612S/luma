@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QSslSocket>
 #include <QTimer>
+#include <QJsonObject>
 
 class CastV2Client : public QObject {
     Q_OBJECT
@@ -22,11 +23,10 @@ public:
     double currentDuration() const { return m_currentDuration; }
     double currentVolume() const { return m_currentVolume; }
 
-    // Команды управления
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
     Q_INVOKABLE void seekTo(double seconds);
-    Q_INVOKABLE void setVolume(double level); // 0.0 - 1.0
+    Q_INVOKABLE void setVolume(double level);
 
 signals:
     void connected();
@@ -56,6 +56,7 @@ private:
 
     QString m_transportId;
     QString m_sessionId;
+    int m_mediaSessionId = -1; // <-- ДОБАВЛЕНО
     int m_requestId = 1;
 
     QString m_pendingMediaUrl;

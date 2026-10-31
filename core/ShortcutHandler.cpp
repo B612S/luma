@@ -52,7 +52,6 @@ ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *me
         connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &reason) {
             if (reason != "eof") return;
             if (m_ignoreEndFile) return;
-            // Если идет каст, локальное видео и так на паузе
             if (m_castManager && m_castManager->casting()) return;
 
             QTimer::singleShot(100, this, [this]() {
@@ -110,6 +109,7 @@ void ShortcutHandler::onPositionChanged() {
     if (!m_mpv) return;
     if (m_isSliderSeeking) return;
     if (m_isInternalSeeking) return;
+    if (m_castManager && m_castManager->casting()) return; // Игнорируем локальные изменения при касте
 
     double currentPos = m_mpv->position();
     if (currentPos < 0) return;
@@ -125,7 +125,7 @@ void ShortcutHandler::onPositionChanged() {
 void ShortcutHandler::onVolumeChanged() {
     if (!m_mpv || !m_osd) return;
     if (m_isInternalVolume) return;
-    if (m_castManager && m_castManager->casting()) return;
+    if (m_castManager && m_castManager->casting()) return; // Игнорируем локальный звук при касте
     m_osd->showVolume();
 }
 
@@ -245,7 +245,6 @@ void ShortcutHandler::startVolume(double step) {
 }
 
 void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
-    // Если идет трансляция, перехватываем управление на Chromecast
     if (m_castManager && m_castManager->casting()) {
         switch (action) {
             case ShortcutAction::TogglePause:
@@ -283,14 +282,11 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
                     }
                 }
                 return;
-                // Остальные действия (Fullscreen, NextFile и т.д.) не имеют смысла для Cast
-                // или обрабатываются локальным mpv (например, переключение файла)
             default:
                 break;
         }
     }
 
-    // Стандартное поведение для локального mpv
     switch (action) {
         case ShortcutAction::TogglePause:
             if (!autoRepeat && m_mpv) m_mpv->setPaused(!m_mpv->paused());
@@ -464,6 +460,15 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 
         double volStep = (delta / 120.0) * 5.0;
 
+        // Если идет каст, сразу отправляем в Chromecast и съедаем событие
+        if (m_castManager && m_castManager->casting()) {
+            double newVol = qBound(0.0, m_castManager->remoteVolume() + volStep, 100.0);
+            m_castManager->setVolume(newVol);
+            if (m_osd) m_osd->showVolume(newVol);
+            m_volResetTimer->start();
+            return true;
+        }
+
         m_wheelVolumeDelta += volStep;
         m_wheelDebounceTimer->start();
 
@@ -474,8 +479,8 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void ShortcutHandler::toggleCrop() {
-    // ... (оставляем ваш оригинальный код из предыдущих сообщений) ...
     if (!m_mpv) return;
+    if (m_castManager && m_castManager->casting()) return;
 
     if (m_cropEnabled) {
         m_cropEnabled = false;
@@ -562,6 +567,8 @@ void ShortcutHandler::toggleCrop() {
 
 void ShortcutHandler::cycleAspectRatio() {
     if (!m_mpv) return;
+    if (m_castManager && m_castManager->casting()) return;
+
     QStringList aspects = {"original", "16:9", "4:3", "21:9", "1:1", "9:16"};
     QStringList labels  = {"Original", "16:9", "4:3", "21:9", "1:1", "9:16"};
     m_aspectIndex = (m_aspectIndex + 1) % aspects.size();
@@ -574,6 +581,8 @@ void ShortcutHandler::cycleAspectRatio() {
 
 void ShortcutHandler::cycleSubtitles() {
     if (!m_mpv) return;
+    if (m_castManager && m_castManager->casting()) return;
+
     QVariantList tracks = m_mpv->getProperty("track-list").toList();
     QList<int> subIds;
     for (const QVariant &t : tracks) {
@@ -601,6 +610,8 @@ void ShortcutHandler::cycleSubtitles() {
 
 void ShortcutHandler::cycleAudio() {
     if (!m_mpv) return;
+    if (m_castManager && m_castManager->casting()) return;
+
     QVariantList tracks = m_mpv->getProperty("track-list").toList();
     QList<int> audioIds;
     for (const QVariant &t : tracks) {

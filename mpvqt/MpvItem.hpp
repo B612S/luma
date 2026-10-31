@@ -19,6 +19,9 @@ class MpvItem : public MpvAbstractItem {
     Q_PROPERTY(bool deinterlaceEnabled READ deinterlaceEnabled NOTIFY deinterlaceChanged)
     Q_PROPERTY(bool cropEnabled READ cropEnabled NOTIFY cropEnabledChanged)
 
+    // НОВОЕ: Свойство для передачи состояния каста из QML в C++
+    Q_PROPERTY(bool isCasting READ isCasting WRITE setCastingState NOTIFY isCastingChanged)
+
 public:
     explicit MpvItem(QQuickItem *parent = nullptr);
 
@@ -37,6 +40,10 @@ public:
     bool deinterlaceEnabled() const { return m_deinterlaceEnabled; }
     bool cropEnabled() const { return m_cropEnabled; }
     void setCropEnabled(bool enabled);
+
+    // НОВОЕ:
+    bool isCasting() const { return m_isCasting; }
+    void setCastingState(bool casting);
 
     Q_INVOKABLE void seekFast(double pos);
     Q_INVOKABLE void seekExact(double pos);
@@ -57,10 +64,13 @@ signals:
     void mutedChanged();
     void sourceChanged();
     void videoDisabledChanged();
-    void fileEnded(const QString &reason); // <--- Добавлен аргумент reason
+    void fileEnded(const QString &reason);
     void deinterlaceChanged();
     void cropEnabledChanged();
     void thumbnailReady(const QString &requestId);
+
+    // НОВОЕ:
+    void isCastingChanged();
 
 private slots:
     void onMpvPropertyChanged(const QString &property, const QVariant &value);
@@ -75,6 +85,9 @@ private:
     bool   m_videoDisabled = false;
     bool   m_deinterlaceEnabled = false;
     bool   m_cropEnabled = false;
+
+    // НОВОЕ:
+    bool   m_isCasting = false;
 
     FrameDecoder *m_frameDecoder = nullptr;
 

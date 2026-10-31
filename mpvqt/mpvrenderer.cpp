@@ -13,13 +13,10 @@
 #include <QQuickWindow>
 #include <QOpenGLFunctions>
 
-// ВАЖНО: <QtGui/qnativeinterface.h> не существует в стандартной установке Qt6.
-// QNativeInterface::QWaylandApplication / QX11Application объявлены в <QGuiApplication>
-// (через макросы Q_DECLARE_NATIVE_INTERFACE), поэтому отдельный include не нужен.
-
 #include "mpvabstractitem.h"
 #include "mpvabstractitem_p.h"
 #include "mpvcontroller.h"
+#include "MpvItem.hpp"
 
 Q_STATIC_LOGGING_CATEGORY(MpvQt_MpvRenderer, "MpvQt.MpvRenderer")
 
@@ -67,8 +64,10 @@ void MpvRenderer::render()
     f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     f->glClear(GL_COLOR_BUFFER_BIT);
 
-    // Если видео нет — mpv сам не нарисует кадр, FBO останется чёрным.
-    // Блокирующий getProperty("vid") здесь не нужен (и опасен — render thread).
+    MpvItem *mpvItem = qobject_cast<MpvItem*>(m_mpvAItem);
+    if (mpvItem && (mpvItem->isCasting() || mpvItem->videoDisabled())) {
+        return;
+    }
 
     mpv_opengl_fbo mpfbo;
     mpfbo.fbo = static_cast<int>(fbo->handle());
@@ -76,7 +75,6 @@ void MpvRenderer::render()
     mpfbo.h = fbo->height();
     mpfbo.internal_format = 0;
 
-    // Qt FBO уже в OpenGL-ориентации
     int flip_y{0};
     int block_for_target_time = 0;
 
@@ -106,33 +104,18 @@ mpv_render_context *MpvRenderer::createMpvRenderContext()
     #if defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HAIKU)
     const QString platform = QGuiApplication::platformName();
 
-    // startsWith("wayland") — потому что platformName() может быть "wayland",
-    // "wayland-egl", "wayland-brcm" и т.п.
     if (platform.startsWith(QStringLiteral("wayland"))) {
-        // Нативный Wayland: передаём wl_display* в libmpv.
-        // QNativeInterface::QWaylandApplication доступен с Qt 6.5.
         if (auto *ni = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>()) {
             display.type = MPV_RENDER_PARAM_WL_DISPLAY;
             display.data = ni->display();
             qCDebug(MpvQt_MpvRenderer) << "mpv: using Wayland display";
-        } else {
-            qCWarning(MpvQt_MpvRenderer)
-            << "mpv: QWaylandApplication native interface is not available";
         }
     } else if (platform == QStringLiteral("xcb")) {
-        // X11 (в том числе XWayland): передаём Display* в libmpv.
         if (auto *ni = qGuiApp->nativeInterface<QNativeInterface::QX11Application>()) {
             display.type = MPV_RENDER_PARAM_X11_DISPLAY;
             display.data = ni->display();
             qCDebug(MpvQt_MpvRenderer) << "mpv: using X11 display";
-        } else {
-            qCWarning(MpvQt_MpvRenderer)
-            << "mpv: QX11Application native interface is not available";
         }
-    } else {
-        qCWarning(MpvQt_MpvRenderer)
-        << "mpv: unknown platform" << platform
-        << "— display param left as INVALID";
     }
     #endif
 

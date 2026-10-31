@@ -57,12 +57,36 @@ void MpvItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometr
     }
 }
 
-void MpvItem::setPosition(double pos) { command(QStringList() << "seek" << QString::number(pos) << "absolute"); }
-void MpvItem::seekFast(double pos) { command(QStringList() << "seek" << QString::number(pos) << "absolute"); }
-void MpvItem::seekExact(double pos) { command(QStringList() << "seek" << QString::number(pos) << "absolute+exact"); }
-void MpvItem::setPaused(bool p) { setProperty("pause", p); }
-void MpvItem::setVolume(double vol) { setProperty("volume", vol); }
-void MpvItem::setMuted(bool m) { setProperty("mute", m); }
+void MpvItem::setVolume(double vol) {
+    // Если идет трансляция, вообще не трогаем libmpv
+    if (m_isCasting) return;
+    setProperty("volume", vol);
+}
+
+void MpvItem::setPosition(double pos) {
+    if (m_isCasting) return;
+    command(QStringList() << "seek" << QString::number(pos) << "absolute");
+}
+
+void MpvItem::seekFast(double pos) {
+    if (m_isCasting) return;
+    command(QStringList() << "seek" << QString::number(pos) << "absolute");
+}
+
+void MpvItem::seekExact(double pos) {
+    if (m_isCasting) return;
+    command(QStringList() << "seek" << QString::number(pos) << "absolute+exact");
+}
+
+void MpvItem::setPaused(bool p) {
+    if (m_isCasting) return;
+    setProperty("pause", p);
+}
+
+void MpvItem::setMuted(bool m) {
+    if (m_isCasting) return;
+    setProperty("mute", m);
+}
 
 void MpvItem::setSource(const QString &src) {
     m_source = src;
@@ -75,6 +99,27 @@ void MpvItem::setCropEnabled(bool enabled) {
         m_cropEnabled = enabled;
         emit cropEnabledChanged();
     }
+}
+
+void MpvItem::setCastingState(bool casting) {
+    if (m_isCasting == casting) return;
+    m_isCasting = casting;
+
+    if (m_isCasting) {
+        // ЖЕСТКАЯ ОСТАНОВКА: отключаем рендеринг видео и звук, чтобы не мешать ТВ
+        setProperty("vid", "no");
+        setProperty("aid", "no");
+        setProperty("mute", true);
+        setProperty("volume", 0.0);
+    } else {
+        // Возвращаем на место
+        setProperty("vid", "auto");
+        setProperty("aid", "auto");
+        setProperty("mute", false);
+        setProperty("volume", m_volume);
+    }
+
+    emit isCastingChanged();
 }
 
 void MpvItem::requestThumbnail(double seekTime, const QString &requestId) {
@@ -126,9 +171,21 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
         }
     }
     else if (property == "duration") { m_duration = value.toDouble(); emit durationChanged(); }
-    else if (property == "pause") { m_paused = value.toBool(); emit pausedChanged(); }
-    else if (property == "volume") { m_volume = value.toDouble(); emit volumeChanged(); }
-    else if (property == "mute") { m_muted = value.toBool(); emit mutedChanged(); }
+    else if (property == "pause") {
+        if (m_isCasting) return; // Игнорируем локальные изменения паузы при касте
+        m_paused = value.toBool();
+        emit pausedChanged();
+    }
+    else if (property == "volume") {
+        if (m_isCasting) return; // Игнорируем локальные изменения громкости при касте
+        m_volume = value.toDouble();
+        emit volumeChanged();
+    }
+    else if (property == "mute") {
+        if (m_isCasting) return;
+        m_muted = value.toBool();
+        emit mutedChanged();
+    }
     else if (property == "vid") {
         bool disabled = false;
         if (value.typeId() == QMetaType::QString) disabled = (value.toString() == "no");

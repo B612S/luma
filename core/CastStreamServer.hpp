@@ -10,17 +10,19 @@ public:
     explicit CastStreamServer(QObject *parent = nullptr);
     ~CastStreamServer();
 
-    // Запускает FFmpeg и HTTP-сервер. Возвращает true, если сервер поднялся.
-    // URL доступен через url().
-    bool start(const QString &inputFile);
+    bool start(const QString &inputFile, const QString &targetIP);
     void stop();
 
     QString url() const;
     bool isRunning() const { return m_server && m_server->isListening(); }
 
+    bool isPlaylistReady() const;
+    bool isFullyEncoded() const;
+
 private:
     void handleClient(QTcpSocket *socket);
-    QString detectLocalIP() const;
+    QString detectLocalIP(const QString &targetIP) const;
+    QString playlistPath() const;
 
     QTcpServer *m_server = nullptr;
     QTemporaryDir *m_tempDir = nullptr;

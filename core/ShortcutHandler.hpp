@@ -72,7 +72,6 @@ private:
 
     int m_aspectIndex = 0;
 
-    // Auto Crop state
     bool m_cropEnabled = false;
     bool m_cropPending = false;
 
