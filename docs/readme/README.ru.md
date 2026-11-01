@@ -95,6 +95,27 @@ sudo cmake --install build
 makepkg -si
 ```
 
+## AppImage
+
+Собрать переносимый AppImage:
+
+```bash
+./build-appimage.sh
+# -> dist/Luma-<version>-x86_64.AppImage
+```
+
+Скрипт собирает Release-версию в AppDir и включает Qt/QML (в том числе Kirigami и
+`qqc2-desktop-style`), libmpv, FFmpeg, TagLib и плагины платформ Wayland и X11. Также
+добавляются виджет-стиль Breeze и небольшой набор иконок Breeze, которые использует
+интерфейс, поэтому скроллбары и иконки не зависят от KDE в системе. При первом запуске
+скрипт скачивает `linuxdeploy`, его Qt-плагин и `appimagetool` в `.appimage-tools/`.
+Необязательные `yt-dlp`, `ffmpeg` и `avahi-browse` не включаются; установите их в
+системе, если нужны ссылки или трансляция.
+
+Собирайте на самом старом дистрибутиве с glibc, который планируете поддерживать:
+AppImage не может включать glibc. На системах без FUSE запускайте образ с
+`--appimage-extract-and-run`.
+
 ## Тесты
 
 По умолчанию тесты **выключены** — при обычной сборке не собираются и в пакет не попадают.
@@ -111,11 +132,17 @@ ctest --test-dir build --output-on-failure
 `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, поэтому ваши настройки не затрагиваются. Qt6::Test
 необязателен: если модуля нет, тесты просто не собираются.
 
+`tst_media_open` — интеграционный тест с настоящим libmpv в headless-режиме
+(`vo=null`, `ao=null`): открывает аудио/видео из `tests/data/` и YouTube-ссылку через
+поддельный `yt-dlp`. Запуск только его:
+`ctest --test-dir build -R tst_media_open --output-on-failure`. Настоящая сетевая
+проверка YouTube пропускается, пока не задана переменная `LUMA_TEST_YOUTUBE_URL`.
+
 ## Использование
 
 - **Открыть файл или папку** — правый клик по видео → *Открыть*, либо перетащите файл
   в окно, либо передайте путь в командной строке.
-- **Открыть ссылку** — правый клик → *Открыть* → *Открыть по ссылке…*; yt-dlp
+- **Открыть ссылку** — правый клик → *Открыть* → *Открыть ссылку…*; yt-dlp
   разрешает поток, и Luma воспроизводит его в mpv. Перемотка работает как обычно.
 - **Плейлисты** — кнопка плейлиста на панели управления открывает панель. Вкладки
   сверху переключают плейлисты; правый клик по вкладке — *Добавить файлы…*,
@@ -238,11 +265,37 @@ ignore_file_style=false
 - **Запуск второй копии ничего не делает.** Включён режим одного экземпляра: аргументы
   передаются уже запущенному плееру, а новый процесс завершается. Закройте работающий
   экземпляр или задайте `single_instance=false` в `luma.conf`.
-- **Приложение не стартует на X11 или без графической сессии.** `main.cpp` принудительно
-  включает платформенный плагин Wayland и OpenGL RHI.
+- **X11.** Luma предпочитает Wayland, если сессия его предоставляет, а иначе
+  использует xcb-плагин Qt; при необходимости установите runtime-пакеты Qt для X11.
 - **Ошибка импорта QML при запуске.** Установите `kirigami` и `qqc2-desktop-style`.
 - **Трансляция не находит устройства.** Проверьте, что установлены `avahi` и `ffmpeg`,
   а телевизор в той же сети.
+
+## Благодарности
+
+Luma построена на этих проектах:
+
+- [Qt 6 / Qt Quick](https://www.qt.io/) — фреймворк и среда выполнения QML.
+- [KDE Kirigami](https://invent.kde.org/frameworks/kirigami) и
+  [qqc2-desktop-style](https://invent.kde.org/frameworks/qqc2-desktop-style) — интерфейс.
+- [mpv / libmpv](https://mpv.io/) и [mpvqt](https://invent.kde.org/libraries/mpvqt) —
+  движок воспроизведения и привязки к Qt.
+- [FFmpeg](https://ffmpeg.org/) — превью и HLS для трансляции.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — разрешение ссылок с видеосайтов.
+- [TagLib](https://taglib.org/) — метаданные аудио.
+- [Wayland](https://wayland.freedesktop.org/), [xkbcommon](https://xkbcommon.org/) и
+  [Avahi](https://avahi.org/) — интеграция с рабочим столом.
+- [AppImage](https://appimage.org/) и
+  [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) — переносимые сборки.
+
+Спасибо мейнтейнерам и участникам этих проектов.
+
+## Версионирование
+
+Luma использует версии `MAJOR.MINOR.PATCH`. Единственный источник версии —
+файл [`VERSION`](../../VERSION); его читают `CMakeLists.txt`, `main.cpp`, `PKGBUILD` и
+`build-appimage.sh`. Правила для мажорных, минорных, патч-версий и пересборок
+описаны в [`VERSIONING.md`](../../VERSIONING.md).
 
 ## Лицензия
 

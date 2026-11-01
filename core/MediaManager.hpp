@@ -21,6 +21,8 @@ class MediaManager : public QObject {
     Q_PROPERTY(QString currentFileName READ currentFileName NOTIFY fileChanged)
     // A direct stream (radio) is playing: seeking works only within the cache.
     Q_PROPERTY(bool liveStream READ liveStream NOTIFY liveStreamChanged)
+    // A new source is being resolved/opened; stats must not read mpv synchronously.
+    Q_PROPERTY(bool isLoading READ isLoading NOTIFY loadingChanged)
 
 public:
     explicit MediaManager(MpvItem *mpv = nullptr, QObject *parent = nullptr);
@@ -39,7 +41,10 @@ public:
     void setPlayMode(const QString &mode);
 
     QString currentFileName() const;
+    // True only for real video; embedded audio cover art is not video.
+    Q_INVOKABLE bool hasVideo() const;
     bool liveStream() const { return m_liveStream; }
+    bool isLoading() const { return m_loading; }
 
     Q_INVOKABLE void openFile(const QString &path);
     Q_INVOKABLE void openFolder(const QString &folder);
@@ -77,6 +82,7 @@ signals:
     void isManualSwitchChanged();
     void playlistChanged();
     void liveStreamChanged();
+    void loadingChanged();
     // Text for the OSD while a URL is being opened via yt-dlp.
     void downloadStatus(const QString &message);
 
@@ -93,7 +99,6 @@ private:
     void playStream(const QString &originalUrl, const QString &videoUrl,
                     const QString &audioUrl, const QString &title, bool keepPlaylist);
     void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
-    QStringList ytdlpConfigArgs() const;
     // The external audio track (video-only + audio) is attached after fileLoaded.
     void onMpvFileLoaded();
 
@@ -108,6 +113,8 @@ private:
     QElapsedTimer m_lastPlayedTimer;
     QString m_lastStreamTitle;
     bool m_liveStream = false;
+    bool m_loading = false;
+    void setLoading(bool loading);
     void setLiveStream(bool live);
 
     QDBusInterface *m_notifyInterface = nullptr;

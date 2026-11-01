@@ -5,6 +5,7 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QThread>
+#include <QHash>
 
 class FrameDecoder;
 
@@ -76,6 +77,8 @@ public:
     Q_INVOKABLE QString getAudioOutput();
     Q_INVOKABLE QString getAudioDevice();
     Q_INVOKABLE QVariant property(const QString &name) { return getProperty(name); }
+    // Last value received from mpv's observeProperty; never blocks the UI.
+    Q_INVOKABLE QVariant observedProperty(const QString &name) const { return m_observedValues.value(name); }
 
 protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
@@ -107,6 +110,7 @@ private:
 
     QString m_source;
     QString m_mediaTitle;
+    QHash<QString, QVariant> m_observedValues;
     double m_position = 0.0;
     double m_duration = 0.0;
     bool   m_paused   = false;

@@ -1,4 +1,5 @@
 #include <QTest>
+#include <QSignalSpy>
 #include <QVariantMap>
 
 #include "PlaylistModel.hpp"
@@ -13,6 +14,9 @@ private slots:
     void setFilesAndCurrent();
     void displayAddsCurrentMarker();
     void displayStripsExtension();
+    void updateMetadataChangesFields();
+    void sortByMetadata();
+    void playingMarkerIsControllable();
     void moveItemKeepsCurrent();
     void removeItemAdjustsCurrent();
     void clearRemovesEverything();
@@ -60,6 +64,92 @@ void TestPlaylistModel::displayStripsExtension()
     entry["title"] = QStringLiteral("clip.mp4");
     model.setEntries(QVariantList() << entry, QStringLiteral("/tmp/clip.mp4"));
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ clip"));
+}
+
+void TestPlaylistModel::playingMarkerIsControllable()
+{
+    PlaylistModel model;
+    model.setFiles({"a.mp3"}, "a.mp3");
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 1).toBool(), true);
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ a"));
+
+    model.setPlaying(false);
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 1).toBool(), false);
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("a"));
+
+    model.setPlaying(true);
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 1).toBool(), true);
+}
+
+void TestPlaylistModel::sortByMetadata()
+{
+    QVariantList entries;
+    auto add = [&entries](const QString &path, const QString &title, const QString &artist,
+                           const QString &album, int year) {
+        QVariantMap e;
+        e["path"] = path;
+        e["kind"] = "audio";
+        e["title"] = title;
+        e["artist"] = artist;
+        e["album"] = album;
+        e["year"] = year;
+        entries << e;
+    };
+    add("b.mp3", "Beta", "Zed", "B", 2020);
+    add("a.mp3", "Alpha", "Ann", "A", 2019);
+    add("c.mp3", "Gamma", "Ann", "C", 2021);
+
+    PlaylistModel model;
+    model.setEntries(entries, "");
+
+    model.sortBy("name", true);
+    QCOMPARE(model.fileAt(0), QStringLiteral("a.mp3"));
+    QCOMPARE(model.fileAt(1), QStringLiteral("b.mp3"));
+    QCOMPARE(model.fileAt(2), QStringLiteral("c.mp3"));
+
+    model.sortBy("name", false);
+    QCOMPARE(model.fileAt(0), QStringLiteral("c.mp3"));
+    QCOMPARE(model.fileAt(2), QStringLiteral("a.mp3"));
+
+    model.sortBy("artist", true);
+    QCOMPARE(model.fileAt(0), QStringLiteral("a.mp3"));
+    QCOMPARE(model.fileAt(1), QStringLiteral("c.mp3"));
+    QCOMPARE(model.fileAt(2), QStringLiteral("b.mp3"));
+
+    model.sortBy("year", true);
+    QCOMPARE(model.fileAt(0), QStringLiteral("a.mp3"));
+    QCOMPARE(model.fileAt(1), QStringLiteral("b.mp3"));
+    QCOMPARE(model.fileAt(2), QStringLiteral("c.mp3"));
+
+    model.sortBy("year", false);
+    QCOMPARE(model.fileAt(0), QStringLiteral("c.mp3"));
+    QCOMPARE(model.fileAt(2), QStringLiteral("a.mp3"));
+
+    model.sortBy("album", true);
+    QCOMPARE(model.fileAt(0), QStringLiteral("a.mp3"));
+    QCOMPARE(model.fileAt(1), QStringLiteral("b.mp3"));
+    QCOMPARE(model.fileAt(2), QStringLiteral("c.mp3"));
+}
+
+void TestPlaylistModel::updateMetadataChangesFields()
+{
+    PlaylistModel model;
+    model.setFiles({"song.mp3"}, "song.mp3");
+    QSignalSpy modified(&model, &PlaylistModel::modified);
+
+    QVERIFY(model.updateMetadata("song.mp3", "Song title", "Artist", "Album", 2024, 123.0));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 6).toString(), QStringLiteral("Song title"));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 3).toString(), QStringLiteral("Artist"));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 4).toString(), QStringLiteral("Album"));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 5).toDouble(), 123.0);
+    QCOMPARE(modified.count(), 1);
+
+    QVERIFY(!model.updateMetadata("song.mp3", "Song title", "Artist", "Album", 2024, 123.0));
+    QCOMPARE(modified.count(), 1);
+
+    // Removed tags fall back to the file name.
+    QVERIFY(model.updateMetadata("song.mp3", "", "", "", 0, 0.0));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 6).toString(), QStringLiteral("song"));
 }
 
 void TestPlaylistModel::moveItemKeepsCurrent()

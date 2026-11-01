@@ -1,6 +1,7 @@
 #include "ConfigManager.hpp"
 #include <QDir>
 #include <QFile>
+#include <QProcess>
 #include <QTextStream>
 #include <QStandardPaths>
 
@@ -279,6 +280,19 @@ void ConfigManager::setSubtitleIgnoreFileStyle(bool enabled) {
     if (subtitleIgnoreFileStyle() == enabled) return;
     m_settings->setValue("subtitles/ignore_file_style", enabled);
     emit subtitlesChanged();
+}
+
+QStringList ConfigManager::ytdlpConfigArgs() const {
+    QStringList args;
+    QFile f(ytdlpConfigPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return args;
+
+    while (!f.atEnd()) {
+        const QString line = QString::fromUtf8(f.readLine()).trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+        args << QProcess::splitCommand(line);
+    }
+    return args;
 }
 
 QString ConfigManager::ytdlpConfigPath() const {

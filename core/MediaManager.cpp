@@ -28,7 +28,6 @@
 extern "C" {
     #include <libavformat/avformat.h>
     #include <libavcodec/avcodec.h>
-    #include <libswscale/swscale.h>
 }
 
 #include <QCryptographicHash>
@@ -61,7 +60,9 @@ QString coverCachePath(const QString &sourcePath) {
     return dir + "/" + QString::fromLatin1(hash) + ".jpg";
 }
 
-// Extracts the embedded cover art (ID3 APIC / MP4 covr, etc.).
+// Extracts the embedded cover art (ID3 APIC / MP4 covr, etc.). Attached
+// pictures are normal JPEG/PNG bytes; letting Qt decode them avoids a separate
+// FFmpeg decoder and the fragile sws_scale path for unusual covers.
 QImage decodeAttachedCover(AVFormatContext *ctx) {
     int streamIndex = -1;
     for (unsigned i = 0; i < ctx->nb_streams; ++i) {
@@ -75,45 +76,9 @@ QImage decodeAttachedCover(AVFormatContext *ctx) {
     AVStream *stream = ctx->streams[streamIndex];
     if (!stream->attached_pic.data || stream->attached_pic.size <= 0) return QImage();
 
-    const AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
-    if (!codec) return QImage();
-
-    AVCodecContext *codecCtx = avcodec_alloc_context3(codec);
-    if (!codecCtx) return QImage();
-    if (avcodec_parameters_to_context(codecCtx, stream->codecpar) < 0
-            || avcodec_open2(codecCtx, codec, nullptr) < 0) {
-        avcodec_free_context(&codecCtx);
-        return QImage();
-    }
-
-    AVPacket packet {};
-    QImage image;
-    AVFrame *frame = av_frame_alloc();
-
-    if (frame && av_packet_ref(&packet, &stream->attached_pic) >= 0) {
-        if (avcodec_send_packet(codecCtx, &packet) >= 0
-                && avcodec_receive_frame(codecCtx, frame) >= 0) {
-            const int w = frame->width;
-            const int h = frame->height;
-            if (w > 0 && h > 0) {
-                image = QImage(w, h, QImage::Format_RGBA8888);
-                SwsContext *sws = sws_getContext(w, h, static_cast<AVPixelFormat>(frame->format),
-                                                 w, h, AV_PIX_FMT_RGBA, SWS_BILINEAR,
-                                                 nullptr, nullptr, nullptr);
-                if (sws && !image.isNull()) {
-                    uint8_t *dst[4] = { image.bits(), nullptr, nullptr, nullptr };
-                    int dstStride[4] = { static_cast<int>(image.bytesPerLine()), 0, 0, 0 };
-                    sws_scale(sws, frame->data, frame->linesize, 0, h, dst, dstStride);
-                }
-                if (sws) sws_freeContext(sws);
-            }
-        }
-        av_packet_unref(&packet);
-    }
-
-    if (frame) av_frame_free(&frame);
-    avcodec_free_context(&codecCtx);
-    return image;
+    const QByteArray data(reinterpret_cast<const char *>(stream->attached_pic.data),
+                          stream->attached_pic.size);
+    return QImage::fromData(data);
 }
 
 // Reads the tags; returns true if anything was found.
@@ -211,7 +176,9 @@ void MediaManager::setMpv(MpvItem *mpv) {
     m_mpv = mpv;
     if (m_mpv) {
         connect(m_mpv, &MpvItem::mediaTitleChanged, this, &MediaManager::onMediaTitleChanged);
+        connect(m_mpv, &MpvItem::sourceChanged, this, [this]() { setLoading(true); });
         connect(m_mpv, &MpvItem::fileLoaded, this, &MediaManager::onMpvFileLoaded);
+        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &) { setLoading(false); });
     }
 }
 
@@ -219,6 +186,12 @@ void MediaManager::setLiveStream(bool live) {
     if (m_liveStream == live) return;
     m_liveStream = live;
     emit liveStreamChanged();
+}
+
+void MediaManager::setLoading(bool loading) {
+    if (m_loading == loading) return;
+    m_loading = loading;
+    emit loadingChanged();
 }
 
 void MediaManager::onMediaTitleChanged() {
@@ -315,6 +288,26 @@ QString MediaManager::currentFileName() const {
     QString path = m_mpv->source();
     if (path.isEmpty()) return "";
     return QFileInfo(path).fileName();
+}
+
+bool MediaManager::hasVideo() const {
+    if (!m_mpv) return false;
+
+    const QString codec = m_mpv->property("video-codec").toString().trimmed();
+    if (codec.isEmpty() || codec.compare(QStringLiteral("no"), Qt::CaseInsensitive) == 0)
+        return false;
+
+    auto flag = [this](const char *name) {
+        const QVariant value = m_mpv->property(name);
+        if (!value.isValid()) return false;
+        if (value.toBool()) return true;
+        const QString text = value.toString().trimmed().toLower();
+        return text == QLatin1String("yes") || text == QLatin1String("true");
+    };
+
+    // Audio covers are exposed as image/album-art video tracks.
+    return !flag("current-tracks/video/image")
+        && !flag("current-tracks/video/albumart");
 }
 
 void MediaManager::_sendNotification(const QString &body) {
@@ -649,6 +642,7 @@ void MediaManager::openFile(const QString &path) {
     if (!files.contains(cleanPath)) files.prepend(cleanPath);
 
     def->setFiles(files, cleanPath);
+    if (m_playlists) m_playlists->scanAudioPaths(files);
     if (m_playMode == "shuffle") def->setShuffle(true);
 
     if (m_playlists->activeId() != PlaylistManager::DEFAULT_ID)
@@ -685,6 +679,7 @@ void MediaManager::openFolder(const QString &folder) {
         if (idx >= 0) playIndex(idx);
     } else {
         def->setFiles(files, files.first());
+        if (m_playlists) m_playlists->scanAudioPaths(files);
         if (m_playMode == "shuffle") def->setShuffle(true);
         if (m_playlists->activeId() != PlaylistManager::DEFAULT_ID)
             m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
@@ -692,25 +687,10 @@ void MediaManager::openFolder(const QString &folder) {
     }
 }
 
-QStringList MediaManager::ytdlpConfigArgs() const {
-    // Settings live in ~/.config/luma/yt-dlp.conf: one option per line.
-    // QProcess::splitCommand parses a line the same way a shell does.
-    QStringList args;
-    if (!m_config) return args;
-
-    QFile f(m_config->ytdlpConfigPath());
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return args;
-
-    while (!f.atEnd()) {
-        const QString line = QString::fromUtf8(f.readLine()).trimmed();
-        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
-        args << QProcess::splitCommand(line);
-    }
-    return args;
-}
 
 void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     if (!m_mpv || !m_playlists) return;
+    setLoading(true);
 
     const QString exe = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
     if (exe.isEmpty()) {
@@ -752,7 +732,7 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     m_ytdlpProcess = proc;
     proc->setProcessChannelMode(QProcess::SeparateChannels);
 
-    QStringList args = ytdlpConfigArgs();
+    QStringList args = m_config ? m_config->ytdlpConfigArgs() : QStringList();
     args << QStringLiteral("--no-playlist")
          << QStringLiteral("-j")
          << QStringLiteral("-f") << formatExpr
@@ -771,13 +751,17 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     });
     connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart) return;
+        if (m_ytdlpProcess != proc) return;
         if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
         if (m_ytdlpProcess == proc) m_ytdlpProcess = nullptr;
         proc->deleteLater();
+        setLoading(false);
         emit downloadStatus(tr("download_failed_start"));
         _sendNotification(tr("download_failed_open"), tr("download_ytdlp_missing"), QString());
     });
     connect(proc, &QProcess::finished, this, [this, proc, url, keepPlaylist](int code, QProcess::ExitStatus status) {
+        // FailedToStart is handled above and clears m_ytdlpProcess.
+        if (m_ytdlpProcess != proc) return;
         m_ytdlpStdoutBuffer += proc->readAllStandardOutput();
         m_ytdlpStderr += QString::fromUtf8(proc->readAllStandardError());
         if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
@@ -849,6 +833,7 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
         m_resolvedTitle.clear();
         m_resolvedVideoUrl.clear();
         m_resolvedAudioUrl.clear();
+        setLoading(false);
         return;
     }
 
@@ -874,8 +859,11 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
 
     PlaylistModel *titleModel = keepPlaylist ? m_playlists->activeModel()
                                              : m_playlists->defaultModel();
-    if (titleModel && !title.isEmpty())
-        titleModel->setVideoTitle(originalUrl, title);
+    if (titleModel) {
+        m_playlists->setPlayingModel(titleModel);
+        if (!title.isEmpty())
+            titleModel->setVideoTitle(originalUrl, title);
+    }
 
     m_lastPlayedFile = originalUrl;
     m_lastPlayedTimer.start();
@@ -886,6 +874,7 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
 
     m_pendingAudioUrl = audioUrl;
+    setLoading(true);
     m_mpv->setSource(videoUrl);
     m_mpv->setPaused(false);
 
@@ -901,11 +890,24 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
 }
 
 void MediaManager::onMpvFileLoaded() {
-    if (!m_mpv || m_pendingAudioUrl.isEmpty()) return;
-    const QString audio = m_pendingAudioUrl;
-    m_pendingAudioUrl.clear();
-    m_mpv->command(QStringList() << QStringLiteral("audio-add")
-                                 << audio << QStringLiteral("select"));
+    if (!m_mpv) return;
+
+    if (!m_pendingAudioUrl.isEmpty()) {
+        // A local file may be opened while the previous network stream is still
+        // loading. Do not attach the old external audio track to it.
+        const QString source = m_mpv->source();
+        if (source.startsWith(QStringLiteral("http://"))
+                || source.startsWith(QStringLiteral("https://"))) {
+            const QString audio = m_pendingAudioUrl;
+            m_pendingAudioUrl.clear();
+            m_mpv->command(QStringList() << QStringLiteral("audio-add")
+                                         << audio << QStringLiteral("select"));
+        } else {
+            m_pendingAudioUrl.clear();
+        }
+    }
+
+    setLoading(false);
 }
 
 void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &playUrl) {
@@ -933,7 +935,9 @@ void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &pl
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
 
+    m_playlists->setPlayingModel(def);
     def->setCurrentIndex(existingIndex >= 0 ? existingIndex : 0);
+    setLoading(true);
     m_mpv->setSource(playUrl);
     m_mpv->setPaused(false);
 
@@ -980,6 +984,7 @@ void MediaManager::playIndex(int index) {
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
 
+    m_playlists->setPlayingModel(model);
     model->setCurrentIndex(index);
     m_mpv->setSource(file);
     m_mpv->setPaused(false);

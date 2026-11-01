@@ -1,9 +1,13 @@
 # Maintainer: B612S
+
 pkgname=luma
-pkgver=1.0.0
+# VERSION is the single source of the application version (MAJOR.MINOR.PATCH).
+pkgver="$(tr -d '[:space:]' < "${startdir:-$PWD}/VERSION" 2>/dev/null || true)"
+pkgver="${pkgver:-1.0.0}"
+# Increment for a packaging-only rebuild; reset to 1 when pkgver changes.
 pkgrel=1
-pkgdesc="Lightweight video player based on mpv and Qt/QML"
-arch=('x86_64')
+pkgdesc="Lightweight audio and video player based on mpv and Qt/QML"
+arch=('x86_64' 'aarch64')
 url="https://github.com/B612S/luma"
 license=('GPL-3.0-or-later')
 
@@ -12,6 +16,8 @@ depends=(
     'qt6-declarative'
     'qt6-svg'
     'qt6-wayland'
+    'wayland'
+    'libxkbcommon'
     'mpv'
     'ffmpeg'
     'taglib'
@@ -24,40 +30,43 @@ depends=(
 makedepends=(
     'cmake'
     'ninja'
-    'extra-cmake-modules'
+    'pkgconf'
     'qt6-tools'
 )
 
 optdepends=(
     'yt-dlp: playback of links from video sites'
+    'avahi: Chromecast discovery'
 )
 
-# Оставляем пустым. Мы скопируем файлы вручную в prepare()
+# This PKGBUILD packages the working tree, so there is no remote source.
 source=()
 sha256sums=()
 
-options=(!strip !debug)
-
 prepare() {
-    # Создаем рабочую директорию и копируем туда всё из папки с PKGBUILD
+    # Copy the checkout into $srcdir without local build, VCS or packaging data.
+    rm -rf "$srcdir/luma"
     mkdir -p "$srcdir/luma"
-
-    # Копируем ВСЁ, кроме папки src (чтобы не зациклиться) и build
-    cp -r "$startdir"/* "$srcdir/luma/" 2>/dev/null || true
-    rm -rf "$srcdir/luma/src" "$srcdir/luma/build"
-
-    # Если вы используете rsync, можно сделать так (он аккуратнее):
-    # rsync -a --exclude 'src' --exclude 'build' "$startdir/" "$srcdir/luma/"
+    tar -C "${startdir:-$PWD}" \
+        --exclude='./.git' \
+        --exclude='./src' \
+        --exclude='./pkg' \
+        --exclude='./build' \
+        --exclude='./build-appimage' \
+        --exclude='./dist' \
+        --exclude='./AppDir' \
+        --exclude='./squashfs-root' \
+        --exclude='./.appimage-tools' \
+        -cf - . | tar -C "$srcdir/luma" -xf -
 }
 
 build() {
     cd "$srcdir/luma"
 
-    rm -rf build
-
     cmake -B build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
+        -DLUMA_BUILD_TESTS=OFF \
         -G Ninja
 
     cmake --build build
@@ -66,16 +75,9 @@ build() {
 package() {
     cd "$srcdir/luma"
 
+    # Installs the binary, QML module, translations, desktop file and icon.
     DESTDIR="$pkgdir" cmake --install build
 
-    # Убираем лишний файл
+    # This deployment map is not needed by the installed QML module.
     rm -f "$pkgdir/usr/lib/qt6/qml/luma/luma_qml_module_dir_map.qrc"
-
-    # Устанавливаем .desktop
-    install -Dm644 "luma.desktop" \
-        "$pkgdir/usr/share/applications/luma.desktop"
-
-    # Устанавливаем иконку
-    install -Dm644 "assets/luma.png" \
-        "$pkgdir/usr/share/icons/hicolor/256x256/apps/luma.png"
 }

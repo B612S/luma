@@ -70,6 +70,26 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     observeProperty("vid", MPV_FORMAT_NODE);
     observeProperty("deinterlace", MPV_FORMAT_STRING);
     observeProperty("media-title", MPV_FORMAT_STRING);
+
+    // Used by the statistics panel. Reading these through getProperty() from
+    // QML would block the GUI thread while mpv is opening or buffering a file.
+    const QStringList statsProperties = {
+        QStringLiteral("filename"), QStringLiteral("file-size"),
+        QStringLiteral("file-format"), QStringLiteral("video-codec"),
+        QStringLiteral("audio-codec"), QStringLiteral("current-ao"),
+        QStringLiteral("width"),
+        QStringLiteral("height"), QStringLiteral("container-fps"),
+        QStringLiteral("video-bitrate"), QStringLiteral("hwdec-current"),
+        QStringLiteral("frame-drop-count"), QStringLiteral("audio-bitrate"),
+        QStringLiteral("audio-params/channel-count"),
+        QStringLiteral("audio-params/samplerate"),
+        QStringLiteral("audio-out-params"), QStringLiteral("audio-device"),
+        QStringLiteral("avsync"), QStringLiteral("demuxer-cache-duration"),
+        QStringLiteral("current-tracks/video/image"),
+        QStringLiteral("current-tracks/video/albumart")
+    };
+    for (const QString &property : statsProperties)
+        observeProperty(property, MPV_FORMAT_NODE);
 }
 
 MpvItem::~MpvItem() {
@@ -214,6 +234,8 @@ QString MpvItem::getAudioDevice() {
 }
 
 void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &value) {
+    m_observedValues.insert(property, value);
+
     if (property == "time-pos") {
         if (m_positionTimer.elapsed() > 200) {
             m_position = value.toDouble();

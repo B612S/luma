@@ -8,6 +8,7 @@
 #include "PlaylistModel.hpp"
 
 class ConfigManager;
+class TagScanner;
 
 class PlaylistManager : public QObject {
     Q_OBJECT
@@ -32,12 +33,18 @@ public:
 
     Q_INVOKABLE QString createPlaylist(const QString &name);
     Q_INVOKABLE void deletePlaylist(const QString &id);
+    Q_INVOKABLE void movePlaylist(int from, int to);
+    Q_INVOKABLE void sortPlaylist(const QString &id, const QString &key, bool ascending);
+    Q_INVOKABLE void shufflePlaylist(const QString &id);
+    Q_INVOKABLE bool playlistHasAudio(const QString &id) const;
     Q_INVOKABLE void renamePlaylist(const QString &id, const QString &newName);
     Q_INVOKABLE void addFilesToPlaylist(const QString &id, const QStringList &paths);
     Q_INVOKABLE void addFolderToPlaylist(const QString &id, const QString &folder);
     Q_INVOKABLE void openAddFilesDialog(const QString &id);
     Q_INVOKABLE void openAddFolderDialog(const QString &id);
     Q_INVOKABLE void addUrlToPlaylist(const QString &id, const QString &url);
+    void scanAudioPaths(const QStringList &paths);
+    void setPlayingModel(PlaylistModel *model);
     Q_INVOKABLE QString playlistName(const QString &id) const;
     Q_INVOKABLE void saveActive();
 
@@ -50,6 +57,7 @@ private:
     void loadAll();
     void savePlaylist(const QString &id);
     void loadPlaylist(const QString &id);
+    void fetchUrlTitle(const QString &id, const QString &url);
     void saveOrder();
     // Changes (drag and drop, additions) arrive very often, so writing to disk
     // and the playlistsChanged signal are coalesced via a timer.
@@ -69,6 +77,7 @@ private:
     QString m_activeId = DEFAULT_ID;
     bool m_loading = false;
     QTimer m_saveTimer;
+    TagScanner *m_tagScanner = nullptr;
     QSet<QString> m_dirtyIds;
     bool m_playlistsChangedPending = false;
 };

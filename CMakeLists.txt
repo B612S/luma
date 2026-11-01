@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
-project(luma VERSION 1.0 LANGUAGES CXX)
+
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" LUMA_VERSION LIMIT_COUNT 1)
+string(STRIP "${LUMA_VERSION}" LUMA_VERSION)
+if(NOT LUMA_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "VERSION must be MAJOR.MINOR.PATCH (got '${LUMA_VERSION}')")
+endif()
+project(luma VERSION ${LUMA_VERSION} LANGUAGES CXX)
+
+include(GNUInstallDirs)
+if(NOT CMAKE_INSTALL_DATADIR)
+    set(CMAKE_INSTALL_DATADIR "share")
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,6 +56,7 @@ qt_add_executable(luma
     core/OsdManager.cpp
     core/KeyboardLayoutWatcher.cpp
     core/TagManager.cpp
+    core/TagScanner.cpp
     core/ShortcutAction.cpp
     core/ShortcutHandler.cpp
     core/ThumbnailProvider.hpp
@@ -63,7 +75,7 @@ qt_add_executable(luma
 
 qt_add_qml_module(luma
     URI luma
-    VERSION 1.0
+    VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     QML_FILES
         qml/Main.qml
         qml/ControlBar.qml
@@ -120,6 +132,9 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/translations
 )
 
+install(FILES luma.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES assets/luma.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+
 target_include_directories(luma PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/mpvqt
@@ -152,6 +167,8 @@ target_link_libraries(luma PRIVATE
     ${SWSCALE_LIBRARIES}
     ${AVUTIL_LIBRARIES}
 )
+
+target_compile_definitions(luma PRIVATE LUMA_VERSION="${PROJECT_VERSION}")
 
 if (TARGET Qt6::WaylandClient)
     target_link_libraries(luma PRIVATE Qt6::WaylandClient)

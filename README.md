@@ -95,6 +95,27 @@ A `PKGBUILD` is included:
 makepkg -si
 ```
 
+## AppImage
+
+Build a portable AppImage with:
+
+```bash
+./build-appimage.sh
+# -> dist/Luma-<version>-x86_64.AppImage
+```
+
+The script builds a Release AppDir and bundles Qt/QML (including Kirigami and
+`qqc2-desktop-style`), libmpv, FFmpeg, TagLib and both the Wayland and X11 platform
+plugins. The Breeze widget style and the small set of Breeze icons used by the controls
+are included as well, so scrollbars and icons do not depend on the host's KDE setup. On
+first use it downloads `linuxdeploy`, its Qt plugin and `appimagetool` into
+`.appimage-tools/`. Optional tools such as `yt-dlp`, `ffmpeg` and `avahi-browse` are not
+bundled; install them on the system when you need link playback or casting.
+
+Build on the oldest glibc-based distribution you intend to support — an AppImage cannot
+bundle glibc. On systems without FUSE, run the image with
+`--appimage-extract-and-run`.
+
 ## Tests
 
 Tests are **off by default** — they are not built during a normal build or included in
@@ -112,11 +133,18 @@ playlist model and manager, the configuration file and the yt-dlp config. Tests 
 are not touched. Qt6::Test is optional — if the module is missing, the tests are skipped
 during configuration.
 
+`tst_media_open` is an integration test that uses the real libmpv in headless mode
+(`vo=null`, `ao=null`) to open the audio/video fixtures in `tests/data/` and a YouTube
+URL routed through a fake `yt-dlp`. Run only it with
+`ctest --test-dir build -R tst_media_open --output-on-failure`. A real network YouTube
+test is skipped unless `LUMA_TEST_YOUTUBE_URL` is set; it uses the real `yt-dlp` and
+network, so it is not part of the default run.
+
 ## Usage
 
 - **Open a file/folder** — right-click the video → *Open*, or drag & drop a file onto
   the window, or pass a path on the command line.
-- **Open a link** — right-click the video → *Open* → *Open from URL…*; yt-dlp resolves
+- **Open a link** — right-click the video → *Open* → *Open link…*; yt-dlp resolves
   the stream and Luma plays it in mpv. Seeking works as usual.
 - **Playlists** — the playlist button in the control bar opens the panel. Tabs at the
   top switch playlists; right-click a tab for *Add files…*, *Add folder…*,
@@ -238,12 +266,39 @@ Translations of this README live in [`docs/readme/`](docs/readme/).
 - **Launching a second copy does nothing.** Single-instance mode forwards arguments to
   the running player and exits. Quit the running instance, or set
   `single_instance=false` in `luma.conf`.
-- **The app does not start on X11 or headless.** `main.cpp` forces the Wayland platform
-  plugin and the OpenGL RHI.
+- **X11.** Luma prefers Wayland when the session provides it and otherwise uses Qt's
+  xcb platform plugin; install the Qt X11/xcb runtime packages if your distribution
+  splits them out.
 - **A QML import error on startup.** Install the runtime QML modules: `kirigami` and
   `qqc2-desktop-style`.
 - **Casting finds no devices.** Make sure `avahi` and `ffmpeg` are installed and the TV
   is on the same network.
+
+## Credits
+
+Luma is built on these projects:
+
+- [Qt 6 / Qt Quick](https://www.qt.io/) — application framework and QML runtime.
+- [KDE Kirigami](https://invent.kde.org/frameworks/kirigami) and
+  [qqc2-desktop-style](https://invent.kde.org/frameworks/qqc2-desktop-style) — UI.
+- [mpv / libmpv](https://mpv.io/) and [mpvqt](https://invent.kde.org/libraries/mpvqt) —
+  playback engine and Qt bindings.
+- [FFmpeg](https://ffmpeg.org/) — thumbnails and HLS for casting.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — resolving links from video sites.
+- [TagLib](https://taglib.org/) — audio metadata.
+- [Wayland](https://wayland.freedesktop.org/), [xkbcommon](https://xkbcommon.org/) and
+  [Avahi](https://avahi.org/) — desktop integration.
+- [AppImage](https://appimage.org/) and
+  [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) — portable builds.
+
+Thanks to the maintainers and contributors of these projects.
+
+## Versioning
+
+Luma uses `MAJOR.MINOR.PATCH`. The single source of the version is the
+[`VERSION`](VERSION) file; `CMakeLists.txt`, `main.cpp`, `PKGBUILD` and
+`build-appimage.sh` consume it. See [`VERSIONING.md`](VERSIONING.md) for the
+rules for major, minor, patch and rebuild versions.
 
 ## License
 

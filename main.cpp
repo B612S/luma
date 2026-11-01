@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QTimer>
 #include <QStandardPaths>
+#include <QStyleFactory>
 #include <QTranslator>
 #include <QLocalSocket>
 #include <QLocalServer>
@@ -34,6 +35,10 @@
 #include "core/SocksHttpProxy.hpp"
 #include "mpvqt/MpvItem.hpp"
 
+#ifndef LUMA_VERSION
+#define LUMA_VERSION "dev"
+#endif
+
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
     if (args.size() > 1) {
         QString filePath = args.at(1);
@@ -47,12 +52,32 @@ void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow 
 }
 
 int main(int argc, char *argv[]) {
-    qputenv("QT_QPA_PLATFORM", QByteArray("wayland"));
+    // Prefer Wayland when the session provides it; otherwise let Qt select the
+    // platform plugin (xcb on X11), so portable builds work on more systems.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")
+            && !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")) {
+        qputenv("QT_QPA_PLATFORM", QByteArray("wayland"));
+    }
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
     QApplication app(argc, argv);
+    // Use the KDE widget style for native dialogs and for qqc2-desktop-style's
+    // style items. QT_STYLE_OVERRIDE would also change the QML controls style,
+    // which must remain org.kde.desktop.
+    const QStringList styleKeys = QStyleFactory::keys();
+    for (const QString &key : styleKeys) {
+        if (key.compare(QStringLiteral("Breeze"), Qt::CaseInsensitive) != 0)
+            continue;
+        if (QStyle *breeze = QStyleFactory::create(key))
+            QApplication::setStyle(breeze);
+        break;
+    }
+    // The AppImage bundles a small hicolor icon set; use it there so the
+    // controls do not depend on a KDE icon theme being installed.
+    if (qEnvironmentVariableIsSet("LUMA_APPIMAGE"))
+        QIcon::setThemeName(QStringLiteral("hicolor"));
     app.setApplicationName("luma");
-    app.setApplicationVersion("1.0.0");
+    app.setApplicationVersion(QString::fromLatin1(LUMA_VERSION));
     app.setWindowIcon(QIcon(":/assets/luma.png"));
 
     ConfigManager config;

@@ -126,7 +126,7 @@ Dialog {
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "general"
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 22
 
                         Label { text: qsTr("settings_general"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
@@ -176,7 +176,7 @@ Dialog {
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "playlist"
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 22
 
                         Label { text: qsTr("settings_playlist"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
@@ -221,7 +221,7 @@ Dialog {
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "interface"
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 22
 
                         Label { text: qsTr("settings_interface"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
@@ -302,12 +302,12 @@ Dialog {
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "playback"
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 22
 
                         Label { text: qsTr("settings_playback"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
-                        Label { text: qsTr("settings_audio"); font.pixelSize: 14; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Label { text: qsTr("settings_audio"); font.pixelSize: 15; font.weight: Font.Bold; color: Kirigami.Theme.textColor; Layout.topMargin: 2 }
 
                         GridLayout {
                             columns: 2
@@ -335,7 +335,9 @@ Dialog {
                             }
                         }
 
-                        Label { text: qsTr("settings_video_acceleration"); font.pixelSize: 14; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; Layout.topMargin: 4; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.13) }
+
+                        Label { text: qsTr("settings_video_acceleration"); font.pixelSize: 15; font.weight: Font.Bold; color: Kirigami.Theme.textColor; Layout.topMargin: 2 }
 
                         GridLayout {
                             columns: 2
@@ -383,7 +385,9 @@ Dialog {
                             }
                         }
 
-                        Label { text: qsTr("settings_ytdlp"); font.pixelSize: 14; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; Layout.topMargin: 4; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.13) }
+
+                        Label { text: qsTr("settings_ytdlp"); font.pixelSize: 15; font.weight: Font.Bold; color: Kirigami.Theme.textColor; Layout.topMargin: 2 }
 
                         GridLayout {
                             columns: 2
@@ -472,7 +476,7 @@ Dialog {
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "subtitles"
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 22
 
                         Label { text: qsTr("settings_subtitles"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
@@ -667,7 +671,7 @@ Dialog {
                     ColumnLayout {
                         visible: settingsDialog.currentCategory === "about"
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 22
 
                         Label { text: qsTr("about_title"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }

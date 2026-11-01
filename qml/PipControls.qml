@@ -177,7 +177,7 @@ Item {
             anchors.centerIn: parent
             width: 18; height: 18
             color: pip.iconColor
-            source: pip.windowed ? "view-fullscreen" : "view-restore"
+            source: pip.windowed ? "view-fullscreen-symbolic" : "view-restore-symbolic"
         }
 
         MouseArea { anchors.fill: parent; onClicked: pip.fullscreenRequested() }
@@ -200,7 +200,7 @@ Item {
             anchors.centerIn: parent
             width: 18; height: 18
             color: pip.iconColor
-            source: "window-close"
+            source: "window-close-symbolic"
         }
 
         MouseArea { anchors.fill: parent; onClicked: pip.closeRequested() }
@@ -221,7 +221,7 @@ Item {
             anchors.centerIn: parent
             width: 22; height: 22
             color: pip.iconColor
-            source: pip.mpv && pip.mpv.paused ? "media-playback-start" : "media-playback-pause"
+            source: pip.mpv && pip.mpv.paused ? "media-playback-start-symbolic" : "media-playback-pause-symbolic"
         }
 
         MouseArea {
@@ -334,7 +334,7 @@ Item {
                     anchors.centerIn: parent
                     width: 18; height: 18
                     color: pip.iconColor
-                    source: pip.mpv && pip.mpv.muted ? "audio-volume-muted" : "audio-volume-high"
+                    source: pip.mpv && pip.mpv.muted ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
                 }
 
                 MouseArea {

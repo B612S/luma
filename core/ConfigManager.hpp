@@ -110,6 +110,7 @@ public:
 
     // Path to the yt-dlp config (created on first launch).
     QString ytdlpConfigPath() const;
+    QStringList ytdlpConfigArgs() const;
 
     Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
     Q_INVOKABLE void setValue(const QString &key, const QVariant &value);

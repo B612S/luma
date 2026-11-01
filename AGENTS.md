@@ -16,7 +16,10 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   `ctest --test-dir build --output-on-failure`. They cover core logic only (shortcuts table,
   playlist model/manager, config and the yt-dlp config file), need neither mpv nor a display,
   and redirect `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` to a temp dir. There is no lint/format
-  config at the repo root.
+  config at the repo root. `tst_media_open` is a separate libmpv integration test: it runs
+  headless with `vo=null`/`ao=null`, uses the fixtures in `tests/data/`, and is labelled
+  `integration;libmpv`. Its real network YouTube case is skipped unless
+  `LUMA_TEST_YOUTUBE_URL` is set; the default YouTube path uses a fake `yt-dlp`.
 - The binary is `build/bin/luma` (`CMAKE_RUNTIME_OUTPUT_DIRECTORY`), not `build/luma`.
   `README.md` is the English user documentation; other languages live in `docs/readme/`.
 - Dependencies come from `find_package(Qt6 ...)` plus `pkg_check_modules` for `mpv`,
@@ -33,8 +36,8 @@ cmake --build build -j$(nproc)          # single-target: --target luma
 
 ## Runtime gotchas when launching
 
-- `main.cpp` forces `QT_QPA_PLATFORM=wayland` and the OpenGL RHI before `QApplication`.
-  It will not start on a pure X11 or headless machine without changing that line.
+- `main.cpp` prefers Wayland when `WAYLAND_DISPLAY` is set, otherwise lets Qt choose
+  the platform plugin (xcb on X11), and forces the OpenGL RHI before `QApplication`.
 - Single-instance mode is on by default (`QLocalServer` name
   `luma_single_instance_server`): a second launch forwards its argv to the running
   instance and exits 0. During manual testing this looks like "nothing happened"; kill
@@ -74,8 +77,11 @@ cmake --build build -j$(nproc)          # single-target: --target luma
 ## Conventions
 
 - Code comments are in English; user-visible strings are `tr()`/`qsTr()`-wrapped.
-- Version numbers live in three places: `project(... VERSION ...)` in `CMakeLists.txt`,
-  `setApplicationVersion` in `main.cpp`, and `PKGBUILD`.
+- `VERSION` is the single source of the application version (`MAJOR.MINOR.PATCH`).
+  CMake reads it for the project and passes `LUMA_VERSION` to `main.cpp`; the
+  AppImage script and `PKGBUILD` read it too. `pkgrel` is packaging-only. Bump
+  rules and rebuild rules are in `VERSIONING.md`. `luma.desktop`'s `Version`
+  key is the desktop-entry spec version, not the app version.
 - Packaging is Arch-only: `PKGBUILD` copies the working tree (excluding `src/`, `build/`)
   and installs `luma.desktop` and `assets/luma.png` itself; `.gitignore` covers `src/`,
   `pkg/`, `AppDir/`, AppImage/deb artifacts.

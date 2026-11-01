@@ -6,7 +6,7 @@
 <message><source>menu_open</source><translation>Открыть</translation></message>
 <message><source>menu_open_file</source><translation>Открыть файл…</translation></message>
 <message><source>menu_open_folder</source><translation>Открыть папку…</translation></message>
-<message><source>menu_open_url</source><translation>Открыть по ссылке…</translation></message>
+<message><source>menu_open_url</source><translation>Открыть ссылку…</translation></message>
 <message><source>menu_back</source><translation>Назад</translation></message>
 <message><source>menu_exit</source><translation>Выйти</translation></message>
 <message><source>menu_settings</source><translation>Настройки</translation></message>
@@ -137,6 +137,13 @@
 <message><source>tabs_add_file</source><translation>Добавить файлы…</translation></message>
 <message><source>tabs_add_folder</source><translation>Добавить папку…</translation></message>
 <message><source>tabs_add_url</source><translation>Добавить ссылку…</translation></message>
+<message><source>tabs_sort</source><translation>Сортировать</translation></message>
+<message><source>tabs_sort_name_asc</source><translation>По имени (А–Я)</translation></message>
+<message><source>tabs_sort_name_desc</source><translation>По имени (Я–А)</translation></message>
+<message><source>tabs_shuffle</source><translation>Перемешать</translation></message>
+<message><source>tabs_sort_artist</source><translation>По исполнителю</translation></message>
+<message><source>tabs_sort_year</source><translation>По году</translation></message>
+<message><source>tabs_sort_album</source><translation>По альбому</translation></message>
 <message><source>tabs_clear</source><translation>Очистить плейлист</translation></message>
 <message><source>tabs_rename</source><translation>Переименовать</translation></message>
 <message><source>tabs_delete</source><translation>Удалить</translation></message>
@@ -154,7 +161,7 @@
 
 <context>
 <name>StatsPanel</name>
-<message><source>stats_file</source><translation>Имя файла</translation></message>
+<message><source>stats_file</source><translation>Название</translation></message>
 <message><source>stats_size</source><translation>Размер</translation></message>
 <message><source>stats_format</source><translation>Формат</translation></message>
 <message><source>stats_duration</source><translation>Длительность</translation></message>
@@ -180,7 +187,7 @@
 <message><source>dialog_open_video</source><translation>Открыть медиафайл</translation></message>
 <message><source>dialog_video_filter</source><translation>Видеофайлы (*.mp4 *.mkv *.avi *.webm);;Все файлы (*)</translation></message>
 <message><source>dialog_open_folder</source><translation>Выбор папки</translation></message>
-<message><source>dialog_open_url</source><translation>Открыть по ссылке</translation></message>
+<message><source>dialog_open_url</source><translation>Открыть ссылку</translation></message>
 <message><source>dialog_enter_url</source><translation>Вставьте ссылку:</translation></message>
 <message><source>dialog_open_subtitles</source><translation>Загрузить субтитры</translation></message>
 <message><source>dialog_subtitles_filter</source><translation>Файлы субтитров (*.srt *.ass *.ssa *.sub *.vtt);;Все файлы (*)</translation></message>

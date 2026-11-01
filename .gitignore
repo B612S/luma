@@ -2,11 +2,44 @@
 build/
 pkg/
 src/
-AppDir/
+AppDir
 *.pkg.tar.zst
+*.pkg.tar.xz
 *.deb
 *.AppImage
 
 # CMake
 CMakeCache.txt
 CMakeFiles/
+
+# AppImage build artifacts
+.appimage-tools/
+build-appimage
+dist
+squashfs-root
+build-appimage.log
+
+# Local build/tooling files
+compile_commands.json
+CMakeUserPresets.json
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.qm
+*.log
+/luma
+*.zsync
+*.flatpak
+.flatpak-builder
+.cache/
+.clangd/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.smoketest
+.apptest
+.probe
+.icontest

@@ -6,7 +6,7 @@
 <message><source>menu_open</source><translation>Open</translation></message>
 <message><source>menu_open_file</source><translation>Open file…</translation></message>
 <message><source>menu_open_folder</source><translation>Open folder…</translation></message>
-<message><source>menu_open_url</source><translation>Open from URL…</translation></message>
+<message><source>menu_open_url</source><translation>Open link…</translation></message>
 <message><source>menu_back</source><translation>Back</translation></message>
 <message><source>menu_exit</source><translation>Quit</translation></message>
 <message><source>menu_settings</source><translation>Settings</translation></message>
@@ -137,6 +137,13 @@
 <message><source>tabs_add_file</source><translation>Add files…</translation></message>
 <message><source>tabs_add_folder</source><translation>Add folder…</translation></message>
 <message><source>tabs_add_url</source><translation>Add link…</translation></message>
+<message><source>tabs_sort</source><translation>Sort</translation></message>
+<message><source>tabs_sort_name_asc</source><translation>Name (A–Z)</translation></message>
+<message><source>tabs_sort_name_desc</source><translation>Name (Z–A)</translation></message>
+<message><source>tabs_shuffle</source><translation>Shuffle</translation></message>
+<message><source>tabs_sort_artist</source><translation>By artist</translation></message>
+<message><source>tabs_sort_year</source><translation>By year</translation></message>
+<message><source>tabs_sort_album</source><translation>By album</translation></message>
 <message><source>tabs_clear</source><translation>Clear playlist</translation></message>
 <message><source>tabs_rename</source><translation>Rename</translation></message>
 <message><source>tabs_delete</source><translation>Delete</translation></message>
@@ -154,7 +161,7 @@
 
 <context>
 <name>StatsPanel</name>
-<message><source>stats_file</source><translation>File name</translation></message>
+<message><source>stats_file</source><translation>Title</translation></message>
 <message><source>stats_size</source><translation>Size</translation></message>
 <message><source>stats_format</source><translation>Format</translation></message>
 <message><source>stats_duration</source><translation>Duration</translation></message>
@@ -180,7 +187,7 @@
 <message><source>dialog_open_video</source><translation>Open media file</translation></message>
 <message><source>dialog_video_filter</source><translation>Video files (*.mp4 *.mkv *.avi *.webm);;All files (*)</translation></message>
 <message><source>dialog_open_folder</source><translation>Choose folder</translation></message>
-<message><source>dialog_open_url</source><translation>Open from URL</translation></message>
+<message><source>dialog_open_url</source><translation>Open link</translation></message>
 <message><source>dialog_enter_url</source><translation>Paste a link:</translation></message>
 <message><source>dialog_open_subtitles</source><translation>Load subtitle file</translation></message>
 <message><source>dialog_subtitles_filter</source><translation>Subtitle files (*.srt *.ass *.ssa *.sub *.vtt);;All files (*)</translation></message>

@@ -165,7 +165,7 @@ Rectangle {
             Layout.preferredHeight: 36
             Kirigami.Icon {
                 anchors.centerIn: parent
-                source: root.displayPaused ? "media-playback-start" : "media-playback-pause"
+                source: root.displayPaused ? "media-playback-start-symbolic" : "media-playback-pause-symbolic"
                 color: Kirigami.Theme.textColor
                 width: 22
                 height: 22
@@ -367,7 +367,7 @@ Rectangle {
             Kirigami.Icon {
                 anchors.centerIn: parent
                 source: (CastManager.casting ? (CastManager.remoteVolume === 0) : (mpv.muted || mpv.volume === 0))
-                ? "audio-volume-muted" : "audio-volume-high"
+                ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
                 color: Kirigami.Theme.textColor
                 width: 22
                 height: 22

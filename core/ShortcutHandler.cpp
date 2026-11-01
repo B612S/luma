@@ -287,6 +287,16 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
         }
     }
 
+    const bool videoOnly = action == ShortcutAction::FrameForward
+                        || action == ShortcutAction::FrameBackward
+                        || action == ShortcutAction::CycleSubtitles
+                        || action == ShortcutAction::CycleAudio
+                        || action == ShortcutAction::CycleDeinterlace
+                        || action == ShortcutAction::CycleAspectRatio
+                        || action == ShortcutAction::ToggleCrop;
+    if (videoOnly && (!m_media || !m_media->hasVideo()))
+        return;
+
     switch (action) {
         case ShortcutAction::TogglePause:
             if (!autoRepeat && m_mpv) m_mpv->setPaused(!m_mpv->paused());
@@ -496,7 +506,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void ShortcutHandler::toggleCrop() {
-    if (!m_mpv) return;
+    if (!m_mpv || !m_media || !m_media->hasVideo()) return;
     if (m_castManager && m_castManager->casting()) return;
 
     if (m_cropEnabled) {

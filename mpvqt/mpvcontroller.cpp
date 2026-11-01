@@ -215,7 +215,12 @@ void MpvController::init()
     mpv_set_wakeup_callback(d_ptr->m_mpv, MpvController::mpvEvents, this);
 
     // HARD OVERRIDE (takes precedence over mpv.conf)
+#ifdef LUMA_TEST_MPV_VO
+    // Headless tests have no render context; null still demuxes/decodes tracks.
+    mpv_set_property_string(d_ptr->m_mpv, "vo", "null");
+#else
     mpv_set_property_string(d_ptr->m_mpv, "vo", "libmpv");
+#endif
     mpv_set_property_string(d_ptr->m_mpv, "audio-client-name", "luma");
 
     // CRITICAL: keep-open is disabled so mpv always sends EOF

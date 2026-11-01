@@ -2,6 +2,7 @@
 #include <QFileInfo>
 #include <QUrl>
 #include <QRandomGenerator>
+#include <algorithm>
 
 PlaylistModel::PlaylistModel(QObject *parent) : QAbstractListModel(parent) {}
 
@@ -25,6 +26,37 @@ void PlaylistModel::setVideoTitle(const QString &path, const QString &title) {
         emit dataChanged(index(i), index(i), {Qt::DisplayRole, Qt::UserRole + 6});
         emit modified();
     }
+}
+
+bool PlaylistModel::updateMetadata(const QString &path, const QString &title,
+                                    const QString &artist, const QString &album,
+                                    int year, double duration)
+{
+    for (int i = 0; i < m_entries.size(); ++i) {
+        Entry &e = m_entries[i];
+        if (e.path != path)
+            continue;
+
+        const QString newTitle = title.isEmpty() && !e.path.contains(QStringLiteral("://"))
+                                 ? QFileInfo(e.path).completeBaseName()
+                                 : title;
+        if (e.title == newTitle && e.artist == artist && e.album == album
+                && e.year == year && qAbs(e.duration - duration) < 0.001) {
+            return false;
+        }
+
+        e.title = newTitle;
+        e.artist = artist;
+        e.album = album;
+        e.year = year;
+        e.duration = duration;
+        emit dataChanged(index(i), index(i),
+                         {Qt::DisplayRole, Qt::UserRole + 3, Qt::UserRole + 4,
+                          Qt::UserRole + 5, Qt::UserRole + 6});
+        emit modified();
+        return true;
+    }
+    return false;
 }
 
 int PlaylistModel::rowCount(const QModelIndex &parent) const {
@@ -54,11 +86,11 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
                     name = QFileInfo(e.path).completeBaseName();
             }
             if (name.isEmpty()) name = e.path;
-            if (index.row() == m_currentIndex) return "▶ " + name;
+            if (m_isPlaying && index.row() == m_currentIndex) return "▶ " + name;
             return name;
         }
         case Qt::UserRole:      return e.path;
-        case Qt::UserRole + 1:  return index.row() == m_currentIndex;
+        case Qt::UserRole + 1:  return m_isPlaying && index.row() == m_currentIndex;
         case Qt::UserRole + 2:  return e.kind;
         case Qt::UserRole + 3:  return e.artist;
         case Qt::UserRole + 4:  return e.album;
@@ -91,6 +123,7 @@ QVariant PlaylistModel::entryToVariant(const Entry &e) const {
         m["title"] = e.title;
     m["artist"] = e.artist;
     m["album"] = e.album;
+    m["year"] = e.year;
     m["duration"] = e.duration;
     return m;
 }
@@ -107,6 +140,7 @@ PlaylistModel::Entry PlaylistModel::variantToEntry(const QVariantMap &m) const {
     e.persistTitle = !e.title.isEmpty();
     e.artist = m.value("artist").toString();
     e.album = m.value("album").toString();
+    e.year = m.value("year").toInt();
     e.duration = m.value("duration").toDouble();
     if (e.title.isEmpty() && !e.path.contains(QStringLiteral("://")))
         e.title = QFileInfo(e.path).completeBaseName();
@@ -187,6 +221,16 @@ int PlaylistModel::indexOf(const QString &path) const {
     return -1;
 }
 
+void PlaylistModel::setPlaying(bool playing)
+{
+    if (m_isPlaying == playing) return;
+    m_isPlaying = playing;
+    if (m_currentIndex >= 0 && m_currentIndex < m_entries.size()) {
+        emit dataChanged(index(m_currentIndex), index(m_currentIndex),
+                         {Qt::DisplayRole, Qt::UserRole + 1});
+    }
+}
+
 void PlaylistModel::setCurrentIndex(int idx) {
     if (m_currentIndex == idx) return;
 
@@ -208,6 +252,60 @@ void PlaylistModel::setCurrentIndex(int idx) {
 // ---------------------------------------------------------------------------
 // Changes (emit modified)
 // ---------------------------------------------------------------------------
+
+void PlaylistModel::sortBy(const QString &key, bool ascending)
+{
+    if (m_entries.size() < 2)
+        return;
+
+    auto keyValue = [&key](const Entry &e) {
+        if (key == QLatin1String("artist")) return e.artist;
+        if (key == QLatin1String("album")) return e.album;
+        QString title = e.title;
+        if (title.isEmpty()) title = QFileInfo(e.path).completeBaseName();
+        return title;
+    };
+
+    beginResetModel();
+    std::stable_sort(m_entries.begin(), m_entries.end(),
+                     [&](const Entry &a, const Entry &b) {
+        if (key == QLatin1String("year")) {
+            const bool aEmpty = a.year <= 0;
+            const bool bEmpty = b.year <= 0;
+            if (aEmpty != bEmpty) return !aEmpty; // entries without a year go last
+            if (a.year != b.year)
+                return ascending ? a.year < b.year : a.year > b.year;
+        } else {
+            const QString va = keyValue(a);
+            const QString vb = keyValue(b);
+            const bool aEmpty = va.isEmpty();
+            const bool bEmpty = vb.isEmpty();
+            if (aEmpty != bEmpty) return !aEmpty;
+            const int cmp = QString::localeAwareCompare(va, vb);
+            if (cmp != 0)
+                return ascending ? cmp < 0 : cmp > 0;
+        }
+
+        const int titleCmp = QString::localeAwareCompare(a.title, b.title);
+        if (titleCmp != 0)
+            return ascending ? titleCmp < 0 : titleCmp > 0;
+        return QString::localeAwareCompare(a.path, b.path) < 0;
+    });
+
+    m_originalPaths.clear();
+    for (const Entry &e : m_entries)
+        m_originalPaths << e.path;
+    m_currentIndex = -1;
+    for (int i = 0; i < m_entries.size(); ++i) {
+        if (m_entries[i].path == m_currentPlayingFile) {
+            m_currentIndex = i;
+            break;
+        }
+    }
+    endResetModel();
+    emit currentIndexChanged();
+    emit modified();
+}
 
 void PlaylistModel::setShuffle(bool shuffle) {
     if (m_entries.isEmpty()) return;

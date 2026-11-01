@@ -48,7 +48,6 @@ Menu {
             playStartTimer.start();
         }
     }
-    MenuItem { text: qsTranslate("PlaylistPanel", "playlist_shuffle"); visible: Media.playMode === "shuffle"; onTriggered: { if (trackContextMenu.playlistPanel && trackContextMenu.playlistPanel.model) trackContextMenu.playlistPanel.model.setShuffle(true); } }
     MenuSeparator {}
 
     Menu {

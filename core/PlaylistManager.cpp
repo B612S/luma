@@ -1,5 +1,6 @@
 #include "PlaylistManager.hpp"
 #include "ConfigManager.hpp"
+#include "TagScanner.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -10,12 +11,23 @@
 #include <QStandardPaths>
 #include <QUuid>
 #include <QDebug>
-
-extern "C" {
-    #include <libavformat/avformat.h>
-}
+#include <QProcess>
 
 const QString PlaylistManager::DEFAULT_ID = "__default__";
+
+static const QStringList &audioExtensions()
+{
+    static const QStringList extensions = {
+        "mp3", "flac", "aac", "wav", "ogg", "m4a", "opus", "wma",
+        "m4b", "wv", "ape", "aiff", "caf"
+    };
+    return extensions;
+}
+
+static bool isAudioPath(const QString &path)
+{
+    return audioExtensions().contains(QFileInfo(path).suffix().toLower());
+}
 
 PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
 : QObject(parent), m_config(config)
@@ -34,9 +46,31 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
     });
 
     loadAll();
+
+    m_tagScanner = new TagScanner(this);
+    connect(m_tagScanner, &TagScanner::scanned, this,
+            [this](const QString &path, const QString &title, const QString &artist,
+                   const QString &album, int year, double duration, bool ok) {
+        if (!ok) return;
+        for (PlaylistModel *model : m_models) {
+            if (model)
+                model->updateMetadata(path, title, artist, album, year, duration);
+        }
+    });
+
+    // Refresh tags in the background on every start, without blocking the UI.
+    for (PlaylistModel *model : m_models) {
+        if (!model) continue;
+        for (const PlaylistModel::Entry &entry : model->entries()) {
+            if (!entry.path.contains(QStringLiteral("://")) && isAudioPath(entry.path))
+                m_tagScanner->enqueue(entry.path);
+        }
+    }
 }
 
 PlaylistManager::~PlaylistManager() {
+    if (m_tagScanner)
+        m_tagScanner->stop();
     if (m_saveTimer.isActive())
         flushPendingSaves();
 }
@@ -262,6 +296,44 @@ void PlaylistManager::deletePlaylist(const QString &id) {
     emit playlistsChanged();
 }
 
+void PlaylistManager::movePlaylist(int from, int to) {
+    // Indices are positions in the tab bar, where index 0 is Default. Default
+    // itself cannot move, and no tab can be placed before it.
+    if (from <= 0 || from > m_order.size()) return;
+    const int fromRow = from - 1;
+    const int toRow = qBound(0, to - 1, m_order.size() - 1);
+    if (fromRow == toRow) return;
+
+    m_order.move(fromRow, toRow);
+    saveOrder();
+    emit playlistsChanged();
+}
+
+void PlaylistManager::sortPlaylist(const QString &id, const QString &key, bool ascending) {
+    PlaylistModel *model = m_models.value(id, nullptr);
+    if (!model) return;
+    if (key == QLatin1String("shuffle")) {
+        model->setShuffle(true);
+        return;
+    }
+    model->sortBy(key, ascending);
+}
+
+void PlaylistManager::shufflePlaylist(const QString &id) {
+    if (PlaylistModel *model = m_models.value(id, nullptr))
+        model->setShuffle(true);
+}
+
+bool PlaylistManager::playlistHasAudio(const QString &id) const {
+    PlaylistModel *model = m_models.value(id, nullptr);
+    if (!model) return false;
+    for (const PlaylistModel::Entry &entry : model->entries()) {
+        if (isAudioPath(entry.path))
+            return true;
+    }
+    return false;
+}
+
 void PlaylistManager::renamePlaylist(const QString &id, const QString &newName) {
     if (id == DEFAULT_ID) return;
     QString clean = sanitizeName(newName);
@@ -275,32 +347,10 @@ QVariantMap PlaylistManager::buildEntry(const QString &path) const {
     QVariantMap entry;
     QFileInfo fi(path);
     entry["path"] = fi.absoluteFilePath();
-
-    QString ext = fi.suffix().toLower();
-    static const QStringList audioExt = {"mp3","flac","aac","wav","ogg","m4a","opus","wma"};
-    bool isAudio = audioExt.contains(ext);
-    entry["kind"] = isAudio ? "audio" : "video";
-
-    if (isAudio) {
-        AVFormatContext *fmt_ctx = nullptr;
-        if (avformat_open_input(&fmt_ctx, path.toUtf8().constData(), nullptr, nullptr) == 0) {
-            if (avformat_find_stream_info(fmt_ctx, nullptr) >= 0) {
-                AVDictionaryEntry *tag = nullptr;
-                tag = av_dict_get(fmt_ctx->metadata, "title", nullptr, 0);
-                if (tag) entry["title"] = QString::fromUtf8(tag->value);
-                tag = av_dict_get(fmt_ctx->metadata, "artist", nullptr, 0);
-                if (tag) entry["artist"] = QString::fromUtf8(tag->value);
-                tag = av_dict_get(fmt_ctx->metadata, "album", nullptr, 0);
-                if (tag) entry["album"] = QString::fromUtf8(tag->value);
-                entry["duration"] = (double)fmt_ctx->duration / AV_TIME_BASE;
-            }
-            avformat_close_input(&fmt_ctx);
-        }
-    }
-
-    if (entry.value("title").toString().isEmpty())
-        entry["title"] = fi.fileName();
-
+    entry["kind"] = isAudioPath(path) ? "audio" : "video";
+    // Tags and duration are read by TagScanner in the background.
+    entry["title"] = fi.completeBaseName().isEmpty() ? fi.fileName() : fi.completeBaseName();
+    entry["duration"] = 0.0;
     return entry;
 }
 
@@ -313,10 +363,30 @@ void PlaylistManager::addFilesToPlaylist(const QString &id, const QStringList &p
         if (!fi.exists() || fi.isDir()) continue;
         QVariantMap entry = buildEntry(fi.absoluteFilePath());
         model->appendEntry(entry);
+        if (m_tagScanner
+                && entry.value("kind").toString() == QLatin1String("audio")
+                && !fi.absoluteFilePath().contains(QStringLiteral("://"))) {
+            m_tagScanner->enqueue(fi.absoluteFilePath());
+        }
     }
 
     if (id != DEFAULT_ID) scheduleSave(id);
     else emit playlistsChanged();
+}
+
+void PlaylistManager::setPlayingModel(PlaylistModel *model) {
+    for (PlaylistModel *candidate : m_models) {
+        if (candidate)
+            candidate->setPlaying(candidate == model);
+    }
+}
+
+void PlaylistManager::scanAudioPaths(const QStringList &paths) {
+    if (!m_tagScanner) return;
+    for (const QString &path : paths) {
+        if (!path.contains(QStringLiteral("://")) && isAudioPath(path))
+            m_tagScanner->enqueue(path);
+    }
 }
 
 void PlaylistManager::addUrlToPlaylist(const QString &id, const QString &url) {
@@ -337,6 +407,53 @@ void PlaylistManager::addUrlToPlaylist(const QString &id, const QString &url) {
 
     if (id != DEFAULT_ID) scheduleSave(id);
     else emit playlistsChanged();
+
+    if (trimmed.startsWith(QStringLiteral("http://"))
+            || trimmed.startsWith(QStringLiteral("https://"))) {
+        fetchUrlTitle(id, trimmed);
+    }
+}
+
+void PlaylistManager::fetchUrlTitle(const QString &id, const QString &url) {
+    const QString exe = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
+    if (exe.isEmpty()) return;
+
+    auto *proc = new QProcess(this);
+    QStringList args = m_config ? m_config->ytdlpConfigArgs() : QStringList();
+    args << QStringLiteral("--get-title")
+         << QStringLiteral("--no-playlist")
+         << QStringLiteral("--no-warnings")
+         << QStringLiteral("--no-progress")
+         << url;
+    proc->setProgram(exe);
+    proc->setArguments(args);
+    proc->setProcessChannelMode(QProcess::SeparateChannels);
+
+    auto *timeout = new QTimer(proc);
+    timeout->setSingleShot(true);
+    timeout->setInterval(15000);
+    connect(timeout, &QTimer::timeout, proc, [proc]() {
+        if (proc->state() != QProcess::NotRunning)
+            proc->kill();
+    });
+    connect(proc, &QProcess::errorOccurred, this, [proc](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart)
+            proc->deleteLater();
+    });
+    connect(proc, &QProcess::finished, this,
+            [this, proc, id, url](int code, QProcess::ExitStatus status) {
+        const QString output = QString::fromUtf8(proc->readAllStandardOutput()).trimmed();
+        if (status == QProcess::NormalExit && code == 0 && !output.isEmpty()) {
+            const QString title = output.section(QLatin1Char('\n'), 0, 0).trimmed();
+            if (!title.isEmpty()) {
+                if (PlaylistModel *model = m_models.value(id, nullptr))
+                    model->setVideoTitle(url, title);
+            }
+        }
+        proc->deleteLater();
+    });
+    timeout->start();
+    proc->start();
 }
 
 void PlaylistManager::addFolderToPlaylist(const QString &id, const QString &folder) {

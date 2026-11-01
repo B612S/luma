@@ -18,6 +18,7 @@ Popup {
     property int currentTrackId: -1
     property var mpv: null
     property string currentAspect: "original"
+    property bool hasVideo: false
     // App window: QML handlers cannot access the implicit
     // `window` (ReferenceError), so pass the reference explicitly.
     property var hostWindow: null
@@ -28,6 +29,7 @@ Popup {
     signal openUrlRequested()
 
     onOpened: {
+        hasVideo = Media.hasVideo();
         const w = hostWindow;
         if (w && w.currentOpenMenu && w.currentOpenMenu !== menu) w.currentOpenMenu.close();
         if (w) w.currentOpenMenu = menu;
@@ -147,7 +149,7 @@ Popup {
             }
 
             MenuButton {
-                text: qsTr("menu_video"); hasArrow: true; isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false
+                text: qsTr("menu_video"); hasArrow: true; isEnabled: menu.hasVideo
                 onClicked: {
                     menu.tracksList = Media.getTracks("video")
                     menu.currentTrackId = Media.currentTrackId("vid")
@@ -156,7 +158,7 @@ Popup {
             }
 
             MenuButton {
-                text: qsTr("menu_subtitles"); hasArrow: true; isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false
+                text: qsTr("menu_subtitles"); hasArrow: true; isEnabled: menu.hasVideo
                 onClicked: {
                     menu.tracksList = Media.getTracks("sub")
                     menu.currentTrackId = Media.currentTrackId("sid")
@@ -283,11 +285,12 @@ Popup {
             spacing: 2
 
             MenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.currentPage = "playback_mode" }
-            MenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; onClicked: menu.currentPage = "aspect_ratio" }
+            MenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; isEnabled: menu.hasVideo; onClicked: menu.currentPage = "aspect_ratio" }
             MenuButton { text: qsTr("menu_renderer"); hasArrow: true; onClicked: menu.currentPage = "renderer" }
 
             MenuButton {
                 text: (menu.mpv && menu.mpv.cropEnabled ? "✓ " : "") + qsTr("menu_crop")
+                isEnabled: menu.hasVideo
                 onClicked: { menu.toggleCropRequested(); menu.close() }
             }
 

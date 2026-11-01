@@ -22,6 +22,12 @@ Rectangle {
     property int    _staticHeight: 0
     property string _staticVideoCodec: ""
     property string _staticAudioCodec: ""
+    property bool _staticImageTrack: false
+
+    // Width/height stay zero for audio-only files and radio streams. Embedded
+    // cover art is also a video stream (usually MJPEG); do not treat it as video.
+    readonly property bool hasVideo: _staticWidth > 0 && _staticHeight > 0
+                                     && !_staticImageTrack
 
     height: Math.min(contentColumn.implicitHeight + 32, maxHeight)
     Behavior on height {
@@ -61,6 +67,21 @@ Rectangle {
         _staticHeight = 0
         _staticVideoCodec = ""
         _staticAudioCodec = ""
+        _staticImageTrack = false
+    }
+
+    function statsProperty(name) {
+        if (!mpv) return undefined;
+        if (typeof mpv.observedProperty === "function")
+            return mpv.observedProperty(name);
+        return mpv.property(name); // fallback for older builds
+    }
+
+    function currentDisplayTitle() {
+        if (typeof Media === "undefined" || !Media.playlist) return "";
+        const model = Media.playlist;
+        if (!model || model.count === 0 || model.currentIndex < 0) return "";
+        return model.data(model.index(model.currentIndex, 0), 262) || ""; // UserRole + 6 (title)
     }
 
     Timer {
@@ -68,17 +89,36 @@ Rectangle {
         interval: 1000
         repeat: true
         onTriggered: {
-            if (_staticFile === "") {
-                _staticFile = safeString(mpv.property("filename"))
-                _staticSize = formatSize(mpv.property("file-size"))
-                _staticFormat = safeString(mpv.property("file-format"))
-                _staticVideoCodec = safeString(mpv.property("video-codec"))
-                _staticAudioCodec = safeString(mpv.property("audio-codec"))
-            }
+            // Do not issue blocking mpv property reads while a network file is
+            // still being opened; that freezes the UI for the whole load.
+            const live = typeof Media !== "undefined" && Media.liveStream === true;
+            const loading = typeof Media !== "undefined" && Media.isLoading === true;
+            if (loading || !mpv || (mpv.duration <= 0 && !live)) return;
 
-            if (_staticWidth === 0) {
-                _staticWidth = safeNumber(mpv.property("width"), 0)
-                _staticHeight = safeNumber(mpv.property("height"), 0)
+            const title = currentDisplayTitle();
+            if (title !== "") _staticFile = title;
+            if (_staticFile === "")
+                _staticFile = safeString(statsProperty("filename"))
+
+            // These are cached by MpvItem (no blocking mpv calls) and can change
+            // after an external audio track is attached, so refresh every tick.
+            _staticSize = formatSize(statsProperty("file-size"))
+            _staticFormat = safeString(statsProperty("file-format"))
+            _staticVideoCodec = safeString(statsProperty("video-codec"))
+            _staticAudioCodec = safeString(statsProperty("audio-codec"))
+            _staticWidth = safeNumber(statsProperty("width"), 0)
+            _staticHeight = safeNumber(statsProperty("height"), 0)
+
+            // mpv marks attached cover art as an image/album-art track.
+            const imageFlag = statsProperty("current-tracks/video/image");
+            const albumFlag = statsProperty("current-tracks/video/albumart");
+            if (imageFlag !== undefined || albumFlag !== undefined) {
+                _staticImageTrack = safeBool(imageFlag) || safeBool(albumFlag);
+            } else {
+                const codec = safeString(_staticVideoCodec).toLowerCase();
+                const hasAudio = _staticAudioCodec !== "" && _staticAudioCodec !== "N/A";
+                _staticImageTrack = hasAudio
+                    && (codec === "mjpeg" || codec === "png" || codec === "bmp");
             }
 
             fileLabel.text = "<b>" + qsTr("stats_file") + ":</b> " + _staticFile
@@ -88,35 +128,34 @@ Rectangle {
 
                 videoLabel.text = "<b>" + qsTr("stats_video") + ":</b> " + _staticVideoCodec
                 resLabel.text = "<b>" + qsTr("stats_resolution") + ":</b> " + _staticWidth + "x" + _staticHeight
-                fpsLabel.text = "<b>" + qsTr("stats_fps") + ":</b> " + safeNumber(mpv.property("container-fps"), 2)
+                fpsLabel.text = "<b>" + qsTr("stats_fps") + ":</b> " + safeNumber(statsProperty("container-fps"), 2)
 
-                let vidBitrate = mpv.property("video-bitrate");
+                let vidBitrate = statsProperty("video-bitrate");
             vidBitrateLabel.text = "<b>" + qsTr("stats_vid_bitrate") + ":</b> " + formatBitrate(vidBitrate)
 
-            hwdecLabel.text = "<b>" + qsTr("stats_hwdec") + ":</b> " + safeString(mpv.property("hwdec-current"))
-            droppedLabel.text = "<b>" + qsTr("stats_dropped") + ":</b> " + safeNumber(mpv.property("frame-drop-count"), 0)
+            hwdecLabel.text = "<b>" + qsTr("stats_hwdec") + ":</b> " + safeString(statsProperty("hwdec-current"))
+            droppedLabel.text = "<b>" + qsTr("stats_dropped") + ":</b> " + safeNumber(statsProperty("frame-drop-count"), 0)
 
             audioLabel.text = "<b>" + qsTr("stats_audio") + ":</b> " + _staticAudioCodec
-            channelsLabel.text = "<b>" + qsTr("stats_channels") + ":</b> " + safeString(mpv.property("audio-params/channel-count"))
-            samplerateLabel.text = "<b>" + qsTr("stats_samplerate") + ":</b> " + safeString(mpv.property("audio-params/samplerate")) + " Hz"
+            channelsLabel.text = "<b>" + qsTr("stats_channels") + ":</b> " + safeString(statsProperty("audio-params/channel-count"))
+            samplerateLabel.text = "<b>" + qsTr("stats_samplerate") + ":</b> " + safeString(statsProperty("audio-params/samplerate")) + " Hz"
 
-            let audBitrate = mpv.property("audio-bitrate");
+            let audBitrate = statsProperty("audio-bitrate");
             audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatAudioBitrate(audBitrate)
 
             // Smart Audio Output query (try QML first, then C++)
-            let aoParams = mpv.property("audio-out-params");
-            let aoDriver = "N/A";
-            if (aoParams && aoParams.driver) {
-                aoDriver = aoParams.driver;
-            } else {
-                aoDriver = mpv.getAudioOutput();
+            let aoDriver = safeString(statsProperty("current-ao"));
+            if (aoDriver === "N/A") {
+                const aoParams = statsProperty("audio-out-params");
+                if (aoParams && aoParams.driver)
+                    aoDriver = aoParams.driver;
             }
             aoLabel.text = "<b>" + qsTr("stats_ao") + ":</b> " + safeString(aoDriver)
 
-            audioDeviceLabel.text = "<b>" + qsTr("stats_audio_device") + ":</b> " + safeString(mpv.getAudioDevice())
+            audioDeviceLabel.text = "<b>" + qsTr("stats_audio_device") + ":</b> " + safeString(statsProperty("audio-device"))
 
-            avsyncLabel.text = "<b>" + qsTr("stats_avsync") + ":</b> " + safeNumber(mpv.property("avsync"), 3) + " s"
-            cacheLabel.text = "<b>" + qsTr("stats_cache") + ":</b> " + safeNumber(mpv.property("demuxer-cache-duration"), 1) + " s"
+            avsyncLabel.text = "<b>" + qsTr("stats_avsync") + ":</b> " + safeNumber(statsProperty("avsync"), 3) + " s"
+            cacheLabel.text = "<b>" + qsTr("stats_cache") + ":</b> " + safeNumber(statsProperty("demuxer-cache-duration"), 1) + " s"
         }
     }
 
@@ -156,14 +195,14 @@ Rectangle {
             Label { id: formatLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
             Label { id: durationLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
 
-            Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+            Rectangle { width: parent.width; height: 1; visible: statsPanel.hasVideo; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
-            Label { id: videoLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
-            Label { id: resLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
-            Label { id: fpsLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
-            Label { id: vidBitrateLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
-            Label { id: hwdecLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
-            Label { id: droppedLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: videoLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: resLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: fpsLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: vidBitrateLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: hwdecLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: droppedLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
@@ -179,6 +218,13 @@ Rectangle {
             Label { id: avsyncLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
             Label { id: cacheLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
         }
+    }
+
+    function safeBool(val) {
+        if (val === true || val === 1) return true;
+        if (val === false || val === 0 || val === undefined || val === null) return false;
+        const text = val.toString().toLowerCase();
+        return text === "yes" || text === "true";
     }
 
     function safeString(val) {

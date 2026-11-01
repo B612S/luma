@@ -17,6 +17,7 @@ public:
         QString title;
         QString artist;
         QString album;
+        int     year = 0;
         double  duration = 0.0;
         // The video title from yt-dlp is saved in the playlist; the live ICY title
         // of radio is not (it goes stale after a restart).
@@ -46,8 +47,16 @@ public:
 
     // Live stream title (radio): shown instead of the URL, not saved.
     void setStreamTitle(const QString &path, const QString &title);
+    // Only the model that owns the active playback shows the ▶ marker.
+    void setPlaying(bool playing);
+    bool isPlaying() const { return m_isPlaying; }
+
     // Video title from yt-dlp: shown and saved in the playlist.
     void setVideoTitle(const QString &path, const QString &title);
+    // Updates local audio metadata read in the background (tags/duration).
+    bool updateMetadata(const QString &path, const QString &title, const QString &artist,
+                        const QString &album, int year, double duration);
+    Q_INVOKABLE void sortBy(const QString &key, bool ascending = true);
 
     // --- Changes (emit modified) ---
     Q_INVOKABLE void setShuffle(bool shuffle);
@@ -58,7 +67,7 @@ public:
 
     // --- Serialization ---
     QVariantList toVariantList() const;
-    QVector<Entry> entries() const { return m_entries; }
+    const QVector<Entry> &entries() const { return m_entries; }
 
 signals:
     void currentIndexChanged();
@@ -73,4 +82,5 @@ private:
     QVector<Entry> m_entries;
     int m_currentIndex = -1;
     QString m_currentPlayingFile;
+    bool m_isPlaying = true;
 };

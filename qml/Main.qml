@@ -323,7 +323,9 @@ ApplicationWindow {
         id: playlistPanel
         objectName: "playlistPanel"
         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 20
-        anchors.bottom: root.controlBarPinned ? controlBar.top : parent.bottom; anchors.bottomMargin: 20
+        // Keep a 20 px gap above the floating bar too; when it is hidden, the panel can use the full height.
+        anchors.bottom: (root.controlBarPinned || (controlBar.visible && controlBar.isOpen)) ? controlBar.top : parent.bottom
+        anchors.bottomMargin: 20
         width: 300; mpv: mpv; model: Media.playlist; isOpen: false; z: 4
         rootContextMenu: contextMenu
     }
