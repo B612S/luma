@@ -43,8 +43,9 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   `mpv.conf`, `playlists/*.json`. Logs go to `~/.cache/luma/luma.log`; set
   `ui/debug_logging=debug` (or `none`) for verbosity.
 - `mpv.conf` is *included* by `mpvqt/mpvcontroller.cpp` while mpv's own config is
-  disabled, then `vo=libmpv`, `keep-open=no` and auto `hwdec` are forced. Settings that
-  depend on those cannot be overridden from the config file.
+  disabled, then `vo=libmpv` and `keep-open=no` are forced. The playback settings are
+  stored in `mpv.conf` in mpv syntax (`hwdec=...`, `ao=...`); legacy `[playback]` keys
+  from `luma.conf` are migrated there and removed.
 - Casting shells out to external `avahi-browse` (discovery) and `ffmpeg` (HLS
   re-encode over LAN); it silently fails if they are not on `PATH`.
 
@@ -72,8 +73,7 @@ cmake --build build -j$(nproc)          # single-target: --target luma
 
 ## Conventions
 
-- C++ comments and several QML UI strings are in Russian; user-visible strings are
-  `tr()`/`qsTr()`-wrapped.
+- Code comments are in English; user-visible strings are `tr()`/`qsTr()`-wrapped.
 - Version numbers live in three places: `project(... VERSION ...)` in `CMakeLists.txt`,
   `setApplicationVersion` in `main.cpp`, and `PKGBUILD`.
 - Packaging is Arch-only: `PKGBUILD` copies the working tree (excluding `src/`, `build/`)

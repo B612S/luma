@@ -8,7 +8,7 @@ Menu {
     modal: false
     z: 1000
 
-    // Свойство НЕ должно называться panel (см. PlaylistContextMenu.qml).
+    // The property must NOT be named panel (see PlaylistContextMenu.qml).
     property var playlistPanel: null
 
     onOpened: {

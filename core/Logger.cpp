@@ -7,8 +7,8 @@
 
 namespace {
 bool g_loggerAlive = true;
-// Сообщения Qt могут приходить из разных потоков (mpv, рендерер),
-// поэтому запись в файл и stderr сериализуем.
+// Qt messages can arrive from different threads (mpv, renderer),
+// so writes to the file and stderr are serialized.
 QMutex g_logMutex;
 }
 
@@ -18,7 +18,7 @@ Logger& Logger::instance() {
 }
 
 Logger::Logger(QObject *parent) : QObject(parent), m_file(nullptr) {
-    // Путь: ~/.cache/luma/luma.log
+    // Path: ~/.cache/luma/luma.log
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
     if (cacheDir.isEmpty()) {
         cacheDir = QDir::homePath() + "/.cache";

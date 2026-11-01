@@ -140,7 +140,7 @@ void CastV2Client::seekTo(double seconds) {
     sendMessage("sender-0", m_transportId, "urn:x-cast:com.google.cast.media",
                 QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
 
-    // Задержка, чтобы ТВ успел обработать
+    // Delay so the TV has time to process it
     QTimer::singleShot(300, this, &CastV2Client::pollStatus);
 }
 

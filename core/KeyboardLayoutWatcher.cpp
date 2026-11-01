@@ -16,7 +16,7 @@
 
 namespace {
 
-// XKB-коды клавиш (evdev + 8), которые встречаются в подсказках по клавишам.
+// XKB keycodes (evdev + 8) that appear in the keyboard hints.
 const QHash<QString, int> &keyTable() {
     static const QHash<QString, int> table = {
         { QStringLiteral("Q"), 24 }, { QStringLiteral("E"), 26 }, { QStringLiteral("S"), 39 },

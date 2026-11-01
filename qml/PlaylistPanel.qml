@@ -52,8 +52,8 @@ Rectangle {
     function closeContextMenu() { contextMenu.close(); tabs.closeMenus(); }
     function scrollToCurrent() { if (panel.model) listView.currentIndex = panel.model.currentIndex; scrollTimer.start(); }
 
-    // Меню трека живёт в этом файле: снаружи (из делегата) обращаемся по имени
-    // функции, а не через `panel.contextMenu` — id не является свойством объекта.
+    // The track menu lives in this file: from outside (the delegate) we call it by
+    // function name, not via `panel.contextMenu` — an id is not an object property.
     function openTrackMenu(index, scenePos) {
         contextMenuIndex = index;
         let win = panel.window;
@@ -77,21 +77,21 @@ Rectangle {
         dialogs.clearDialog.openFor(id, name);
     }
 
-    // Таймеры — это id внутри этого файла, а не свойства объекта panel,
-    // поэтому делегат не может обращаться к ним напрямую.
+    // The timers are ids inside this file, not properties of the panel object,
+    // so the delegate cannot access them directly.
     function startAutoScroll() { autoScrollTimer.start(); }
     function startClickResetTimer() { clickResetTimer.start(); }
     function endDrag() {
         panel.isDragging = false; panel.readyIndex = -1; panel.draggedIndex = -1;
         panel.dragGlobalY = -1; autoScrollTimer.stop();
-        // Qt.binding должен захватывать собственную копию делегата:
-        // с общим var item после цикла в замыкании оказывается null.
+        // Qt.binding must capture its own copy of the delegate:
+        // with a shared var item, the closure ends up with null after the loop.
         for (var i = 0; i < listView.count; i++) {
             const delegate = listView.itemAtIndex(i);
             if (!delegate || delegate.itemIndex === undefined) continue;
             delegate.y = Qt.binding(() => delegate.itemIndex * 38);
         }
-        // Пересобираем раскладку, иначе после переноса вверх остаются «дыры».
+        // Rebuild the layout, otherwise "holes" remain after moving an item up.
         listView.forceLayout();
     }
 
@@ -183,7 +183,7 @@ Rectangle {
                 }
             }
 
-            // ПЕРЕДАЕМ ССЫЛКИ В ДЕЛЕГАТ
+            // PASS REFERENCES TO THE DELEGATE
             delegate: PlaylistDelegate {
                 playlistView: listView
                 playlistPanel: panel
@@ -195,14 +195,14 @@ Rectangle {
         }
     }
 
-    // Меню трека
+    // Track menu
     PlaylistContextMenu {
         id: contextMenu
         playlistPanel: panel
         trackIndex: panel.contextMenuIndex
     }
 
-    // Диалоги
+    // Dialogs
     PlaylistDialogs {
         id: dialogs
     }

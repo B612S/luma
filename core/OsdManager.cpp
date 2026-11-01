@@ -21,7 +21,7 @@ void OsdManager::restoreTimeMode() {
         m_state = StateTimePinned;
         m_visible = true;
         m_seekTarget = -1.0;
-        // Сразу обновляем время, чтобы не было задержки
+        // Update the time right away to avoid a delay
         updateTimeInternal(m_mpv->position(), m_mpv->duration());
         emit messageChanged();
         emit visibleChanged();
@@ -39,16 +39,16 @@ void OsdManager::tickOsd() {
         return;
     }
 
-    // Если показываем оверлеи (громкость/инфо) — не трогаем текст
+    // While an overlay (volume/info) is shown, leave the text alone
     if (m_state == StateOverlayVolume || m_state == StateOverlayInfo) {
         return;
     }
 
-    // Если это перемотка, но mpv еще не догнал цель — показываем цель
+    // While seeking, until mpv reaches the target, show the target
     if (m_state == StateTimeTemporary && m_seekTarget >= 0.0) {
         double realPos = m_mpv->position();
         if (realPos >= 0.0 && qAbs(realPos - m_seekStartPos) > 0.05) {
-            m_seekTarget = -1.0; // mpv догнал, переключаемся на реальное время
+            m_seekTarget = -1.0; // mpv reached the target, switch to the real time
         } else {
             double dur = m_seekTargetDuration > 0.0 ? m_seekTargetDuration : m_mpv->duration();
             if (dur > 0.0) updateTimeInternal(m_seekTarget, dur);
@@ -56,7 +56,7 @@ void OsdManager::tickOsd() {
         }
     }
 
-    // В остальных случаях (Pinned, TemporaryTime) показываем реальное время
+    // Otherwise (Pinned, TemporaryTime) show the real time
     double pos = m_mpv->position();
     double dur = m_mpv->duration();
     if (pos >= 0.0 && dur > 0.0) {
@@ -66,7 +66,7 @@ void OsdManager::tickOsd() {
 
 void OsdManager::requestTimeOsd() {
     if (!m_mpv) return;
-    if (m_isPinned) return; // Если T нажата, игнорируем обычное появление
+    if (m_isPinned) return; // If T is pressed, ignore the usual appearance
 
     m_state = StateTimeTemporary;
     m_seekTarget = -1.0;
@@ -93,7 +93,7 @@ void OsdManager::requestTimeOsd(double pos, double dur) {
 void OsdManager::requestSeekOsd(double pos, double dur) {
     if (!m_mpv) return;
 
-    // Перемотка всегда временно показывает время
+    // Seeking always shows the time temporarily
     m_state = StateTimeTemporary;
     m_hideTimer->start();
 
@@ -113,12 +113,12 @@ void OsdManager::togglePinTimeOsd() {
     if (m_isPinned) {
         m_isPinned = false;
         m_hideTimer->stop();
-        restoreTimeMode(); // Скрыть или оставить как есть
+        restoreTimeMode(); // Hide or leave as is
     } else {
         m_isPinned = true;
         m_state = StateTimePinned;
         m_seekTarget = -1.0;
-        m_hideTimer->stop(); // Отключаем автоскрытие
+        m_hideTimer->stop(); // Disable auto-hide
         updateTimeInternal(m_mpv->position(), m_mpv->duration());
         m_visible = true;
         emit messageChanged();
@@ -128,9 +128,9 @@ void OsdManager::togglePinTimeOsd() {
 }
 
 void OsdManager::endTemporaryOsd() {
-    // Вызывается, когда пользователь отпустил клавишу перемотки
+    // Called when the user releases the seek key
     if (m_state == StateTimeTemporary) {
-        m_hideTimer->start(2500); // Ждем 2.5 сек и возвращаемся к T (или скрываемся)
+        m_hideTimer->start(2500); // Wait 2.5 s, then return to T (or hide)
     }
 }
 
@@ -150,7 +150,7 @@ void OsdManager::showVolume(double vol) {
 void OsdManager::showVolume(double vol, bool muted) {
     if (!m_mpv) return;
 
-    // Временное перекрытие
+    // Temporary overlay
     m_state = StateOverlayVolume;
 
     int volInt = qRound(vol);

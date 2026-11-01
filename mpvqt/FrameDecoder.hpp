@@ -29,8 +29,8 @@ private:
     AVCodecContext *m_codecCtx = nullptr;
     SwsContext *m_swsCtx = nullptr;
 
-    // Открытый файл переиспользуется между запросами превью: повторное
-    // avformat_open_input на каждый кадр — самая дорогая часть.
+    // The open file is reused between thumbnail requests: a repeated
+    // avformat_open_input for every frame is the most expensive part.
     QString m_currentPath;
     int m_videoStreamIndex = -1;
 

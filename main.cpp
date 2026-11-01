@@ -16,6 +16,10 @@
 #include <QProcess>
 #include <QRect>
 #include <QSize>
+#include <QUrl>
+#include <thread>
+#include <chrono>
+#include <cstdlib>
 
 #include "core/ConfigManager.hpp"
 #include "core/PlaylistManager.hpp"
@@ -27,6 +31,7 @@
 #include "core/Logger.hpp"
 #include "core/ThumbnailProvider.hpp"
 #include "core/CastManager.hpp"
+#include "core/SocksHttpProxy.hpp"
 #include "mpvqt/MpvItem.hpp"
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
@@ -88,10 +93,15 @@ int main(int argc, char *argv[]) {
 
     auto loadLanguage = [&](const QString &lang) {
         app.removeTranslator(translator);
-        QString sysPath = "/usr/share/luma/translations/" + lang + ".qm";
-        QString localPath = QCoreApplication::applicationDirPath() + "/" + lang + ".qm";
+        // Translations are embedded in the binary (qt_add_translations), so the
+        // resource is tried first: it always matches this build.
+        const QString resourcePath = QStringLiteral(":/i18n/") + lang + ".qm";
+        const QString sysPath = "/usr/share/luma/translations/" + lang + ".qm";
+        const QString localPath = QCoreApplication::applicationDirPath() + "/" + lang + ".qm";
 
-        if (translator->load(sysPath) || translator->load(localPath)) {
+        if (translator->load(resourcePath)
+                || translator->load(sysPath)
+                || translator->load(localPath)) {
             app.installTranslator(translator);
         }
     };
@@ -109,6 +119,9 @@ int main(int argc, char *argv[]) {
     OsdManager osd(nullptr, &app);
 
     CastManager castManager;
+
+    // Local HTTP bridge for SOCKS proxies: mpv/FFmpeg cannot do SOCKS themselves.
+    SocksHttpProxy streamProxy(&app);
 
     KeyboardLayoutWatcher keyboardLayout;
 
@@ -128,23 +141,29 @@ int main(int argc, char *argv[]) {
 
     auto root = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
 
-    // ---- Смена языка на лету ----
+    // ---- Switching the language on the fly ----
     QObject::connect(&config, &ConfigManager::languageChanged, [&]() {
         loadLanguage(config.language());
         engine.retranslate();
     });
 
-    // ---- Размер окна ----
+    // ---- Window size ----
     int w = qMax(400, config.value("window/width", 960).toInt());
     int h = qMax(300, config.value("window/height", 640).toInt());
     root->setWidth(w);
     root->setHeight(h);
 
-    // ---- Mpv и зависимости ----
+    // ---- Mpv and dependencies ----
     auto mpv = root->findChild<MpvItem*>("mpv");
     if (mpv) {
         media.setMpv(mpv);
         osd.setMpv(mpv);
+
+        // Show the yt-dlp link opening status on top of the video.
+        QObject::connect(&media, &MediaManager::downloadStatus, &osd,
+                         [&osd](const QString &message) {
+                             if (!message.isEmpty()) osd.showInfo(message);
+                         });
 
         if (config.rememberVolume()) {
             mpv->setVolume(config.volume());
@@ -152,7 +171,47 @@ int main(int argc, char *argv[]) {
             mpv->setVolume(config.defaultVolume());
         }
 
-        // ---- Субтитры: применяем настройки и реагируем на изменения ----
+        // ---- Audio output and hardware decoding ----
+        // An empty string for "ao" means automatic driver selection:
+        // mpv has no "auto" value (it disables sound).
+        auto applyPlaybackSettings = [&config, mpv]() {
+            const QString audio = config.audioOutput();
+            mpv->setProperty("ao", audio == QLatin1String("auto") ? QStringLiteral("") : audio);
+            mpv->setProperty("hwdec", config.hwdec());
+        };
+        applyPlaybackSettings();
+        QObject::connect(&config, &ConfigManager::audioOutputChanged, mpv, applyPlaybackSettings);
+        QObject::connect(&config, &ConfigManager::hwdecChanged, mpv, applyPlaybackSettings);
+
+        // ---- Proxy for streams ----
+        // yt-dlp gets the proxy on its own, but mpv/FFmpeg cannot do SOCKS. For them
+        // we start a local HTTP bridge: mpv downloads the stream through it, so
+        // Range requests and seeking work as with plain HTTP.
+        auto applyStreamProxy = [&config, mpv, &streamProxy]() {
+            const QString proxy = config.ytdlpProxy();
+            const int sep = proxy.indexOf(QStringLiteral("://"));
+            const QString scheme = sep > 0 ? proxy.left(sep).toLower() : QString();
+
+            if (scheme == QLatin1String("socks5") || scheme == QLatin1String("socks5h")) {
+                if (streamProxy.start(QUrl(proxy))) {
+                    mpv->setProperty("http-proxy", streamProxy.localUrl());
+                } else {
+                    qWarning() << "SocksHttpProxy:" << streamProxy.lastError();
+                    mpv->setProperty("http-proxy", QStringLiteral(""));
+                }
+            } else if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
+                // FFmpeg understands an HTTP proxy itself, no bridge needed.
+                streamProxy.stop();
+                mpv->setProperty("http-proxy", proxy);
+            } else {
+                streamProxy.stop();
+                mpv->setProperty("http-proxy", QStringLiteral(""));
+            }
+        };
+        applyStreamProxy();
+        QObject::connect(&config, &ConfigManager::ytdlpSettingsChanged, mpv, applyStreamProxy);
+
+        // ---- Subtitles: apply the settings and react to changes ----
         auto applySubtitleSettings = [&config, mpv]() {
             mpv->setProperty("sub-font", config.subtitleFont());
             mpv->setProperty("sub-font-size", config.subtitleFontSize());
@@ -194,13 +253,33 @@ int main(int argc, char *argv[]) {
                 new MprisManager(mpv, &media, &app);
     }
 
-    // ---- Связь: смена активного плейлиста -> обновление QML-биндинга ----
+    // Guard against a hang on exit: if stopping mpv/the bridge or tearing
+    // down QML does not finish within 5 seconds, the process is terminated
+    // forcibly. This does not affect a normal exit.
+    bool exitWatchdogStarted = false;
+    auto startExitWatchdog = [&]() {
+        if (exitWatchdogStarted) return;
+        exitWatchdogStarted = true;
+        std::thread([]() {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::_Exit(0);
+        }).detach();
+    };
+
+    QObject::connect(root, &QQuickWindow::closing, &app, [&]() {
+        startExitWatchdog();
+        // Do not block the close handler: stop goes to the mpv thread,
+        // the main stop and the bridge shutdown happen in aboutToQuit.
+        if (mpv) mpv->command(QStringList() << QStringLiteral("stop"));
+    });
+
+    // ---- Wiring: active playlist change -> QML binding update ----
     QObject::connect(&playlists, &PlaylistManager::activeModelChanged,
                      &media, &MediaManager::playlistChanged);
 
     handleArguments(app.arguments(), media, root);
 
-    // ---- Единственный экземпляр: приём новых аргументов ----
+    // ---- Single instance: accepting new arguments ----
     if (config.singleInstance() && server) {
         QObject::connect(server, &QLocalServer::newConnection, [server, &media, root]() {
             QLocalSocket *clientSocket = server->nextPendingConnection();
@@ -217,9 +296,10 @@ int main(int argc, char *argv[]) {
         });
     }
 
-    // ---- Сохранение состояния при выходе ----
+    // ---- Saving state on exit ----
     QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
-        // В режиме PiP окно маленькое — сохраняем размер, который был до него.
+        // Save the state first: if the watchdog timer fires,
+        // the settings are already written.
         QSize windowSize(root->width(), root->height());
         if (root->property("pipMode").toBool()) {
             const QRect saved = root->property("pipSavedGeometry").toRect();
@@ -229,11 +309,18 @@ int main(int argc, char *argv[]) {
             windowSize = QSize(960, 640);
         config.saveWindowSize(windowSize.width(), windowSize.height());
         config.setPlaylistMode(media.playMode());
-        castManager.stopCast();
-
-        if (mpv && config.rememberVolume()) {
+        if (mpv && config.rememberVolume())
             config.setVolume(static_cast<int>(mpv->volume()));
+
+        // Stop playback and the bridge before mpv/QML teardown, so
+        // network threads do not leave the process hanging with audio still playing.
+        startExitWatchdog();
+        if (mpv) {
+            mpv->commandBlocking(QStringList() << QStringLiteral("stop"));
+            mpv->setPaused(true);
         }
+        streamProxy.stop();
+        castManager.stopCast();
     });
 
     return app.exec();

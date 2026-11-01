@@ -5,9 +5,9 @@
 #include <QDir>
 #include <QString>
 
-// Тесты не должны трогать настоящие настройки пользователя: подменяем
-// XDG_CONFIG_HOME/XDG_CACHE_HOME на временную папку ДО создания QCoreApplication
-// и любых обращений к QStandardPaths.
+// Tests must not touch the user's real settings: we replace
+// XDG_CONFIG_HOME/XDG_CACHE_HOME with a temporary folder BEFORE QCoreApplication
+// is created and before any access to QStandardPaths.
 inline QString initTestEnvironment()
 {
     static QString root;

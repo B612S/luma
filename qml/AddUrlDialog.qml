@@ -3,11 +3,11 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-// Ввод ссылки в стиле остальных диалогов приложения (без системного окна).
+// URL input styled like the app's other dialogs (no system window).
 Item {
     id: root
 
-    // Куда добавлять (для «Добавить ссылку» в плейлисте).
+    // Where to add to (for "Add URL" in the playlist).
     property string targetId: ""
 
     signal urlAccepted(string url)
@@ -76,8 +76,8 @@ Item {
         }
     }
 
-    // Функции должны быть на корневом объекте компонента, иначе снаружи
-    // (urlDialog.openWith(...)) они не видны.
+    // Functions must be on the component's root object, otherwise they are not
+    // visible from outside (urlDialog.openWith(...)).
     function openWith(titleText, target) {
         urlDialog.title = titleText;
         root.targetId = target ? target : "";

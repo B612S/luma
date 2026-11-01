@@ -28,7 +28,7 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
     m_models.insert(DEFAULT_ID, m_defaultModel);
     m_names.insert(DEFAULT_ID, tr("playlist_default"));
 
-    // Автосохранение при изменениях в именованных моделях
+    // Autosave on changes in named models
     connect(m_defaultModel, &PlaylistModel::modified, this, [this]() {
         scheduleSave(DEFAULT_ID);
     });
@@ -97,7 +97,7 @@ void PlaylistManager::loadAll() {
         existing << fi.completeBaseName();
     }
 
-    // Сначала — из order (если файл есть), потом новые (по алфавиту)
+    // First those from order (if the file exists), then the new ones (alphabetically)
     QStringList finalOrder;
     for (const QString &id : order) {
         if (existing.contains(id)) finalOrder << id;
@@ -133,7 +133,7 @@ void PlaylistManager::loadPlaylist(const QString &id) {
         model = new PlaylistModel(this);
         m_models.insert(id, model);
 
-        // Автосохранение при изменениях
+        // Autosave on changes
         connect(model, &PlaylistModel::modified, this, [this, id]() {
             if (m_loading) return;
             scheduleSave(id);
@@ -242,7 +242,7 @@ void PlaylistManager::deletePlaylist(const QString &id) {
     if (id == DEFAULT_ID) return;
     if (!m_models.contains(id)) return;
 
-    // Отложенная запись не должна «воскресить» удалённый плейлист.
+    // A pending save must not resurrect a deleted playlist.
     m_dirtyIds.remove(id);
 
     if (m_activeId == id) {
@@ -328,7 +328,7 @@ void PlaylistManager::addUrlToPlaylist(const QString &id, const QString &url) {
 
     QVariantMap entry;
     entry["path"] = trimmed;
-    // Поток может оказаться и видео, и радио — по умолчанию считаем аудио.
+    // A stream may be either video or radio — assume audio by default.
     entry["kind"] = "audio";
     entry["title"] = "";
     entry["duration"] = 0.0;

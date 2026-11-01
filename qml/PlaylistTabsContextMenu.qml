@@ -11,7 +11,7 @@ Menu {
     property string targetId: ""
     property string targetName: ""
     property bool targetIsDefault: false
-    // Главное меню приложения, чтобы закрывать его при открытии меню таба.
+    // App main menu, so it can be closed when the tab menu opens.
     property var rootContextMenu: null
 
     signal addFilesRequested(string id)

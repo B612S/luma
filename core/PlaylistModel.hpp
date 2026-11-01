@@ -18,6 +18,9 @@ public:
         QString artist;
         QString album;
         double  duration = 0.0;
+        // The video title from yt-dlp is saved in the playlist; the live ICY title
+        // of radio is not (it goes stale after a restart).
+        bool persistTitle = false;
     };
 
     explicit PlaylistModel(QObject *parent = nullptr);
@@ -26,11 +29,11 @@ public:
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    // --- Загрузка (не эмитит modified, чтобы не сохранять при чтении с диска) ---
+    // --- Loading (does not emit modified, so nothing is saved when reading from disk) ---
     Q_INVOKABLE void setFiles(const QStringList &files, const QString &current);
     Q_INVOKABLE void setEntries(const QVariantList &entries, const QString &current);
 
-    // --- Чтение ---
+    // --- Reading ---
     Q_INVOKABLE QString fileAt(int index) const;
     Q_INVOKABLE QString currentFile() const;
     Q_INVOKABLE int count() const { return m_entries.size(); }
@@ -41,17 +44,19 @@ public:
     int currentIndex() const { return m_currentIndex; }
     void setCurrentIndex(int idx);
 
-    // Живой заголовок потока (радио): показываем вместо ссылки, не сохраняя.
+    // Live stream title (radio): shown instead of the URL, not saved.
     void setStreamTitle(const QString &path, const QString &title);
+    // Video title from yt-dlp: shown and saved in the playlist.
+    void setVideoTitle(const QString &path, const QString &title);
 
-    // --- Изменения (эмитят modified) ---
+    // --- Changes (emit modified) ---
     Q_INVOKABLE void setShuffle(bool shuffle);
     Q_INVOKABLE void moveItem(int from, int to);
     Q_INVOKABLE void removeItem(int index);
     Q_INVOKABLE void clear();
     Q_INVOKABLE void appendEntry(const QVariantMap &entry);
 
-    // --- Сериализация ---
+    // --- Serialization ---
     QVariantList toVariantList() const;
     QVector<Entry> entries() const { return m_entries; }
 
@@ -64,7 +69,7 @@ private:
     QVariant entryToVariant(const Entry &e) const;
     Entry variantToEntry(const QVariantMap &m) const;
 
-    QStringList m_originalPaths;   // для отключения shuffle
+    QStringList m_originalPaths;   // for disabling shuffle
     QVector<Entry> m_entries;
     int m_currentIndex = -1;
     QString m_currentPlayingFile;

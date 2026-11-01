@@ -6,8 +6,8 @@
 #include "ShortcutAction.hpp"
 #include "TestEnvironment.h"
 
-// Проверяет таблицу горячих клавиш: привязки, уникальность, соответствие
-// evdev-кодам и поведение actionForEvent().
+// Checks the hotkey table: bindings, uniqueness, matching
+// evdev codes and actionForEvent() behavior.
 class TestShortcuts : public QObject
 {
     Q_OBJECT
@@ -43,7 +43,7 @@ void TestShortcuts::noDuplicateBindings()
     for (const ShortcutDef &def : defaultShortcuts()) {
         const QPair<quint32, int> binding(def.keycode, static_cast<int>(def.modifiers));
         QVERIFY2(!seen.contains(binding),
-                 qPrintable(QStringLiteral("Дублирующаяся привязка для кода %1").arg(def.keycode)));
+                 qPrintable(QStringLiteral("Duplicate binding for keycode %1").arg(def.keycode)));
         seen.insert(binding);
         QVERIFY(def.keyName != nullptr && *def.keyName != '\0');
     }
@@ -93,7 +93,7 @@ void TestShortcuts::mapsPip()
 
 void TestShortcuts::removedCoversKeyDoesNothing()
 {
-    // Клавиша N (ToggleCsd) была удалена — привязки быть не должно.
+    // The N key (ToggleCsd) was removed — there must be no binding.
     QCOMPARE(static_cast<int>(actionFor(57, Qt::NoModifier)),
              static_cast<int>(ShortcutAction::None));
 }
@@ -106,7 +106,7 @@ void TestShortcuts::unknownKeyGivesNone()
 
 void TestShortcuts::helpKeyWorksWithAndWithoutShift()
 {
-    // «?» — это Shift+/, поэтому обе комбинации должны открывать подсказку.
+    // "?" is Shift+/, so both combinations must open the help.
     QCOMPARE(static_cast<int>(actionFor(61, Qt::NoModifier)),
              static_cast<int>(ShortcutAction::ShowShortcutsHelp));
     QCOMPARE(static_cast<int>(actionFor(61, Qt::ShiftModifier)),

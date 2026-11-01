@@ -21,19 +21,40 @@ Rectangle {
     property bool isVolumeSeeking: false
     property bool hasVideo: CastManager.casting || (mpv.duration > 0)
 
-    // Прямой поток (радио): перематывать можно только внутри кэша,
-    // поэтому ползунок показывает окно кэша и прижат вправо.
+    // Audio file: preview frames while seeking aren't needed. For files opened
+    // directly kind is always "video", so check the extension too.
+    readonly property bool audioFile: {
+        const model = (typeof Media !== "undefined") ? Media.playlist : null;
+        if (!model || model.count === 0 || model.currentIndex < 0) return false;
+        if (model.data(model.index(model.currentIndex, 0), 258) === "audio")
+            return true;
+        const path = (model.fileAt(model.currentIndex) || "").split("?")[0].toLowerCase();
+        return [".mp3", ".flac", ".aac", ".wav", ".ogg", ".m4a", ".opus", ".wma"]
+               .some(ext => path.endsWith(ext));
+    }
+    // Network stream (YouTube etc.): preview frames are unavailable/black.
+    readonly property bool networkStream: {
+        if (typeof mpv === "undefined" || mpv === null) return false;
+        const source = mpv.source || "";
+        return source.startsWith("http://") || source.startsWith("https://");
+    }
+    // Only show previews for local video.
+    readonly property bool showSeekPreview: !CastManager.casting && !root.audioFile
+                                            && !root.isLive && !root.networkStream
+
+    // Live stream (radio): seeking is only possible within the cache,
+    // so the slider shows the cache window and is pinned to the right.
     readonly property bool isLive: !CastManager.casting && typeof Media !== "undefined"
                                    && Media.liveStream === true
-    readonly property real liveWindow: 300 // секунд; совпадает с cache-secs в mpv
-    // В эфире mpv держит буфер впереди плеера, поэтому «длительность» опережает
-    // позицию даже без перемотки. Минимальное наблюдённое отставание считаем
-    // точкой эфира и отчитываем перемотку уже от него.
+    readonly property real liveWindow: 300 // seconds; matches cache-secs in mpv
+    // In a live stream mpv keeps a buffer ahead of the player, so "duration" runs
+    // ahead of the position even without seeking. Treat the smallest observed lag
+    // as the live point and measure seeking from it.
     property real liveBaseline: -1
     readonly property real liveRawBehind: Math.max(0, root.displayDuration - root.displayPosition)
     readonly property real liveBehind: root.isLive
         ? (root.liveBaseline < 0
-               ? 0   // точку эфира ещё не измерили — считаем, что мы в эфире
+               ? 0   // live point not measured yet — assume we are live
                : Math.max(0, Math.min(root.liveWindow, root.liveRawBehind - Math.max(0, root.liveBaseline))))
         : 0
 
@@ -48,8 +69,8 @@ Rectangle {
                 root.liveBaseline = raw;
                 return;
             }
-            // В начале потока буфер впереди ещё пустой и растёт; пока мы в эфире,
-            // даём baseline подтягиваться за ним (но не прыжком — отмотку не съедаем).
+            // At stream start the buffer ahead is still empty and growing; while we are live,
+            // let the baseline follow it (but not jump — don't eat up the rewind).
             if (raw > root.liveBaseline && raw - root.liveBaseline <= 2)
                 root.liveBaseline = raw;
         }
@@ -60,7 +81,7 @@ Rectangle {
     signal playlistToggleRequested()
 
     property bool isOpen: true
-    // В полноэкранном режиме панель можно отключить в настройках интерфейса.
+    // In fullscreen the bar can be disabled in the interface settings.
     property bool panelsAllowed: true
     visible: opacity > 0 && panelsAllowed
     opacity: 1.0
@@ -188,7 +209,7 @@ Rectangle {
                         if (CastManager.casting) {
                             CastManager.seekTo(value)
                         } else if (root.isLive) {
-                            // value: 0 — начало кэша, liveWindow — прямой эфир.
+                            // value: 0 is the start of the cache, liveWindow is the live edge.
                             const behind = Math.max(0, root.liveWindow - value);
                             const livePos = Math.max(0, root.displayDuration - Math.max(0, root.liveBaseline));
                             if (livePos > 0)
@@ -244,10 +265,10 @@ Rectangle {
 
             Rectangle {
                 id: seekTooltip
-                visible: seekSlider.seeking && !root.isLive
+                visible: seekSlider.seeking
                 z: 100
-                width: 160
-                height: 90 + 24
+                width: root.showSeekPreview ? 160 : (seekTimeText.implicitWidth + 16)
+                height: root.showSeekPreview ? (90 + 24) : 24
                 radius: 6
                 color: "#1a1a1a"
                 clip: true
@@ -266,12 +287,10 @@ Rectangle {
 
                 Timer {
                     id: thumbDebounce
-                    // Запрашиваем превью регулярно во время перетаскивания:
-                    // декодирование идёт в фоновом потоке, а промежуточные
-                    // запросы склеиваются в MpvItem.
+                    // Only request previews for local video.
                     interval: 70
                     repeat: true
-                    running: seekSlider.seeking && !CastManager.casting
+                    running: seekSlider.seeking && root.showSeekPreview
                     onTriggered: {
                         if (seekTooltip.pendingTime >= 0) {
                             let id = "thumb";
@@ -295,7 +314,7 @@ Rectangle {
                 Connections {
                     target: seekSlider
                     function onValueChanged() {
-                        if (seekSlider.seeking && !CastManager.casting)
+                        if (seekSlider.seeking && root.showSeekPreview)
                             seekTooltip.pendingTime = seekSlider.value;
                     }
                 }
@@ -308,7 +327,7 @@ Rectangle {
                     height: 90
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: false
-                    visible: !CastManager.casting
+                    visible: root.showSeekPreview
                 }
 
                 Rectangle {
@@ -318,8 +337,11 @@ Rectangle {
                     color: "#1a1a1a"
 
                     Text {
+                        id: seekTimeText
                         anchors.centerIn: parent
-                        text: formatTime(seekSlider.value)
+                        text: root.isLive
+                              ? "-" + formatTime(root.liveWindow - seekSlider.value)
+                              : formatTime(seekSlider.value)
                         color: "white"
                         font.pixelSize: 12
                         font.bold: true
@@ -381,7 +403,7 @@ Rectangle {
             focus: false
             Layout.preferredWidth: 120
 
-            // Локальная переменная для отображения, чтобы не дергать mpv напрямую
+            // Local display variable to avoid poking mpv directly
             property real localValue: root.displayVolume
             property bool seeking: false
 
@@ -390,9 +412,9 @@ Rectangle {
             onMoved: {
                 if (seeking) {
                     if (CastManager.casting) {
-                        CastManager.setVolume(value) // Отправляем в Chromecast
+                        CastManager.setVolume(value) // Send to Chromecast
                     } else {
-                        mpv.volume = value           // Отправляем в локальный mpv
+                        mpv.volume = value           // Send to local mpv
                     }
                     Osd.showVolume(value)
                 }
@@ -425,7 +447,7 @@ Rectangle {
                 }
             }
 
-            // Синхронизация с Chromecast
+            // Sync with Chromecast
             Connections {
                 target: CastManager
                 function onRemoteStatusChanged() {
@@ -435,7 +457,7 @@ Rectangle {
                 }
             }
 
-            // Синхронизация с mpv (только если НЕТ каста)
+            // Sync with mpv (only when NOT casting)
             Connections {
                 target: mpv
                 function onVolumeChanged() {

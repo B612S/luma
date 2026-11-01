@@ -109,7 +109,7 @@ void ShortcutHandler::onPositionChanged() {
     if (!m_mpv) return;
     if (m_isSliderSeeking) return;
     if (m_isInternalSeeking) return;
-    if (m_castManager && m_castManager->casting()) return; // Игнорируем локальные изменения при касте
+    if (m_castManager && m_castManager->casting()) return; // Ignore local changes while casting
 
     double currentPos = m_mpv->position();
     if (currentPos < 0) return;
@@ -125,7 +125,7 @@ void ShortcutHandler::onPositionChanged() {
 void ShortcutHandler::onVolumeChanged() {
     if (!m_mpv || !m_osd) return;
     if (m_isInternalVolume) return;
-    if (m_castManager && m_castManager->casting()) return; // Игнорируем локальный звук при касте
+    if (m_castManager && m_castManager->casting()) return; // Ignore local volume while casting
     m_osd->showVolume();
 }
 
@@ -332,8 +332,8 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
         case ShortcutAction::ToggleMute:
             if (!autoRepeat && m_mpv) {
                 m_isInternalVolume = true;
-                // muted() обновляется асинхронно от mpv, поэтому решаем по
-                // новому состоянию, иначе OSD показывал инвертированный статус.
+                // muted() is updated asynchronously by mpv, so decide from the
+                // new state; otherwise the OSD showed the inverted status.
                 const bool newMuted = !m_mpv->muted();
                 m_mpv->setMuted(newMuted);
                 if (m_osd) m_osd->showVolume(newMuted ? 0.0 : m_mpv->volume(), newMuted);
@@ -362,7 +362,7 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             break;
         case ShortcutAction::ToggleFullscreen:
             if (!autoRepeat && m_window) {
-                // В режиме «картинка в картинке» полноэкранный режим не нужен.
+                // Fullscreen is not wanted in picture-in-picture mode.
                 if (m_window->property("pipMode").toBool()) break;
                 if (m_window->windowStates() & Qt::WindowFullScreen) m_window->showNormal();
                 else m_window->showFullScreen();
@@ -404,7 +404,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
         if (!m_mpv) return false;
 
-        // Игнорируем, если фокус в текстовом поле (TextField, TextInput и т.д.)
+        // Ignore when focus is in a text field (TextField, TextInput, etc.)
         QObject *focus = QGuiApplication::focusObject();
         if (focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextField"))) {
             return false;
@@ -477,7 +477,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 
         double volStep = (delta / 120.0) * 5.0;
 
-        // Если идет каст, сразу отправляем в Chromecast и съедаем событие
+        // While casting, send it straight to Chromecast and consume the event
         if (m_castManager && m_castManager->casting()) {
             double newVol = qBound(0.0, m_castManager->remoteVolume() + volStep, 100.0);
             m_castManager->setVolume(newVol);

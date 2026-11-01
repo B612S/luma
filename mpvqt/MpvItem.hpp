@@ -8,8 +8,8 @@
 
 class FrameDecoder;
 
-// Кадры для превью декодируются в отдельном потоке: FFmpeg-перемотка
-// занимает десятки миллисекунд и не должна подвешивать интерфейс.
+// Thumbnail frames are decoded on a separate thread: an FFmpeg seek
+// takes tens of milliseconds and must not block the UI.
 class ThumbnailWorker : public QObject {
     Q_OBJECT
 public:
@@ -40,7 +40,7 @@ class MpvItem : public MpvAbstractItem {
     Q_PROPERTY(bool deinterlaceEnabled READ deinterlaceEnabled NOTIFY deinterlaceChanged)
     Q_PROPERTY(bool cropEnabled READ cropEnabled NOTIFY cropEnabledChanged)
 
-    // НОВОЕ: Свойство для передачи состояния каста из QML в C++
+    // NEW: Property for passing the cast state from QML to C++
     Q_PROPERTY(bool isCasting READ isCasting WRITE setCastingState NOTIFY isCastingChanged)
 
 public:
@@ -58,14 +58,14 @@ public:
     void setMuted(bool m);
     QString source() const { return m_source; }
     void setSource(const QString &src);
-    // Актуальный заголовок потока (для радио — ICY StreamTitle).
+    // Current stream title (for radio — the ICY StreamTitle).
     QString mediaTitle() const { return m_mediaTitle; }
     bool videoDisabled() const { return m_videoDisabled; }
     bool deinterlaceEnabled() const { return m_deinterlaceEnabled; }
     bool cropEnabled() const { return m_cropEnabled; }
     void setCropEnabled(bool enabled);
 
-    // НОВОЕ:
+    // NEW:
     bool isCasting() const { return m_isCasting; }
     void setCastingState(bool casting);
 
@@ -90,11 +90,12 @@ signals:
     void mediaTitleChanged();
     void videoDisabledChanged();
     void fileEnded(const QString &reason);
+    void fileLoaded();
     void deinterlaceChanged();
     void cropEnabledChanged();
     void thumbnailReady(const QString &requestId);
 
-    // НОВОЕ:
+    // NEW:
     void isCastingChanged();
 
 private slots:
@@ -115,7 +116,7 @@ private:
     bool   m_deinterlaceEnabled = false;
     bool   m_cropEnabled = false;
 
-    // НОВОЕ:
+    // NEW:
     bool   m_isCasting = false;
 
     QThread *m_thumbThread = nullptr;

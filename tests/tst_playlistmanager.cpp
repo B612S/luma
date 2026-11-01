@@ -8,8 +8,8 @@
 #include "PlaylistModel.hpp"
 #include "TestEnvironment.h"
 
-// Плейлисты: создание/переименование/удаление, добавление ссылок,
-// сохранение на диск и чтение обратно.
+// Playlists: create/rename/delete, adding links,
+// saving to disk and reading back.
 class TestPlaylistManager : public QObject
 {
     Q_OBJECT
@@ -49,7 +49,7 @@ void TestPlaylistManager::defaultPlaylist()
     QCOMPARE(manager.defaultModel()->rowCount(), 0);
     QCOMPARE(manager.playlistName(PlaylistManager::DEFAULT_ID), QStringLiteral("playlist_default"));
 
-    // В списке плейлистов первый — Default.
+    // The first entry in the playlist list is Default.
     const QVariantList list = manager.playlists();
     QVERIFY(!list.isEmpty());
     QCOMPARE(list.first().toMap().value("id").toString(), PlaylistManager::DEFAULT_ID);
@@ -69,8 +69,8 @@ void TestPlaylistManager::createRenameDelete()
     const QString filePath = playlistsDir() + "/" + id + ".json";
     QVERIFY(QFile::exists(filePath));
 
-    manager.renamePlaylist(id, "Отдых");
-    QCOMPARE(manager.playlistName(id), QStringLiteral("Отдых"));
+    manager.renamePlaylist(id, "Relax");
+    QCOMPARE(manager.playlistName(id), QStringLiteral("Relax"));
 
     manager.deletePlaylist(id);
     QVERIFY(manager.modelById(id) == nullptr);
@@ -83,7 +83,7 @@ void TestPlaylistManager::emptyNameRejected()
     PlaylistManager manager(&config);
 
     QVERIFY(manager.createPlaylist("   ").isEmpty());
-    QCOMPARE(int(manager.playlists().size()), 1); // только Default
+    QCOMPARE(int(manager.playlists().size()), 1); // only Default
 }
 
 void TestPlaylistManager::addUrlAndPersist()
@@ -103,7 +103,7 @@ void TestPlaylistManager::addUrlAndPersist()
         QCOMPARE(model->rowCount(), 1);
         QCOMPARE(model->fileAt(0), QStringLiteral("http://kathy.torontocast.com:3060/"));
     }
-    // Второй менеджер читает плейлист с диска.
+    // A second manager reads the playlist from disk.
     ConfigManager config2;
     PlaylistManager manager2(&config2);
 

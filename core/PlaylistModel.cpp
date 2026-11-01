@@ -15,6 +15,18 @@ void PlaylistModel::setStreamTitle(const QString &path, const QString &title) {
     }
 }
 
+void PlaylistModel::setVideoTitle(const QString &path, const QString &title) {
+    if (title.isEmpty()) return;
+    for (int i = 0; i < m_entries.size(); ++i) {
+        if (m_entries[i].path != path) continue;
+        if (m_entries[i].title == title && m_entries[i].persistTitle) return;
+        m_entries[i].title = title;
+        m_entries[i].persistTitle = true;
+        emit dataChanged(index(i), index(i), {Qt::DisplayRole, Qt::UserRole + 6});
+        emit modified();
+    }
+}
+
 int PlaylistModel::rowCount(const QModelIndex &parent) const {
     return parent.isValid() ? 0 : m_entries.size();
 }
@@ -25,13 +37,23 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
     const Entry &e = m_entries[index.row()];
     switch (role) {
         case Qt::DisplayRole: {
-            QString name = e.title.isEmpty() ? QFileInfo(e.path).fileName() : e.title;
-            if (name.isEmpty() && e.path.contains(QStringLiteral("://"))) {
-                const QUrl url(e.path);
-                name = url.host();
-                if (!url.path().isEmpty() && url.path() != QStringLiteral("/"))
-                    name += url.path();
+            QString name = e.title;
+            if (e.path.contains(QStringLiteral("://"))) {
+                // For URLs without a title, show the host rather than a URL fragment.
+                const QString fileName = QFileInfo(e.path).fileName();
+                if (name.isEmpty() || (!fileName.isEmpty() && name == fileName)) {
+                    const QUrl url(e.path);
+                    name = url.host();
+                    if (!url.path().isEmpty() && url.path() != QStringLiteral("/"))
+                        name += url.path();
+                }
+            } else {
+                // Don't show the extension for local files.
+                const QString fileName = QFileInfo(e.path).fileName();
+                if (name.isEmpty() || name == fileName)
+                    name = QFileInfo(e.path).completeBaseName();
             }
+            if (name.isEmpty()) name = e.path;
             if (index.row() == m_currentIndex) return "▶ " + name;
             return name;
         }
@@ -63,8 +85,9 @@ QVariant PlaylistModel::entryToVariant(const Entry &e) const {
     QVariantMap m;
     m["path"] = e.path;
     m["kind"] = e.kind;
-    // Живой заголовок потока не сохраняем: после перезапуска он устареет.
-    if (!e.path.contains(QStringLiteral("://")))
+    // Don't save the live radio title: it goes stale after a restart.
+    // Save the video title from yt-dlp.
+    if (!e.path.contains(QStringLiteral("://")) || e.persistTitle)
         m["title"] = e.title;
     m["artist"] = e.artist;
     m["album"] = e.album;
@@ -78,15 +101,20 @@ PlaylistModel::Entry PlaylistModel::variantToEntry(const QVariantMap &m) const {
     e.kind = m.value("kind").toString();
     if (e.kind.isEmpty()) e.kind = "video";
     e.title = m.value("title").toString();
+    // Old playlists stored the file name (with extension) as the title.
+    if (!e.path.contains(QStringLiteral("://")) && e.title == QFileInfo(e.path).fileName())
+        e.title = QFileInfo(e.path).completeBaseName();
+    e.persistTitle = !e.title.isEmpty();
     e.artist = m.value("artist").toString();
     e.album = m.value("album").toString();
     e.duration = m.value("duration").toDouble();
-    if (e.title.isEmpty()) e.title = QFileInfo(e.path).fileName();
+    if (e.title.isEmpty() && !e.path.contains(QStringLiteral("://")))
+        e.title = QFileInfo(e.path).completeBaseName();
     return e;
 }
 
 // ---------------------------------------------------------------------------
-// Загрузка (НЕ эмитит modified — чтобы не сохранять при чтении с диска)
+// Loading (does NOT emit modified — so nothing is saved when reading from disk)
 // ---------------------------------------------------------------------------
 
 void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
@@ -97,7 +125,8 @@ void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
         Entry e;
         e.path = f;
         e.kind = "video";
-        e.title = QFileInfo(f).fileName();
+        e.title = f.contains(QStringLiteral("://")) ? QString()
+                                                    : QFileInfo(f).completeBaseName();
         m_entries.append(e);
         m_originalPaths << f;
     }
@@ -132,7 +161,7 @@ void PlaylistModel::setEntries(const QVariantList &entries, const QString &curre
 }
 
 // ---------------------------------------------------------------------------
-// Чтение
+// Reading
 // ---------------------------------------------------------------------------
 
 QString PlaylistModel::fileAt(int index) const {
@@ -177,7 +206,7 @@ void PlaylistModel::setCurrentIndex(int idx) {
 }
 
 // ---------------------------------------------------------------------------
-// Изменения (эмитят modified)
+// Changes (emit modified)
 // ---------------------------------------------------------------------------
 
 void PlaylistModel::setShuffle(bool shuffle) {
@@ -208,7 +237,7 @@ void PlaylistModel::setShuffle(bool shuffle) {
         if (hasCurrent) m_entries.append(currentEntry);
         m_entries.append(others);
     } else {
-        // Восстанавливаем исходный порядок по m_originalPaths
+        // Restore the original order from m_originalPaths
         QVector<Entry> restored;
         for (const QString &p : m_originalPaths) {
             for (const Entry &e : m_entries) {
@@ -309,7 +338,7 @@ void PlaylistModel::appendEntry(const QVariantMap &entry) {
     Entry e = variantToEntry(entry);
     if (e.path.isEmpty()) return;
 
-    // Отсев дубликатов по path
+    // Filter out duplicates by path
     for (const Entry &existing : m_entries) {
         if (existing.path == e.path) return;
     }
@@ -324,7 +353,7 @@ void PlaylistModel::appendEntry(const QVariantMap &entry) {
 }
 
 // ---------------------------------------------------------------------------
-// Сериализация
+// Serialization
 // ---------------------------------------------------------------------------
 
 QVariantList PlaylistModel::toVariantList() const {

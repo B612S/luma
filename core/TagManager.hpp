@@ -2,13 +2,13 @@
 #include <QString>
 #include <QVariantMap>
 
-// Чтение и запись тегов аудиофайлов через TagLib (mp3, flac, ogg, mp4/m4a, wav…).
+// Reading and writing audio file tags via TagLib (mp3, flac, ogg, mp4/m4a, wav…).
 namespace TagManager {
 
-// Общие теги, которые можно редактировать в окне «Свойства».
+// Common tags that can be edited in the "Properties" window.
 QVariantMap read(const QString &path);
 
-// Записывает переданные теги прямо в файл. false — если формат/файл не поддержан.
+// Writes the given tags straight into the file. false if the format/file is unsupported.
 bool write(const QString &path, const QVariantMap &tags);
 
 } // namespace TagManager

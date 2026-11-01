@@ -10,8 +10,8 @@ enum class ShortcutAction {
     SeekBackward,
     SeekForwardLong,
     SeekBackwardLong,
-    FrameForward,   // FIX: +1 кадр
-    FrameBackward,  // FIX: -1 кадр
+    FrameForward,   // FIX: +1 frame
+    FrameBackward,  // FIX: -1 frame
     VolumeUp,
     VolumeDown,
     ToggleMute,
@@ -50,7 +50,7 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::SeekBackwardLong,  "Left",  113,  Qt::ControlModifier },
         { ShortcutAction::SeekForwardLong,   "Right", 114,  Qt::ControlModifier },
 
-        // FIX: Alt+Left / Alt+Right для покадровой перемотки
+        // FIX: Alt+Left / Alt+Right for frame-by-frame seeking
         { ShortcutAction::FrameBackward,     "Left",  113,  Qt::AltModifier },
         { ShortcutAction::FrameForward,      "Right", 114,  Qt::AltModifier },
 
@@ -67,7 +67,7 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::ToggleTimeOsd,     "T",      28,  Qt::NoModifier },
         { ShortcutAction::TogglePip,         "P",      33,  Qt::NoModifier },
 
-        // Удержание «?» (Shift+/) или «.» на русской раскладке — подсказки.
+        // Holding "?" (Shift+/) or "." on the Russian layout shows the help.
         { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::NoModifier },
         { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::ShiftModifier },
 

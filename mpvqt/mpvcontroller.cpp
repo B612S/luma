@@ -199,10 +199,10 @@ void MpvController::init()
         qFatal("could not create mpv context");
     }
 
-    // Отключаем стандартные конфиги, чтобы не было конфликтов
+    // Disable the stock configs so there are no conflicts
     mpv_set_option_string(d_ptr->m_mpv, "config", "no");
 
-    // Загружаем пользовательский конфиг
+    // Load the user config
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
     configPath.append(QStringLiteral("/luma"));
     configPath.append(QStringLiteral("/mpv.conf"));
@@ -214,34 +214,26 @@ void MpvController::init()
 
     mpv_set_wakeup_callback(d_ptr->m_mpv, MpvController::mpvEvents, this);
 
-    // ЖЕСТКАЯ БЛОКИРОВКА (перекрывает mpv.conf)
+    // HARD OVERRIDE (takes precedence over mpv.conf)
     mpv_set_property_string(d_ptr->m_mpv, "vo", "libmpv");
     mpv_set_property_string(d_ptr->m_mpv, "audio-client-name", "luma");
 
-    // КРИТИЧНО: Запрещаем keep-open, чтобы mpv всегда слал EOF
-    // и автоматический переход на следующий файл работал.
+    // CRITICAL: keep-open is disabled so mpv always sends EOF
+    // and automatic advance to the next file works.
     mpv_set_property_string(d_ptr->m_mpv, "keep-open", "no");
 
-    // Кэш потоков: даёт перемотку назад примерно на 5 минут, но не больше.
+    // Stream cache: allows seeking back roughly 5 minutes, but no more.
     mpv_set_property_string(d_ptr->m_mpv, "cache", "yes");
     mpv_set_property_string(d_ptr->m_mpv, "cache-secs", "300");
     mpv_set_property_string(d_ptr->m_mpv, "demuxer-max-bytes", "256MiB");
 
-    // Умные настройки (применяем только если пользователь их не менял)
+    // Smart settings (applied only if the user has not changed them)
     char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");
     if (sync_mode) {
         if (QString::fromUtf8(sync_mode) == "audio") {
             mpv_set_property_string(d_ptr->m_mpv, "video-sync", "display-resample");
         }
         mpv_free(sync_mode);
-    }
-
-    char *hwdec = mpv_get_property_string(d_ptr->m_mpv, "hwdec");
-    if (hwdec) {
-        if (QString::fromUtf8(hwdec) == "no") {
-            mpv_set_property_string(d_ptr->m_mpv, "hwdec", "auto");
-        }
-        mpv_free(hwdec);
     }
 
     d_ptr->m_mpvHandleManager = std::make_shared<MpvHandleManager>(d_ptr->m_mpv);

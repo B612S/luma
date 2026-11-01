@@ -51,6 +51,7 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
         emit mutedChanged();
         emit pausedChanged();
         emit deinterlaceChanged();
+        emit fileLoaded();
     });
 
     connect(mpvController(), &MpvController::endFile, this, [this](QString reason) {
@@ -86,7 +87,7 @@ void MpvItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometr
 }
 
 void MpvItem::setVolume(double vol) {
-    // Если идет трансляция, вообще не трогаем libmpv
+    // While casting, leave libmpv alone entirely
     if (m_isCasting) return;
     setProperty("volume", vol);
 }
@@ -119,8 +120,8 @@ void MpvItem::setMuted(bool m) {
 void MpvItem::setSource(const QString &src) {
     m_source = src;
     emit sourceChanged();
-    // Загрузку запускаем после того, как QML закроет меню и успеет перерисовать
-    // кадр: mpv при смене файла на короткое время останавливает вывод видео.
+    // Start loading after QML closes the menu and repaints the frame:
+    // mpv briefly stops video output when switching files.
     QTimer::singleShot(0, this, [this, src]() {
         command(QStringList() << "loadfile" << src);
     });
@@ -138,13 +139,13 @@ void MpvItem::setCastingState(bool casting) {
     m_isCasting = casting;
 
     if (m_isCasting) {
-        // ЖЕСТКАЯ ОСТАНОВКА: отключаем рендеринг видео и звук, чтобы не мешать ТВ
+        // HARD STOP: disable video rendering and audio so the TV is not disturbed
         setProperty("vid", "no");
         setProperty("aid", "no");
         setProperty("mute", true);
         setProperty("volume", 0.0);
     } else {
-        // Возвращаем на место
+        // Put everything back
         setProperty("vid", "auto");
         setProperty("aid", "auto");
         setProperty("mute", false);
@@ -157,8 +158,8 @@ void MpvItem::setCastingState(bool casting) {
 void MpvItem::requestThumbnail(double seekTime, const QString &requestId) {
     if (!m_thumbWorker) return;
 
-    // Пока кадр декодируется, храним только последний запрос — при
-    // перетаскивании ползунка промежуточные позиции не нужны.
+    // While a frame is being decoded, keep only the latest request:
+    // intermediate positions are not needed while dragging the slider.
     m_thumbPending = true;
     m_thumbPendingTime = seekTime;
     m_thumbPendingId = requestId;
@@ -224,12 +225,12 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
     }
     else if (property == "duration") { m_duration = value.toDouble(); emit durationChanged(); }
     else if (property == "pause") {
-        if (m_isCasting) return; // Игнорируем локальные изменения паузы при касте
+        if (m_isCasting) return; // Ignore local pause changes while casting
         m_paused = value.toBool();
         emit pausedChanged();
     }
     else if (property == "volume") {
-        if (m_isCasting) return; // Игнорируем локальные изменения громкости при касте
+        if (m_isCasting) return; // Ignore local volume changes while casting
         m_volume = value.toDouble();
         emit volumeChanged();
     }
@@ -248,7 +249,7 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
         update();
     }
     else if (property == "media-title") {
-        // Для радио mpv обновляет этот заголовок при смене трека (ICY).
+        // For radio mpv updates this title when the track changes (ICY).
         const QString title = value.toString();
         if (m_mediaTitle != title) {
             m_mediaTitle = title;

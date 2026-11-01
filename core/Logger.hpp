@@ -13,7 +13,7 @@ public:
 
     static Logger& instance();
 
-    // Перенаправляет сообщения Qt (включая ошибки QML) в лог-файл.
+    // Redirects Qt messages (including QML errors) to the log file.
     static void installMessageHandler();
 
     void setMode(const QString &mode); // "none", "info", "debug"

@@ -51,8 +51,8 @@ private:
     void savePlaylist(const QString &id);
     void loadPlaylist(const QString &id);
     void saveOrder();
-    // Изменения (перетаскивание, добавление) приходят очень часто, поэтому
-    // запись на диск и сигнал playlistsChanged объединяются по таймеру.
+    // Changes (drag and drop, additions) arrive very often, so writing to disk
+    // and the playlistsChanged signal are coalesced via a timer.
     void scheduleSave(const QString &id);
     void flushPendingSaves();
     QString playlistFilePath(const QString &id) const;

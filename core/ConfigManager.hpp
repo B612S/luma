@@ -25,8 +25,12 @@ class ConfigManager : public QObject {
     Q_PROPERTY(int subtitlePosition READ subtitlePosition WRITE setSubtitlePosition NOTIFY subtitlesChanged)
     Q_PROPERTY(bool subtitleIgnoreFileStyle READ subtitleIgnoreFileStyle WRITE setSubtitleIgnoreFileStyle NOTIFY subtitlesChanged)
     Q_PROPERTY(bool showPanelsFullscreen READ showPanelsFullscreen WRITE setShowPanelsFullscreen NOTIFY showPanelsFullscreenChanged)
+    Q_PROPERTY(QString audioOutput READ audioOutput WRITE setAudioOutput NOTIFY audioOutputChanged)
+    Q_PROPERTY(QString hwdec READ hwdec WRITE setHwdec NOTIFY hwdecChanged)
     Q_PROPERTY(QString ytdlpQuality READ ytdlpQuality WRITE setYtdlpQuality NOTIFY ytdlpSettingsChanged)
     Q_PROPERTY(QString ytdlpProxy READ ytdlpProxy WRITE setYtdlpProxy NOTIFY ytdlpSettingsChanged)
+    Q_PROPERTY(QString ytdlpProxyType READ ytdlpProxyType WRITE setYtdlpProxyType NOTIFY ytdlpSettingsChanged)
+    Q_PROPERTY(QString ytdlpProxyAddress READ ytdlpProxyAddress WRITE setYtdlpProxyAddress NOTIFY ytdlpSettingsChanged)
 
 public:
     explicit ConfigManager(QObject *parent = nullptr);
@@ -81,15 +85,30 @@ public:
     bool showPanelsFullscreen() const;
     void setShowPanelsFullscreen(bool enabled);
 
-    // Параметры yt-dlp хранятся в ~/.config/luma/yt-dlp.conf.
+    // Audio output: "auto" | "pipewire" | "pulse" | "alsa".
+    QString audioOutput() const;
+    void setAudioOutput(const QString &output);
+
+    // mpv hardware decoding: "auto", "auto-copy", "vaapi", "nvdec",
+    // "no", etc. The value is written to luma.conf and applied to mpv.
+    QString hwdec() const;
+    void setHwdec(const QString &mode);
+
+    // yt-dlp settings are stored in ~/.config/luma/yt-dlp.conf.
     QString ytdlpQuality() const;
     void setYtdlpQuality(const QString &quality);
     QString ytdlpProxy() const;
     void setYtdlpProxy(const QString &proxy);
-    // Готовое выражение -f для yt-dlp.
+    // Proxy type ("none", "socks5", "socks5h", "http", "https") and address
+    // ("host:port") are edited in the settings as separate fields.
+    QString ytdlpProxyType() const;
+    void setYtdlpProxyType(const QString &type);
+    QString ytdlpProxyAddress() const;
+    void setYtdlpProxyAddress(const QString &address);
+    // Ready-to-use -f expression for yt-dlp.
     QString ytdlpFormatExpression() const;
 
-    // Путь к конфигурации yt-dlp (создаётся при первом запуске).
+    // Path to the yt-dlp config (created on first launch).
     QString ytdlpConfigPath() const;
 
     Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
@@ -109,15 +128,26 @@ signals:
     void controlBarModeChanged();
     void subtitlesChanged();
     void showPanelsFullscreenChanged();
+    void audioOutputChanged();
+    void hwdecChanged();
     void ytdlpSettingsChanged();
 
 private:
+    void loadPlaybackSettingsFromMpvConf();
+    void savePlaybackToMpvConf();
+    void updateProxyParts();
+    void rewriteProxyLine();
+    void removeYtdlpComments();
     void loadYtdlpConfig();
     void writeYtdlpConfig();
 
     QSettings *m_settings;
     QString m_configDir;
+    QString m_audioOutput = QStringLiteral("auto");
+    QString m_hwdec = QStringLiteral("auto");
     QStringList m_ytdlpExtra;
     QString m_ytdlpQuality = "best";
     QString m_ytdlpProxy;
+    QString m_ytdlpProxyType = "none";
+    QString m_ytdlpProxyAddress;
 };

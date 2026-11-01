@@ -25,13 +25,19 @@ Dialog {
 
     readonly property int controlWidth: 200
 
-    // Пока диалог открыт, горячие клавиши (включая колесо = громкость) выключены.
+    // While the dialog is open, shortcuts (including wheel = volume) are disabled.
     onOpened: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(false); }
     onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
 
-    // Проверка цвета в формате mpv: #RRGGBB или #AARRGGBB.
+    // Validate color in mpv format: #RRGGBB or #AARRGGBB.
     function validColor(value) {
         return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value) ? value : "transparent";
+    }
+
+    // The proxy address is entered without a scheme: host:port (optionally user:pass@).
+    function proxyAddressValid(value) {
+        const v = value.trim();
+        return /:\d{1,5}$/.test(v) && !/\s/.test(v);
     }
 
     contentItem: RowLayout {
@@ -102,13 +108,13 @@ Dialog {
             contentHeight: contentLayout.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
-            // Ширину полосы задаём явно: в некоторых стилях у неё широкая
-            // прозрачная область, которая перекрывала поля справа.
+            // Set the bar width explicitly: in some styles it has a wide
+            // transparent area that overlapped the fields on the right.
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
 
             Item {
-                // Оставляем место справа под полосу прокрутки, иначе элементы
-                // (поля цвета) уходят под неё.
+                // Leave room on the right for the scrollbar, otherwise the elements
+                // (color fields) slide under it.
                 width: parent.width - 22
                 implicitHeight: contentLayout.implicitHeight
 
@@ -234,7 +240,7 @@ Dialog {
                                     id: langCombo
                                     anchors.fill: parent
                                     font.pixelSize: 14
-                                    // Используем нативные названия языков (эндонимы)
+                                    // Use native language names (endonyms)
                                     model: [
                                         { value: "en", text: "English" },
                                         { value: "ru", text: "Русский" }
@@ -254,7 +260,7 @@ Dialog {
                                 }
                             }
 
-                            // --- РЕЖИМ ПАНЕЛИ УПРАВЛЕНИЯ ---
+                            // --- CONTROL BAR MODE ---
                             Label { text: qsTr("settings_control_bar"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -301,6 +307,82 @@ Dialog {
                         Label { text: qsTr("settings_playback"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
                         Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
+                        Label { text: qsTr("settings_audio"); font.pixelSize: 14; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            Label { text: qsTr("settings_audio_output"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                ComboBox {
+                                    anchors.fill: parent
+                                    font.pixelSize: 14
+                                    model: [
+                                        { text: qsTr("settings_audio_auto"), value: "auto" },
+                                        { text: "PipeWire", value: "pipewire" },
+                                        { text: "PulseAudio", value: "pulse" },
+                                        { text: "ALSA", value: "alsa" }
+                                    ]
+                                    textRole: "text"; valueRole: "value"
+                                    currentIndex: { let idx = model.findIndex(item => item.value === Config.audioOutput); return idx !== -1 ? idx : 0 }
+                                    onActivated: (index) => { Config.audioOutput = model[index].value; }
+                                }
+                            }
+                        }
+
+                        Label { text: qsTr("settings_video_acceleration"); font.pixelSize: 14; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            Label { text: qsTr("settings_hwdec"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                ComboBox {
+                                    anchors.fill: parent
+                                    font.pixelSize: 14
+                                    model: [
+                                        { text: qsTr("settings_hwdec_auto"), value: "auto" },
+                                        { text: qsTr("settings_hwdec_auto_copy"), value: "auto-copy" },
+                                        { text: "VA-API", value: "vaapi" },
+                                        { text: "VA-API (copy)", value: "vaapi-copy" },
+                                        { text: "NVDEC", value: "nvdec" },
+                                        { text: "NVDEC (copy)", value: "nvdec-copy" },
+                                        { text: "CUDA", value: "cuda" },
+                                        { text: "CUDA (copy)", value: "cuda-copy" },
+                                        { text: "Vulkan", value: "vulkan" },
+                                        { text: "Vulkan (copy)", value: "vulkan-copy" },
+                                        { text: "DRM", value: "drm" },
+                                        { text: "DRM (copy)", value: "drm-copy" },
+                                        { text: "VDPAU", value: "vdpau" },
+                                        { text: "VDPAU (copy)", value: "vdpau-copy" },
+                                        { text: qsTr("settings_hwdec_disabled"), value: "no" }
+                                    ]
+                                    textRole: "text"; valueRole: "value"
+                                    currentIndex: { let idx = model.findIndex(item => item.value === Config.hwdec); return idx !== -1 ? idx : 0 }
+                                    onActivated: (index) => { Config.hwdec = model[index].value; }
+                                }
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                text: qsTr("settings_hwdec_hint")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+
                         Label { text: qsTr("settings_ytdlp"); font.pixelSize: 14; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
 
                         GridLayout {
@@ -329,17 +411,60 @@ Dialog {
                                 }
                             }
 
-                            Label { text: qsTr("settings_ytdlp_proxy"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Label { text: qsTr("settings_ytdlp_proxy_type"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                ComboBox {
+                                    anchors.fill: parent
+                                    font.pixelSize: 14
+                                    model: [
+                                        { text: qsTr("settings_ytdlp_proxy_none"), value: "none" },
+                                        { text: "SOCKS5", value: "socks5" },
+                                        { text: "SOCKS5h", value: "socks5h" },
+                                        { text: "HTTP", value: "http" },
+                                        { text: "HTTPS", value: "https" }
+                                    ]
+                                    textRole: "text"; valueRole: "value"
+                                    currentIndex: { let idx = model.findIndex(item => item.value === Config.ytdlpProxyType); return idx !== -1 ? idx : 0 }
+                                    onActivated: (index) => { Config.ytdlpProxyType = model[index].value; }
+                                }
+                            }
+
+                            Label {
+                                text: qsTr("settings_ytdlp_proxy_address")
+                                visible: Config.ytdlpProxyType !== "none"
+                                color: Kirigami.Theme.textColor; font.pixelSize: 14
+                                Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            }
+                            Item {
+                                visible: Config.ytdlpProxyType !== "none"
                                 Layout.preferredWidth: settingsDialog.controlWidth
                                 Layout.preferredHeight: 40
                                 TextField {
                                     anchors.fill: parent
                                     font.pixelSize: 14
-                                    placeholderText: "socks5://127.0.0.1:1080"
-                                    text: Config.ytdlpProxy
-                                    onEditingFinished: Config.ytdlpProxy = text.trim()
+                                    placeholderText: "127.0.0.1:1080"
+                                    text: Config.ytdlpProxyAddress
+                                    onEditingFinished: {
+                                        Config.ytdlpProxyAddress = text.trim();
+                                        text = Config.ytdlpProxyAddress;
+                                    }
                                 }
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                visible: Config.ytdlpProxyType !== "none"
+                                text: settingsDialog.proxyAddressValid(Config.ytdlpProxyAddress)
+                                      ? qsTr("settings_ytdlp_proxy_hint")
+                                      : qsTr("settings_ytdlp_proxy_invalid")
+                                color: settingsDialog.proxyAddressValid(Config.ytdlpProxyAddress)
+                                       ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
+                                       : Kirigami.Theme.negativeTextColor
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
                             }
                         }
                     }
@@ -362,8 +487,8 @@ Dialog {
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
                                 Layout.preferredHeight: 40
-                                // Оформляем как остальные поля (TextField), но только для чтения:
-                                // по клику открывается выбор шрифта.
+                                // Style it like the other fields (TextField), but read-only:
+                                // clicking opens the font picker.
                                 TextField {
                                     anchors.fill: parent
                                     readOnly: true
@@ -660,9 +785,9 @@ Dialog {
         Item { implicitWidth: 16; implicitHeight: 1 }
     }
 
-    // Выбор шрифта субтитров. Список системных шрифтов большой, поэтому
-    // ComboBox не используем: ListView создаёт делегаты только для видимых
-    // строк, а список заполняется при первом открытии диалога.
+    // Subtitle font picker. The system font list is large, so
+    // we don't use ComboBox: ListView only creates delegates for visible
+    // rows, and the list is populated when the dialog first opens.
     Dialog {
         id: fontDialog
         title: qsTr("settings_sub_font")
@@ -736,7 +861,7 @@ Dialog {
                 model: fontDialog.shownFonts
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
 
-                // Если нужного шрифта нет в списке, можно применить введённое имя.
+                // If the wanted font isn't in the list, the typed name can still be applied.
                 header: Rectangle {
                     width: ListView.view ? ListView.view.width - 12 : 0
                     height: filterField.text.trim().length > 0 ? 34 : 0

@@ -16,9 +16,9 @@ Rectangle {
     property bool isReady: false
     property bool isBeingDragged: false
     property bool isCurrent: false
-    // ВАЖНО: не называем свойства panel/listView — одноимённые id из
-    // PlaylistPanel.qml перекрывались бы ими, и привязка `panel: panel`
-    // превращалась бы в самоприсваивание (свойство оставалось null).
+    // IMPORTANT: don't name the properties panel/listView — they would shadow
+    // the ids of the same name from PlaylistPanel.qml, and the binding
+    // `panel: panel` would become a self-assignment (the property stays null).
     property var playlistView: null
     property var playlistPanel: null
     property var scrollBar: null
@@ -69,7 +69,7 @@ Rectangle {
         onClicked: (mouse) => {
             if (playlistPanel && playlistPanel.isDragging) return;
             if (mouse.button === Qt.RightButton) {
-                // Панель сама выставит index и позицию меню.
+                // The panel sets the index and menu position itself.
                 if (playlistPanel)
                     playlistPanel.openTrackMenu(itemIndex, mapToItem(null, mouse.x, mouse.y));
             } else {
@@ -100,9 +100,9 @@ Rectangle {
             } else if (playlistPanel.isDragging && playlistView) {
                 var globalMouse = mapToItem(null, mouse.x, mouse.y);
                 playlistPanel.dragGlobalY = globalMouse.y;
-                // Индекс считаем по курсору, а не по позиции самого элемента:
-                // после moveItem представление переставляет делегаты, позиция
-                // «плывёт», и при повторных переносах к краю начинались скачки.
+                // Compute the index from the cursor, not from the item's own position:
+                // after moveItem the view rearranges the delegates, the position
+                // "drifts", and repeated drags to the edge started jumping.
                 var viewPos = playlistView.mapFromItem(null, globalMouse.x, globalMouse.y);
                 var contentY = viewPos.y + playlistView.contentY;
                 var newIndex = Math.floor(contentY / 38);

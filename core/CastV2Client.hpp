@@ -56,7 +56,7 @@ private:
 
     QString m_transportId;
     QString m_sessionId;
-    int m_mediaSessionId = -1; // <-- ДОБАВЛЕНО
+    int m_mediaSessionId = -1; // <-- ADDED
     int m_requestId = 1;
 
     QString m_pendingMediaUrl;

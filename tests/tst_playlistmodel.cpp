@@ -4,7 +4,7 @@
 #include "PlaylistModel.hpp"
 #include "TestEnvironment.h"
 
-// Логика плейлиста без GUI: загрузка, порядок, текущий трек, живые теги потоков.
+// Playlist logic without a GUI: loading, order, current track, live stream tags.
 class TestPlaylistModel : public QObject
 {
     Q_OBJECT
@@ -12,6 +12,7 @@ class TestPlaylistModel : public QObject
 private slots:
     void setFilesAndCurrent();
     void displayAddsCurrentMarker();
+    void displayStripsExtension();
     void moveItemKeepsCurrent();
     void removeItemAdjustsCurrent();
     void clearRemovesEverything();
@@ -19,6 +20,7 @@ private slots:
     void urlEntryShowsHost();
     void streamTitleReplacesUrl();
     void streamTitleIsNotSaved();
+    void videoTitlePersists();
     void shuffleKeepsCurrentFirst();
 };
 
@@ -42,8 +44,22 @@ void TestPlaylistModel::displayAddsCurrentMarker()
     PlaylistModel model;
     model.setFiles({"a.mp4", "b.mp4"}, "a.mp4");
 
-    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ a.mp4"));
-    QCOMPARE(model.data(model.index(1), Qt::DisplayRole).toString(), QStringLiteral("b.mp4"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ a"));
+    QCOMPARE(model.data(model.index(1), Qt::DisplayRole).toString(), QStringLiteral("b"));
+}
+
+void TestPlaylistModel::displayStripsExtension()
+{
+    PlaylistModel model;
+    model.setFiles({"movie.mkv"}, "movie.mkv");
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ movie"));
+
+    // Playlists saved by older versions could still contain "clip.mp4" as title.
+    QVariantMap entry;
+    entry["path"] = QStringLiteral("/tmp/clip.mp4");
+    entry["title"] = QStringLiteral("clip.mp4");
+    model.setEntries(QVariantList() << entry, QStringLiteral("/tmp/clip.mp4"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ clip"));
 }
 
 void TestPlaylistModel::moveItemKeepsCurrent()
@@ -138,6 +154,27 @@ void TestPlaylistModel::streamTitleIsNotSaved()
     const QVariantList saved = model.toVariantList();
     QCOMPARE(int(saved.size()), 1);
     QVERIFY(!saved.first().toMap().contains(QStringLiteral("title")));
+}
+
+void TestPlaylistModel::videoTitlePersists()
+{
+    PlaylistModel model;
+    const QString url = QStringLiteral("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    model.setFiles({url}, url);
+    model.setVideoTitle(url, QStringLiteral("Rick Astley - Never Gonna Give You Up"));
+
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("▶ Rick Astley - Never Gonna Give You Up"));
+
+    const QVariantList saved = model.toVariantList();
+    QCOMPARE(int(saved.size()), 1);
+    QCOMPARE(saved.first().toMap().value(QStringLiteral("title")).toString(),
+             QStringLiteral("Rick Astley - Never Gonna Give You Up"));
+
+    PlaylistModel loaded;
+    loaded.setEntries(saved, url);
+    QCOMPARE(loaded.data(loaded.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("▶ Rick Astley - Never Gonna Give You Up"));
 }
 
 void TestPlaylistModel::shuffleKeepsCurrentFirst()

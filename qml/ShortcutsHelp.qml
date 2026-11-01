@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import org.kde.kirigami as Kirigami
 
-// Подсказки по клавишам: показываются, пока удерживается «?» (Shift+/).
-// Оформление — как у остальных панелей приложения (см. SettingsDialog).
+// Keyboard shortcuts help: shown while "?" (Shift+/) is held.
+// Styling matches the other panels of the app (see SettingsDialog).
 Item {
     id: root
     z: 20
@@ -13,8 +13,8 @@ Item {
     opacity: opened ? 1.0 : 0.0
     Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.InOutQuad } }
 
-    // Клавиши подписываем в раскладке, активной прямо сейчас: Keyboard читает
-    // keymap прямо из Wayland (wl_keyboard.keymap) и обновляется при переключении.
+    // Label keys in the currently active layout: Keyboard reads
+    // the keymap straight from Wayland (wl_keyboard.keymap) and updates on layout switch.
     function keyText(keys) {
         return keys.split("/").map(function (part) {
             const token = part.trim();
@@ -45,7 +45,7 @@ Item {
         { keys: "?", text: qsTr("sc_help") }
     ]
 
-    // Пока подсказка на экране, клики не должны уходить в плеер.
+    // While the help is on screen, clicks must not reach the player.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons

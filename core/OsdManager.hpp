@@ -36,7 +36,7 @@ private:
     void updateTimeInternal(double pos, double dur);
     void hideOsdInternal();
     void tickOsd();
-    void restoreTimeMode(); // Возврат к режиму времени после временного OSD
+    void restoreTimeMode(); // Return to time mode after a temporary OSD
 
     MpvItem *m_mpv;
     QTimer *m_hideTimer;
@@ -44,18 +44,18 @@ private:
 
     QString m_message;
     bool m_visible = false;
-    bool m_isPinned = false; // T нажата
+    bool m_isPinned = false; // T pressed
 
     enum OsdState {
-        StateHidden,          // OSD полностью скрыт
-        StateTimePinned,      // Время показывается постоянно (T)
-        StateTimeTemporary,   // Время показывается временно (перемотка)
-        StateOverlayVolume,   // Временное перекрытие громкости
-        StateOverlayInfo      // Временное перекрытие инфо
+        StateHidden,          // OSD fully hidden
+        StateTimePinned,      // Time shown permanently (T)
+        StateTimeTemporary,   // Time shown temporarily (seeking)
+        StateOverlayVolume,   // Temporary volume overlay
+        StateOverlayInfo      // Temporary info overlay
     };
     OsdState m_state = StateHidden;
 
-    // Для перемотки
+    // For seeking
     double m_seekTarget = -1.0;
     double m_seekTargetDuration = -1.0;
     double m_seekStartPos = -1.0;

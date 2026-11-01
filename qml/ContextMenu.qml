@@ -18,8 +18,8 @@ Popup {
     property int currentTrackId: -1
     property var mpv: null
     property string currentAspect: "original"
-    // Окно приложения: в обработчиках QML нельзя обращаться к неявному
-    // `window` (ReferenceError), поэтому ссылку передаём явно.
+    // App window: QML handlers cannot access the implicit
+    // `window` (ReferenceError), so pass the reference explicitly.
     property var hostWindow: null
 
     signal toggleCropRequested()
@@ -129,7 +129,7 @@ Popup {
         width: parent.width
         spacing: 2
 
-        // --- ГЛАВНАЯ СТРАНИЦА ---
+        // --- MAIN PAGE ---
         Column {
             visible: menu.currentPage === "main"
             width: parent.width
@@ -192,13 +192,13 @@ Popup {
             MenuButton { text: qsTr("menu_exit"); onClicked: Qt.quit() }
         }
 
-        // --- СТРАНИЦА "ОТКРЫТЬ" ---
+        // --- "OPEN" PAGE ---
         Column {
             visible: menu.currentPage === "open"
             width: parent.width
             spacing: 2
 
-            // Одна кнопка для всех медиафайлов
+            // A single button for all media files
             MenuButton { text: qsTr("menu_open_file"); onClicked: { menu.close(); Media.openFileDialog() } }
             MenuButton { text: qsTr("menu_open_folder"); onClicked: { menu.close(); Media.openFolderDialog() } }
             MenuButton { text: qsTr("menu_open_url"); onClicked: { menu.close(); menu.openUrlRequested() } }
@@ -208,7 +208,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "main" }
         }
 
-        // --- СТРАНИЦА ДОРОЖЕК ---
+        // --- TRACKS PAGE ---
         Column {
             visible: menu.currentPage === "audio" || menu.currentPage === "sub" || menu.currentPage === "video"
             width: parent.width
@@ -276,7 +276,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "main" }
         }
 
-        // --- СТРАНИЦА PLAYBACK ---
+        // --- PLAYBACK PAGE ---
         Column {
             visible: menu.currentPage === "playback"
             width: parent.width
@@ -296,7 +296,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "main" }
         }
 
-        // --- СТРАНИЦА РЕЖИМА ВОСПРОИЗВЕДЕНИЯ ---
+        // --- PLAYBACK MODE PAGE ---
         Column {
             visible: menu.currentPage === "playback_mode"
             width: parent.width
@@ -340,7 +340,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "playback" }
         }
 
-        // --- СТРАНИЦА СООТНОШЕНИЯ СТОРОН ---
+        // --- ASPECT RATIO PAGE ---
         Column {
             visible: menu.currentPage === "aspect_ratio"
             width: parent.width
@@ -406,7 +406,7 @@ Popup {
             MenuButton { text: qsTr("menu_back"); onClicked: menu.currentPage = "playback" }
         }
 
-        // --- СТРАНИЦА RENDERER (CHROMECAST) ---
+        // --- RENDERER (CHROMECAST) PAGE ---
         Column {
             visible: menu.currentPage === "renderer"
             width: parent.width

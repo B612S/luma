@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QStringList>
+#include <QByteArray>
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QDBusInterface>
@@ -10,6 +11,7 @@
 class ConfigManager;
 class PlaylistManager;
 class QProcess;
+class QTimer;
 
 class MediaManager : public QObject {
     Q_OBJECT
@@ -17,7 +19,7 @@ class MediaManager : public QObject {
     Q_PROPERTY(QString playMode READ playMode WRITE setPlayMode NOTIFY playModeChanged)
     Q_PROPERTY(bool isManualSwitch READ isManualSwitch NOTIFY isManualSwitchChanged)
     Q_PROPERTY(QString currentFileName READ currentFileName NOTIFY fileChanged)
-    // Идёт прямой поток (радио): можно мотать только внутри кэша.
+    // A direct stream (radio) is playing: seeking works only within the cache.
     Q_PROPERTY(bool liveStream READ liveStream NOTIFY liveStreamChanged)
 
 public:
@@ -50,10 +52,10 @@ public:
     Q_INVOKABLE void removeFromPlaylist(int index);
     Q_INVOKABLE QString getDefaultFileManagerName();
     Q_INVOKABLE QVariantMap getFileInfo(const QString &path);
-    // Теги аудиофайла: чтение и запись в сам файл (через TagLib).
+    // Audio file tags: read and written in the file itself (via TagLib).
     Q_INVOKABLE QVariantMap readTags(const QString &path);
     Q_INVOKABLE bool saveTags(const QString &path, const QVariantMap &tags);
-    // Правка ссылки у потоковой записи плейлиста.
+    // Edit the URL of a streaming playlist entry.
     Q_INVOKABLE bool updateStreamUrl(const QString &oldUrl, const QString &newUrl);
 
     Q_INVOKABLE void openFileDialog();
@@ -75,18 +77,25 @@ signals:
     void isManualSwitchChanged();
     void playlistChanged();
     void liveStreamChanged();
+    // Text for the OSD while a URL is being opened via yt-dlp.
+    void downloadStatus(const QString &message);
 
 private:
     void _sendNotification(const QString &body);
     void _sendNotification(const QString &summary, const QString &body, const QString &coverPath);
-    // Уведомление с метаданными трека (исполнитель, альбом, обложка).
+    // Notification with track metadata (artist, album, cover art).
     void _notifyForFile(const QString &path);
-    // Живой заголовок потока (ICY у радио).
+    // Live stream title (ICY for radio).
     void onMediaTitleChanged();
-    // yt-dlp: сначала получаем прямой поток, файлы не скачиваются.
-    void openUrlAsync(const QString &url);
+    // yt-dlp returns direct URLs; mpv plays them through the local SOCKS bridge.
+    void openUrlAsync(const QString &url, bool keepPlaylist = false);
+    void finishUrlResolution(const QString &url, bool keepPlaylist, bool ok);
+    void playStream(const QString &originalUrl, const QString &videoUrl,
+                    const QString &audioUrl, const QString &title, bool keepPlaylist);
     void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
     QStringList ytdlpConfigArgs() const;
+    // The external audio track (video-only + audio) is attached after fileLoaded.
+    void onMpvFileLoaded();
 
     MpvItem *m_mpv;
     PlaylistManager *m_playlists = nullptr;
@@ -103,4 +112,15 @@ private:
 
     QDBusInterface *m_notifyInterface = nullptr;
     QProcess *m_ytdlpProcess = nullptr;
+    QTimer *m_ytdlpTimeout = nullptr;
+    QByteArray m_ytdlpStdoutBuffer;
+    QString m_ytdlpStderr;
+    QString m_resolvedTitle;
+    QString m_resolvedVideoUrl;
+    QString m_resolvedAudioUrl;
+    QString m_pendingAudioUrl;
+    bool m_ytdlpTimedOut = false;
+    // The source came from yt-dlp: its media-title is a fragment of a googlevideo URL,
+    // so no notification is needed for it (the original URL is sent to playStream).
+    bool m_streamFromYtdlp = false;
 };

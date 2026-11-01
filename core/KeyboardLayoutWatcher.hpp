@@ -3,20 +3,20 @@
 #include <QMutex>
 #include <QObject>
 
-// Читает раскладку клавиатуры напрямую из Wayland (wl_keyboard.keymap) и
-// отдаёт подписи клавиш в раскладке, которая активна прямо сейчас.
-// Работает в отдельном потоке со своим wl_display; при смене раскладки
-// композитор присылает новый keymap, и таблица обновляется.
+// Reads the keyboard layout directly from Wayland (wl_keyboard.keymap) and
+// returns key labels for the layout that is currently active.
+// Runs in a separate thread with its own wl_display; when the layout changes,
+// the compositor sends a new keymap and the table is updated.
 class KeyboardLayoutWatcher : public QObject {
     Q_OBJECT
 public:
     explicit KeyboardLayoutWatcher(QObject *parent = nullptr);
     ~KeyboardLayoutWatcher() override;
 
-    // «Q» -> «Й» (в русской раскладке), «Q» -> «Q» (в английской).
+    // "Q" -> the Cyrillic letter of the Russian layout, "Q" -> "Q" in English.
     Q_INVOKABLE QString keyName(const QString &key) const;
 
-    // true, если раскладка уже получена от композитора.
+    // true if the layout has already been received from the compositor.
     Q_INVOKABLE bool available() const;
 
 signals:

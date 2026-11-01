@@ -81,11 +81,25 @@
 <message><source>settings_sub_ignore_file_style</source><translation>Игнорировать оформление из файла субтитров</translation></message>
 <message><source>settings_show_panels_fullscreen</source><translation>Показывать панель управления в полноэкранном режиме</translation></message>
 <message><source>settings_playback</source><translation>Воспроизведение</translation></message>
+<message><source>settings_audio</source><translation>Звук</translation></message>
+<message><source>settings_audio_output</source><translation>Аудиовыход</translation></message>
+<message><source>settings_audio_auto</source><translation>Автоматически</translation></message>
+<message><source>settings_video_acceleration</source><translation>Видеоускорение</translation></message>
+<message><source>settings_hwdec</source><translation>Аппаратное декодирование</translation></message>
+<message><source>settings_hwdec_auto</source><translation>Автоматически (лучший доступный)</translation></message>
+<message><source>settings_hwdec_auto_copy</source><translation>Автоматически (с копированием)</translation></message>
+<message><source>settings_hwdec_disabled</source><translation>Отключено (программное декодирование)</translation></message>
+<message><source>settings_hwdec_hint</source><translation>«Копирующие» режимы возвращают кадры в системную память: они работают с видеофильтрами, но медленнее.</translation></message>
 <message><source>settings_ytdlp</source><translation>yt-dlp</translation></message>
 <message><source>settings_ytdlp_quality</source><translation>Качество видео</translation></message>
 <message><source>settings_ytdlp_quality_best</source><translation>Наилучшее доступное</translation></message>
 <message><source>settings_ytdlp_quality_audio</source><translation>Только звук</translation></message>
 <message><source>settings_ytdlp_proxy</source><translation>Прокси</translation></message>
+<message><source>settings_ytdlp_proxy_type</source><translation>Тип прокси</translation></message>
+<message><source>settings_ytdlp_proxy_address</source><translation>Адрес прокси</translation></message>
+<message><source>settings_ytdlp_proxy_none</source><translation>Не используется</translation></message>
+<message><source>settings_ytdlp_proxy_hint</source><translation>Формат: host:port, например 127.0.0.1:1080</translation></message>
+<message><source>settings_ytdlp_proxy_invalid</source><translation>Укажите адрес в виде host:port</translation></message>
 <message><source>about_title</source><translation>О программе</translation></message>
 <message><source>about_version</source><translation>Версия %1</translation></message>
 <message><source>about_description</source><translation>Быстрый и минималистичный медиаплеер.</translation></message>
@@ -174,6 +188,12 @@
 <message><source>dialog_audio_filter</source><translation>Аудиофайлы (*.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
 <message><source>track_default_name</source><translation>Дорожка %1</translation></message>
 <message><source>dialog_media_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
+<message><source>stream_opening</source><translation>Открытие ссылки…</translation></message>
+<message><source>download_failed_open</source><translation>Не удалось открыть ссылку</translation></message>
+<message><source>download_failed_start</source><translation>Не удалось запустить yt-dlp</translation></message>
+<message><source>download_ytdlp_missing</source><translation>yt-dlp не найден или не запускается</translation></message>
+<message><source>download_timeout</source><translation>yt-dlp не ответил за 30 секунд</translation></message>
+<message><source>download_no_result</source><translation>yt-dlp не вернул ссылку на поток</translation></message>
 </context>
 
 <context>

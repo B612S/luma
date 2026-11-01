@@ -6,9 +6,9 @@ import org.kde.kirigami as Kirigami
 Item {
     id: root
 
-    // Строки плейлиста лежат в locales/*.ts под контекстом "PlaylistPanel",
-    // поэтому здесь нужен qsTranslate: qsTr() взял бы контекст "PlaylistDialogs"
-    // и перевод не нашёлся бы (в интерфейсе остались бы ключи вида playlist_create).
+    // Playlist strings live in locales/*.ts under the "PlaylistPanel" context,
+    // so qsTranslate is needed here: qsTr() would take the "PlaylistDialogs" context
+    // and the translation wouldn't be found (the UI would show keys like playlist_create).
 
     property alias nameDialog: nameDialog
     property alias deleteDialog: deleteDialog
@@ -48,9 +48,9 @@ Item {
                         color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.05)
                         border.color: nameField.activeFocus ? Kirigami.Theme.highlightColor : "transparent"; border.width: 1
                     }
-                    // Enter/Return обрабатываются штатно (onAccepted), а пробел
-                    // должен попадать в текст — перехват здесь не нужен:
-                    // ShortcutHandler и так игнорирует клавиши при фокусе в поле ввода.
+                    // Enter/Return are handled natively (onAccepted), and Space
+                    // must go into the text — no interception is needed here:
+                    // ShortcutHandler already ignores keys while an input field has focus.
                     onAccepted: {
                         let name = nameField.text.trim();
                         if (name.length > 0) {

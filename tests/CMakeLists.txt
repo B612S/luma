@@ -1,12 +1,12 @@
-# Автотесты (Qt Test). Запуск: ctest --test-dir build --output-on-failure
+# Tests (Qt Test). Run: ctest --test-dir build --output-on-failure
 find_package(Qt6 QUIET COMPONENTS Test)
 
 if (NOT Qt6Test_FOUND)
-    message(STATUS "Qt6::Test не найден — автотесты отключены")
+    message(STATUS "Qt6::Test not found — autotests disabled")
     return()
 endif()
 
-# Тестируемая часть приложения: без mpv, GUI и QML.
+# The tested part of the application: no mpv, GUI or QML.
 add_library(luma_testcore STATIC
     ${CMAKE_SOURCE_DIR}/core/ConfigManager.cpp
     ${CMAKE_SOURCE_DIR}/core/ConfigManager.hpp

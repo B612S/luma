@@ -17,14 +17,14 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(MPV REQUIRED mpv)
 
-# TagLib — чтение и запись тегов аудиофайлов.
+# TagLib — reading and writing audio file tags.
 pkg_check_modules(TAGLIB REQUIRED taglib)
 
-# Раскладка клавиатуры читается напрямую из Wayland.
+# Keyboard layout is read directly from Wayland.
 pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
 pkg_check_modules(XKB REQUIRED xkbcommon)
 
-# FFmpeg для превью и Cast
+# FFmpeg for thumbnails and Cast
 pkg_check_modules(AVFORMAT REQUIRED libavformat)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
 pkg_check_modules(SWSCALE REQUIRED libswscale)
@@ -52,6 +52,8 @@ qt_add_executable(luma
     core/CastStreamServer.cpp
     core/CastV2Client.cpp
     core/CastManager.cpp
+    core/SocksHttpProxy.cpp
+    core/SocksHttpProxy.hpp
     mpvqt/mpvabstractitem.cpp
     mpvqt/mpvcontroller.cpp
     mpvqt/mpvrenderer.cpp
@@ -163,8 +165,8 @@ install(TARGETS luma
 install(IMPORTED_RUNTIME_ARTIFACTS luma DESTINATION ${CMAKE_INSTALL_LIBDIR}/qt6/qml/luma)
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/luma/ DESTINATION ${CMAKE_INSTALL_LIBDIR}/qt6/qml/luma)
 
-# ---- Автотесты (по умолчанию выключены, в пакет не попадают) ----
-option(LUMA_BUILD_TESTS "Собирать автотесты (Qt Test)" OFF)
+# ---- Tests (off by default, never ship in a package) ----
+option(LUMA_BUILD_TESTS "Build autotests (Qt Test)" OFF)
 if (LUMA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

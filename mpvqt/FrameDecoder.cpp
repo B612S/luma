@@ -70,7 +70,7 @@ QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) 
         return *m_cache.object(cacheKey);
     }
 
-    // Файл уже открыт — только перематываемся, без повторного открытия.
+    // The file is already open — just seek, without reopening it.
     if (m_currentPath != filePath || !m_fmtCtx || !m_codecCtx) {
         if (!openFile(filePath)) {
             return QImage();

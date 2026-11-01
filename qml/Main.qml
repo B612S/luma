@@ -8,8 +8,8 @@ ApplicationWindow {
     id: root
     visible: true
     width: 960; height: 640
-    // В PiP окно маленькое — обычный минимум там только мешает,
-    // но слишком мелко нельзя: элементы управления начнут перекрываться.
+    // In PiP the window is small — the usual minimum only gets in the way there,
+    // but it can't be too tiny: the controls would start overlapping.
     minimumWidth: pipMode ? 320 : 640
     minimumHeight: pipMode ? 180 : 480
     title: "Luma"
@@ -25,18 +25,18 @@ ApplicationWindow {
     property real lastMouseX: -1
     property real lastMouseY: -1
 
-    // Глобальная ссылка на текущее открытое меню (таба, трека или главное)
+    // Global reference to the currently open menu (tab, track or main)
     property var currentOpenMenu: null
 
-    // Настройка касается только панели управления: её можно не показывать
-    // в полном экране. Панели плейлиста и статистики при этом доступны как обычно.
+    // The setting only affects the control bar: it can be hidden
+    // in fullscreen. The playlist and stats panels remain available as usual.
     readonly property bool fullscreen: root.visibility === Window.FullScreen
     readonly property bool controlBarAllowed: !fullscreen || Config.showPanelsFullscreen
-    // Режим панели управления: "hidden" | "float" | "pinned".
+    // Control bar mode: "hidden" | "float" | "pinned".
     readonly property bool controlBarHidden: Config.controlBarMode === "hidden"
     readonly property bool controlBarPinnedMode: Config.controlBarMode === "pinned"
-    // Панель занимает место снизу только когда она реально видна
-    // (например, в полном экране она может быть скрыта при закреплении).
+    // The bar only takes up space at the bottom when it is actually visible
+    // (e.g. in fullscreen it may be hidden while pinned).
     readonly property bool controlBarPinned: root.controlBarPinnedMode && root.controlBarAllowed
                                              && !root.pipMode && !root.controlBarHidden
 
@@ -51,10 +51,10 @@ ApplicationWindow {
         root.controlsVisible = false;
     }
 
-    // Если окно потеряло фокус, отпускание клавиши может не дойти — прячем подсказку.
+    // If the window loses focus, the key release may not arrive — hide the help.
     onActiveChanged: if (!active) root.shortcutsHelpVisible = false;
 
-    // ---- Картинка в картинке (небольшое окно поверх остальных) ----
+    // ---- Picture in picture (small window above the others) ----
     property bool pipMode: false
     property bool pipWasFullscreen: false
     property rect pipSavedGeometry: Qt.rect(0, 0, 0, 0)
@@ -85,19 +85,26 @@ ApplicationWindow {
             w = Math.round(h * 16 / 9);
         }
 
-        // На Wayland флаги окна применяются только к скрытому окну: иначе
-        // системные украшения остаются, а размер не применяется.
+        // On Wayland window flags only apply to a hidden window. The size is
+        // also set before show(): otherwise the window appears for a frame at the old
+        // large size, and KWin/NVIDIA sometimes leaves the old plane behind —
+        // a flickering strip far from the PiP window.
         root.hide();
         root.flags = root.flags | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint;
-        root.show();
         root.width = w;
         root.height = h;
+        // Show on the next tick: by then the flags and size are already
+        // applied, and the window's first buffer is created at PiP size right away.
+        Qt.callLater(function() {
+            if (!root.pipMode) return;
+            root.show();
+            root.requestActivate();
+        });
         Qt.callLater(function() {
             if (!root.pipMode) return;
             root.width = w;
             root.height = h;
         });
-        root.requestActivate();
         idleTimer.restart();
     }
 
@@ -108,11 +115,15 @@ ApplicationWindow {
 
         root.hide();
         root.flags = root.flags & ~Qt.WindowStaysOnTopHint & ~Qt.FramelessWindowHint;
-        root.show();
-
+        // As when entering PiP, restore the size before show() so the window
+        // isn't shown for a frame at PiP size.
         if (pipSavedGeometry.width > 0) {
             root.width = pipSavedGeometry.width;
             root.height = pipSavedGeometry.height;
+        }
+        root.show();
+
+        if (pipSavedGeometry.width > 0) {
             root.x = pipSavedGeometry.x;
             root.y = pipSavedGeometry.y;
         }
@@ -174,8 +185,8 @@ ApplicationWindow {
             if (noVideo || isPaused) { idleTimer.restart(); return; }
             const inBottomZone = root.cursorY > root.height - root.bottomZoneHeight;
             if (inBottomZone) { idleTimer.restart(); return; }
-            // Открытое меню не мешает скрывать панель: оно рисуется поверх
-            // и не зависит от нижней панели.
+            // An open menu doesn't prevent hiding the bar: it is drawn on top
+            // and doesn't depend on the bottom bar.
             if (!root.currentOpenMenu) root.cursorVisible = false;
             if (!Config.pinControls) root.controlsVisible = false;
         }
@@ -247,10 +258,10 @@ ApplicationWindow {
 
             onClicked: (mouse) => {
                 if (mouse.button === Qt.RightButton) {
-                    // В режиме «картинка в картинке» меню нет — только свои кнопки.
+                    // In picture-in-picture mode there is no menu — only its own buttons.
                     if (root.pipMode) return;
                     if (contextMenu.visible) { contextMenu.close(); return; }
-                    // Внутри открытой панели плейлиста главное меню не открываем.
+                    // Don't open the main menu inside the open playlist panel.
                     if (playlistPanel.isOpen) {
                         const globalClick = mapToItem(null, mouse.x, mouse.y);
                         const localClick = playlistPanel.mapFromItem(null, globalClick.x, globalClick.y);
@@ -328,7 +339,7 @@ ApplicationWindow {
         text: Osd.message; isOpen: Osd.visible && !root.pipMode; z: 2
     }
 
-    // В режиме «картинка в картинке» — только минимальные свои кнопки.
+    // In picture-in-picture mode — only minimal custom buttons.
     PipControls {
         anchors.fill: parent
         mpv: mpv
@@ -374,14 +385,14 @@ ApplicationWindow {
         property bool cursorWasVisible: true
 
         onOpened: {
-            // Закрываем меню плейлиста (треков и табов)
+            // Close the playlist menus (tracks and tabs)
             if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
                 playlistPanel.closeContextMenu();
             }
             cursorWasVisible = root.cursorVisible;
             root.cursorY = -1;
             idleTimer.restart();
-            // Регистрируемся в глобальной переменной
+            // Register in the global variable
             root.currentOpenMenu = contextMenu;
         }
         onClosed: {

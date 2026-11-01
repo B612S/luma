@@ -7,7 +7,7 @@ Item {
     id: root
     implicitHeight: 36
     property string activeId: Playlists.activeId
-    // Главное меню (ContextMenu из Main.qml), чтобы закрывать его из меню таба.
+    // Main menu (ContextMenu from Main.qml), so it can be closed from the tab menu.
     property var rootContextMenu: null
 
     function closeMenus() { tabContextMenu.close(); }
@@ -79,8 +79,8 @@ Item {
                                     tabContextMenu.targetName = tabBtn.info.name;
                                     tabContextMenu.targetIsDefault = tabBtn.isDefault;
 
-                                    // Позиция меню задаётся относительно его родителя (root),
-                                    // а не в координатах окна.
+                                    // The menu position is relative to its parent (root),
+                                    // not in window coordinates.
                                     let scenePos = mapToItem(null, mouse.x, mouse.y);
                                     let win = root.window;
                                     let maxX = win ? win.width - tabContextMenu.width - 10 : scenePos.x;

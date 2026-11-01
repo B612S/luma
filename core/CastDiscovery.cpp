@@ -37,7 +37,7 @@ void CastDiscovery::parseAvahiOutput(const QString &output) {
     QString currentAddress;
     int currentPort = 8009;
 
-    // Для дедупликации: "address:port"
+    // For deduplication: "address:port"
     QSet<QString> seen;
 
     auto flushDevice = [&]() {
@@ -45,7 +45,7 @@ void CastDiscovery::parseAvahiOutput(const QString &output) {
 
         if (currentAddress.startsWith("127.") || currentAddress == "::1") return;
 
-        // Дедупликация: если такое устройство уже есть, пропускаем
+        // Deduplication: skip the device if it is already present
         const QString key = currentAddress + ":" + QString::number(currentPort);
         if (seen.contains(key)) return;
 

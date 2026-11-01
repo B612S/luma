@@ -9,7 +9,7 @@ Rectangle {
                    Kirigami.Theme.backgroundColor.g,
                    Kirigami.Theme.backgroundColor.b, 0.85)
     radius: 8
-    border.color: "transparent" // Убран бордюр
+    border.color: "transparent" // Border removed
 
     property var mpv: null
     property bool isOpen: false
@@ -103,7 +103,7 @@ Rectangle {
             let audBitrate = mpv.property("audio-bitrate");
             audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatAudioBitrate(audBitrate)
 
-            // Умный запрос Audio Output (сначала пробуем QML, потом C++)
+            // Smart Audio Output query (try QML first, then C++)
             let aoParams = mpv.property("audio-out-params");
             let aoDriver = "N/A";
             if (aoParams && aoParams.driver) {
@@ -201,7 +201,7 @@ Rectangle {
         return mb.toFixed(2) + " MiB";
     }
 
-    // Корректное форматирование битрейта (mpv отдает в bps)
+    // Proper bitrate formatting (mpv reports in bps)
     function formatBitrate(bps) {
         if (!bps || isNaN(bps) || bps <= 0) return "0 kbps";
 
@@ -211,12 +211,12 @@ Rectangle {
         return (bps / 1000).toFixed(0) + " kbps";
     }
 
-    // Защита от глюков mpv (иногда выдает огромные значения аудио на старте)
+    // Guard against mpv glitches (it sometimes reports huge audio values at startup)
     function formatAudioBitrate(bps) {
         if (!bps || isNaN(bps) || bps <= 0) return "0 kbps";
 
         const kbps = bps / 1000;
-        if (kbps > 1500) return "N/A"; // Аудио > 1500 kbps — это баг mpv
+        if (kbps > 1500) return "N/A"; // Audio > 1500 kbps is an mpv bug
 
         return kbps.toFixed(0) + " kbps";
     }

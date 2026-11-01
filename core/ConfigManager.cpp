@@ -4,6 +4,51 @@
 #include <QTextStream>
 #include <QStandardPaths>
 
+// Allowed values for playback settings. For hwdec these are the variants
+// that make sense on Linux (see `mpv --hwdec=help`); "auto" is the usual
+// automatic choice, and "-copy" returns frames to system memory.
+static const QStringList kAudioOutputs = {
+    QStringLiteral("auto"), QStringLiteral("pipewire"),
+    QStringLiteral("pulse"), QStringLiteral("alsa")
+};
+
+static const QStringList kHwdecModes = {
+    QStringLiteral("auto"), QStringLiteral("auto-copy"),
+    QStringLiteral("vaapi"), QStringLiteral("vaapi-copy"),
+    QStringLiteral("nvdec"), QStringLiteral("nvdec-copy"),
+    QStringLiteral("cuda"), QStringLiteral("cuda-copy"),
+    QStringLiteral("vulkan"), QStringLiteral("vulkan-copy"),
+    QStringLiteral("drm"), QStringLiteral("drm-copy"),
+    QStringLiteral("vdpau"), QStringLiteral("vdpau-copy"),
+    QStringLiteral("no")
+};
+
+// Proxy types that yt-dlp understands.
+static const QStringList kProxyTypes = {
+    QStringLiteral("none"), QStringLiteral("socks5"),
+    QStringLiteral("socks5h"), QStringLiteral("http"), QStringLiteral("https")
+};
+
+static QString proxyScheme(const QString &url) {
+    const int sep = url.indexOf(QStringLiteral("://"));
+    return sep > 0 ? url.left(sep).toLower() : QString();
+}
+
+static QString proxyAddress(const QString &url) {
+    const int sep = url.indexOf(QStringLiteral("://"));
+    return sep > 0 ? url.mid(sep + 3) : url;
+}
+
+static QString normalizedProxyUrl(const QString &proxy) {
+    QString value = proxy.trimmed();
+    // Some clients hand out "socks://", but yt-dlp only understands
+    // socks4/socks4a/socks5/socks5h. With an unknown scheme it silently hangs
+    // on connect, so normalize it to SOCKS5.
+    if (value.startsWith(QLatin1String("socks://"), Qt::CaseInsensitive))
+        value = QStringLiteral("socks5://") + value.mid(8);
+    return value;
+}
+
 ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
     QString configDir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/luma";
     QString path = configDir + "/luma.conf";
@@ -55,6 +100,7 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
 
     m_settings = new QSettings(path, QSettings::IniFormat, this);
 
+    loadPlaybackSettingsFromMpvConf();
     loadYtdlpConfig();
 }
 
@@ -87,7 +133,7 @@ void ConfigManager::setVolume(int v) {
 
 QString ConfigManager::language() const {
     const QString lang = m_settings->value("ui/language", "en").toString();
-    // Поддерживаются только языки, для которых собран перевод.
+    // Only languages with a compiled translation are supported.
     return lang == "ru" ? "ru" : "en";
 }
 void ConfigManager::setLanguage(const QString &lang) {
@@ -135,7 +181,7 @@ void ConfigManager::setNotifications(bool enabled) {
 QString ConfigManager::controlBarMode() const {
     QString mode = m_settings->value("ui/control_bar_mode").toString();
     if (mode.isEmpty()) {
-        // Перенос старой настройки «закрепить панель».
+        // Migrate the old "pin panel" setting.
         mode = m_settings->value("ui/pin_controls", false).toBool()
                    ? QStringLiteral("pinned") : QStringLiteral("float");
     }
@@ -248,6 +294,24 @@ void ConfigManager::setShowPanelsFullscreen(bool enabled) {
     emit showPanelsFullscreenChanged();
 }
 
+QString ConfigManager::audioOutput() const { return m_audioOutput; }
+void ConfigManager::setAudioOutput(const QString &output) {
+    const QString normalized = kAudioOutputs.contains(output) ? output : QStringLiteral("auto");
+    if (m_audioOutput == normalized) return;
+    m_audioOutput = normalized;
+    savePlaybackToMpvConf();
+    emit audioOutputChanged();
+}
+
+QString ConfigManager::hwdec() const { return m_hwdec; }
+void ConfigManager::setHwdec(const QString &mode) {
+    const QString normalized = kHwdecModes.contains(mode) ? mode : QStringLiteral("auto");
+    if (m_hwdec == normalized) return;
+    m_hwdec = normalized;
+    savePlaybackToMpvConf();
+    emit hwdecChanged();
+}
+
 QString ConfigManager::ytdlpQuality() const { return m_ytdlpQuality; }
 
 void ConfigManager::setYtdlpQuality(const QString &quality) {
@@ -260,45 +324,123 @@ void ConfigManager::setYtdlpQuality(const QString &quality) {
 QString ConfigManager::ytdlpProxy() const { return m_ytdlpProxy; }
 
 void ConfigManager::setYtdlpProxy(const QString &proxy) {
-    const QString trimmed = proxy.trimmed();
-    if (m_ytdlpProxy == trimmed) return;
-    m_ytdlpProxy = trimmed;
+    const QString normalized = normalizedProxyUrl(proxy);
+    if (m_ytdlpProxy == normalized) return;
+    m_ytdlpProxy = normalized;
+    updateProxyParts();
     writeYtdlpConfig();
     emit ytdlpSettingsChanged();
 }
 
+QString ConfigManager::ytdlpProxyType() const { return m_ytdlpProxyType; }
+
+void ConfigManager::setYtdlpProxyType(const QString &type) {
+    const QString normalized = kProxyTypes.contains(type) ? type : QStringLiteral("none");
+    if (m_ytdlpProxyType == normalized) return;
+    m_ytdlpProxyType = normalized;
+
+    if (normalized == QLatin1String("none")) {
+        if (!m_ytdlpProxy.isEmpty()) {
+            m_ytdlpProxy.clear();
+            writeYtdlpConfig();
+        }
+        // Do not erase the address: picking the type again then does not
+        // require re-entering it.
+        emit ytdlpSettingsChanged();
+        return;
+    }
+
+    if (!m_ytdlpProxyAddress.isEmpty())
+        setYtdlpProxy(normalized + QStringLiteral("://") + m_ytdlpProxyAddress);
+    else
+        emit ytdlpSettingsChanged();
+}
+
+QString ConfigManager::ytdlpProxyAddress() const { return m_ytdlpProxyAddress; }
+
+void ConfigManager::setYtdlpProxyAddress(const QString &address) {
+    QString value = address.trimmed();
+
+    // Allow pasting a full URL: the scheme becomes the proxy type.
+    const QString scheme = proxyScheme(value);
+    if (!scheme.isEmpty()) {
+        value = proxyAddress(value);
+        if (kProxyTypes.contains(scheme) && scheme != QLatin1String("none"))
+            m_ytdlpProxyType = scheme;
+    }
+    value = value.trimmed();
+    m_ytdlpProxyAddress = value;
+
+    if (value.isEmpty()) {
+        if (!m_ytdlpProxy.isEmpty()) {
+            m_ytdlpProxy.clear();
+            writeYtdlpConfig();
+        }
+        emit ytdlpSettingsChanged();
+        return;
+    }
+
+    if (m_ytdlpProxyType == QLatin1String("none") || m_ytdlpProxyType.isEmpty())
+        m_ytdlpProxyType = QStringLiteral("socks5");
+
+    const QString rebuilt = m_ytdlpProxyType + QStringLiteral("://") + value;
+    if (m_ytdlpProxy == rebuilt) {
+        emit ytdlpSettingsChanged();
+        return;
+    }
+    setYtdlpProxy(rebuilt);
+}
+
+void ConfigManager::updateProxyParts() {
+    const QString scheme = proxyScheme(m_ytdlpProxy);
+    m_ytdlpProxyType = kProxyTypes.contains(scheme) ? scheme : QStringLiteral("none");
+    m_ytdlpProxyAddress = m_ytdlpProxy.isEmpty() ? QString() : proxyAddress(m_ytdlpProxy);
+}
+
 QString ConfigManager::ytdlpFormatExpression() const {
-    // Для прямого воспроизведения нужен ровно один URL, поэтому берём
-    // «слитые» форматы (best...), а не bestvideo+bestaudio.
-    if (m_ytdlpQuality == "1080")  return QStringLiteral("best[height<=1080]");
-    if (m_ytdlpQuality == "720")   return QStringLiteral("best[height<=720]");
-    if (m_ytdlpQuality == "480")   return QStringLiteral("best[height<=480]");
+    // Stream video separately from audio: this makes 1080p and above
+    // available, not just muxed 360p. yt-dlp will merge the streams if needed.
+    if (m_ytdlpQuality == "1080")  return QStringLiteral("bestvideo[height<=1080]+bestaudio/best[height<=1080]");
+    if (m_ytdlpQuality == "720")   return QStringLiteral("bestvideo[height<=720]+bestaudio/best[height<=720]");
+    if (m_ytdlpQuality == "480")   return QStringLiteral("bestvideo[height<=480]+bestaudio/best[height<=480]");
     if (m_ytdlpQuality == "audio") return QStringLiteral("bestaudio[ext=m4a]/bestaudio");
-    return QStringLiteral("best");
+    return QStringLiteral("bestvideo+bestaudio/best");
 }
 
 static QString ytdlpQualityFromFormat(const QString &expr) {
-    if (expr.contains(QStringLiteral("bestaudio"))) return QStringLiteral("audio");
+    // Check the height limit first: bestaudio+bestvideo expressions also
+    // contain the word "bestaudio" and would otherwise be treated as audio.
     if (expr.contains(QStringLiteral("height<=1080"))) return QStringLiteral("1080");
     if (expr.contains(QStringLiteral("height<=720"))) return QStringLiteral("720");
     if (expr.contains(QStringLiteral("height<=480"))) return QStringLiteral("480");
+    if (expr.contains(QStringLiteral("bestvideo"))) return QStringLiteral("best");
+    if (expr.contains(QStringLiteral("bestaudio"))) return QStringLiteral("audio");
     return QStringLiteral("best");
 }
 
 void ConfigManager::loadYtdlpConfig() {
     m_ytdlpQuality = QStringLiteral("best");
     m_ytdlpProxy.clear();
+    m_ytdlpProxyType = QStringLiteral("none");
+    m_ytdlpProxyAddress.clear();
     m_ytdlpExtra.clear();
+    bool proxyNeedsRewrite = false;
+    bool hadComments = false;
 
     QFile f(ytdlpConfigPath());
     if (!f.exists() || !f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        updateProxyParts();
         writeYtdlpConfig();
         return;
     }
 
     while (!f.atEnd()) {
         QString line = QString::fromUtf8(f.readLine()).trimmed();
-        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+        if (line.isEmpty()) continue;
+        if (line.startsWith(QLatin1Char('#'))) {
+            hadComments = true;
+            continue;
+        }
 
         if (line.startsWith(QStringLiteral("--format="))) {
             m_ytdlpQuality = ytdlpQualityFromFormat(line.mid(9));
@@ -313,11 +455,17 @@ void ConfigManager::loadYtdlpConfig() {
             continue;
         }
         if (line.startsWith(QStringLiteral("--proxy="))) {
-            m_ytdlpProxy = line.mid(8).trimmed();
+            const QString raw = line.mid(8).trimmed();
+            const QString normalized = normalizedProxyUrl(raw);
+            if (raw != normalized) proxyNeedsRewrite = true;
+            m_ytdlpProxy = normalized;
             continue;
         }
         if (line.startsWith(QStringLiteral("--proxy "))) {
-            m_ytdlpProxy = line.mid(8).trimmed();
+            const QString raw = line.mid(8).trimmed();
+            const QString normalized = normalizedProxyUrl(raw);
+            if (raw != normalized) proxyNeedsRewrite = true;
+            m_ytdlpProxy = normalized;
             continue;
         }
         if (line == QLatin1String("--no-playlist")
@@ -328,6 +476,70 @@ void ConfigManager::loadYtdlpConfig() {
         m_ytdlpExtra << line;
     }
     f.close();
+
+    updateProxyParts();
+    if (hadComments)
+        removeYtdlpComments();
+    if (proxyNeedsRewrite)
+        rewriteProxyLine();
+}
+
+// Strips comments from the user's yt-dlp.conf while keeping the other
+// lines. Called once when an old file is read.
+void ConfigManager::removeYtdlpComments() {
+    QFile f(ytdlpConfigPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+
+    QStringList lines;
+    while (!f.atEnd()) {
+        const QString line = QString::fromUtf8(f.readLine()).trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+        lines << line;
+    }
+    f.close();
+
+    QFile out(ytdlpConfigPath());
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
+    QTextStream stream(&out);
+    for (const QString &line : lines)
+        stream << line << "\n";
+}
+
+// Targeted replacement of the --proxy line: the other options (including
+// a format Luma does not know) are not overwritten.
+void ConfigManager::rewriteProxyLine() {
+    QFile f(ytdlpConfigPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        writeYtdlpConfig();
+        return;
+    }
+
+    QStringList lines;
+    bool replaced = false;
+    while (!f.atEnd()) {
+        const QString line = QString::fromUtf8(f.readLine());
+        const QString trimmed = line.trimmed();
+        if (trimmed.startsWith(QLatin1Char('#'))) continue;
+        if (trimmed.startsWith(QStringLiteral("--proxy="))
+                || trimmed.startsWith(QStringLiteral("--proxy "))) {
+            if (!replaced && !m_ytdlpProxy.isEmpty()) {
+                lines << QStringLiteral("--proxy=") + m_ytdlpProxy;
+                replaced = true;
+            }
+            continue;
+        }
+        lines << trimmed;
+    }
+    f.close();
+
+    if (!replaced && !m_ytdlpProxy.isEmpty())
+        lines << QStringLiteral("--proxy=") + m_ytdlpProxy;
+
+    QFile out(ytdlpConfigPath());
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
+    QTextStream stream(&out);
+    for (const QString &line : lines)
+        stream << line << "\n";
 }
 
 void ConfigManager::writeYtdlpConfig() {
@@ -335,9 +547,6 @@ void ConfigManager::writeYtdlpConfig() {
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
 
     QTextStream out(&f);
-    out << "# Luma: параметры yt-dlp для воспроизведения ссылок.\n";
-    out << "# Формат и прокси задаются в настройках Luma, остальные строки сохраняются.\n";
-    out << "# Luma только воспроизводит поток и никогда не скачивает файлы.\n";
     out << "--no-playlist\n";
     out << "--no-warnings\n";
     out << "--no-progress\n";
@@ -356,6 +565,120 @@ QVariant ConfigManager::value(const QString &key, const QVariant &defaultValue) 
 
 void ConfigManager::setValue(const QString &key, const QVariant &value) {
     m_settings->setValue(key, value);
+}
+
+void ConfigManager::loadPlaybackSettingsFromMpvConf() {
+    // hwdec/ao are stored in mpv.conf in mpv's own syntax. Read them there and
+    // migrate legacy [playback] keys from luma.conf once.
+    QString audio = QStringLiteral("auto");
+    QString mode = QStringLiteral("auto");
+    bool hasHwdec = false;
+    bool hasAo = false;
+    bool invalidHwdec = false;
+
+    QFile f(m_configDir + "/mpv.conf");
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        while (!f.atEnd()) {
+            const QString line = QString::fromUtf8(f.readLine()).trimmed();
+            if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+
+            const int eq = line.indexOf(QLatin1Char('='));
+            if (eq <= 0) continue;
+            const QString key = line.left(eq).trimmed();
+            const QString value = line.mid(eq + 1).trimmed();
+
+            if (key == QLatin1String("hwdec")) {
+                hasHwdec = true;
+                if (kHwdecModes.contains(value))
+                    mode = value;
+                else
+                    invalidHwdec = true;
+            } else if (key == QLatin1String("ao")) {
+                hasAo = true;
+                if (kAudioOutputs.contains(value))
+                    audio = value;
+            }
+        }
+        f.close();
+    }
+
+    const bool legacyHwdec = m_settings->contains("playback/hwdec");
+    const bool legacyAudio = m_settings->contains("playback/audio_output");
+    const QString legacyHwdecValue = m_settings->value("playback/hwdec").toString();
+    const QString legacyAudioValue = m_settings->value("playback/audio_output").toString();
+
+    m_hwdec = kHwdecModes.contains(mode) ? mode : QStringLiteral("auto");
+    m_audioOutput = kAudioOutputs.contains(audio) ? audio : QStringLiteral("auto");
+
+    bool dirty = false;
+    if (!hasHwdec) {
+        if (legacyHwdec && kHwdecModes.contains(legacyHwdecValue))
+            m_hwdec = legacyHwdecValue;
+        // Always keep an explicit hwdec line in mpv.conf.
+        dirty = true;
+    }
+    if (invalidHwdec)
+        dirty = true; // normalize an unsupported value to "auto"
+    if (!hasAo && legacyAudio && kAudioOutputs.contains(legacyAudioValue)
+            && legacyAudioValue != QLatin1String("auto")) {
+        m_audioOutput = legacyAudioValue;
+        dirty = true;
+    }
+    if (hasAo && audio == QLatin1String("auto"))
+        dirty = true; // "ao=auto" is not a valid driver; remove the line
+
+    if (legacyHwdec)
+        m_settings->remove("playback/hwdec");
+    if (legacyAudio)
+        m_settings->remove("playback/audio_output");
+
+    if (dirty)
+        savePlaybackToMpvConf();
+}
+
+void ConfigManager::savePlaybackToMpvConf() {
+    QStringList lines;
+    bool hasHwdec = false;
+    bool hasAo = false;
+
+    QFile f(m_configDir + "/mpv.conf");
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        while (!f.atEnd()) {
+            const QString line = QString::fromUtf8(f.readLine()).trimmed();
+            const int eq = line.indexOf(QLatin1Char('='));
+            if (!line.startsWith(QLatin1Char('#')) && eq > 0) {
+                const QString key = line.left(eq).trimmed();
+                if (key == QLatin1String("hwdec")) {
+                    if (!hasHwdec) {
+                        lines << QStringLiteral("hwdec=") + m_hwdec;
+                        hasHwdec = true;
+                    }
+                    continue;
+                }
+                if (key == QLatin1String("ao")) {
+                    if (!hasAo) {
+                        if (m_audioOutput != QLatin1String("auto"))
+                            lines << QStringLiteral("ao=") + m_audioOutput;
+                        hasAo = true;
+                    }
+                    continue;
+                }
+            }
+            lines << line;
+        }
+        f.close();
+    }
+
+    if (!hasHwdec)
+        lines << QStringLiteral("hwdec=") + m_hwdec;
+    if (!hasAo && m_audioOutput != QLatin1String("auto"))
+        lines << QStringLiteral("ao=") + m_audioOutput;
+
+    QFile out(m_configDir + "/mpv.conf");
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
+    QTextStream stream(&out);
+    for (const QString &line : lines)
+        stream << line << "\n";
 }
 
 void ConfigManager::saveWindowSize(int width, int height) {

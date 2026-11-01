@@ -26,8 +26,10 @@
   add files or a whole folder, “Add to playlist” from the track menu.
 - **Subtitle tuning** — font, size, weight, text/outline colors, outline width,
   background box, vertical position, ASS style override; applied to mpv live.
-- **Links via yt-dlp** — open a URL from the menu and Luma resolves the stream with
-  `yt-dlp`. Playback only: nothing is downloaded.
+- **Links via yt-dlp** — open a URL from the menu and Luma resolves the direct stream
+  with `yt-dlp` and plays it in mpv with normal seeking. The video title is shown in the
+  notification and playlist. SOCKS proxies work through a local HTTP bridge, so mpv never
+  bypasses the proxy.
 - **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`,
   HLS re-encode via `ffmpeg`).
 - **Picture in picture** — `P` or the context menu turns the window into a small
@@ -114,8 +116,8 @@ during configuration.
 
 - **Open a file/folder** — right-click the video → *Open*, or drag & drop a file onto
   the window, or pass a path on the command line.
-- **Open a link** — right-click the video → *Open* → *Open from URL…*; the link is
-  resolved by yt-dlp and played as a stream.
+- **Open a link** — right-click the video → *Open* → *Open from URL…*; yt-dlp resolves
+  the stream and Luma plays it in mpv. Seeking works as usual.
 - **Playlists** — the playlist button in the control bar opens the panel. Tabs at the
   top switch playlists; right-click a tab for *Add files…*, *Add folder…*,
   *Clear playlist*, *Rename*, *Delete*. Right-click a track for playback, shuffle,
@@ -200,17 +202,27 @@ ignore_file_style=false
 The subtitle page in the settings dialog writes these keys; the font picker lists the
 system fonts.
 
+The playback page stores `hwdec` and `ao` in `mpv.conf` using mpv's own syntax
+(`hwdec=...`, `ao=...`); automatic audio output is represented by omitting `ao`. Older
+versions kept these values in `luma.conf` under `[playback]`; they are migrated to
+`mpv.conf` and removed from `luma.conf` on the first start. `no` in `hwdec` disables
+hardware decoding.
+
 `yt-dlp.conf` holds one option per line and is read for every link. Video quality and the
 proxy are configured in *Settings → Playback*; Luma writes them into this file and keeps
 any other lines you add, e.g.:
 
 ```ini
 --no-playlist
---format=best
+--format=bestvideo[height<=1080]+bestaudio/best[height<=1080]
 --proxy=socks5://127.0.0.1:1080
 ```
 
-Luma only asks yt-dlp for the stream URL (`-g`), so **no files are downloaded**.
+The proxy is set as a type (`SOCKS5`, `SOCKS5h`, `HTTP`, `HTTPS`) plus an address in
+`host:port` form. yt-dlp uses it to resolve the stream. For SOCKS5, Luma additionally
+starts a local HTTP bridge: mpv fetches the stream (including seeking and Range requests)
+through it, so a SOCKS-only proxy works without extra tools. HTTP proxies are passed to
+mpv directly. No files are downloaded.
 
 ## Localization
 

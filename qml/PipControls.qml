@@ -3,9 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-// Управление для режима «картинка в картинке»: перетаскивание и изменение
-// размера окна, пауза, прогресс, время, громкость, полный экран и выход.
-// Оформление — в общем стиле приложения (Kirigami).
+// Controls for picture-in-picture mode: window dragging and resizing,
+// pause, progress, time, volume, fullscreen and exit.
+// Styling follows the app's overall look (Kirigami).
 Item {
     id: pip
 
@@ -18,11 +18,25 @@ Item {
     visible: active
 
     readonly property bool windowed: Window.window ? Window.window.visibility !== Window.FullScreen : true
+    readonly property bool fullscreen: !windowed
     readonly property real duration: (mpv && mpv.duration > 0) ? mpv.duration : 0
     readonly property real position: (mpv && mpv.position > 0) ? mpv.position : 0
-    readonly property bool showControls: hoverArea.containsMouse || windowHover.hovered || introTimer.running
 
-    // Цвета как у остальных панелей приложения.
+    // In normal PiP the UI is visible while the cursor is over the small window.
+    // In fullscreen PiP the window covers the whole screen, so hovering
+    // doesn't work — hide the UI on a timer, as in the main window.
+    property bool fullscreenControls: false
+    readonly property bool showControls: fullscreen
+        ? fullscreenControls
+        : (hoverArea.containsMouse || windowHover.hovered || introTimer.running)
+
+    function revealFullscreenControls() {
+        if (!fullscreen) return;
+        fullscreenControls = true;
+        hideTimer.restart();
+    }
+
+    // Colors match the other panels of the app.
     readonly property color panelColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                                                 Kirigami.Theme.backgroundColor.g,
                                                 Kirigami.Theme.backgroundColor.b, 0.85)
@@ -51,12 +65,42 @@ Item {
         repeat: false
     }
 
-    onActiveChanged: {
-        if (active) introTimer.restart();
-        else introTimer.stop();
+    Timer {
+        id: hideTimer
+        interval: 2000
+        repeat: false
+        onTriggered: {
+            if (pip.fullscreen)
+                pip.fullscreenControls = false;
+        }
     }
 
-    // ---- Перетаскивание окна за свободное место ----
+    onActiveChanged: {
+        if (active) {
+            introTimer.restart();
+            if (fullscreen) {
+                fullscreenControls = true;
+                hideTimer.restart();
+            }
+        } else {
+            introTimer.stop();
+            hideTimer.stop();
+            fullscreenControls = false;
+        }
+    }
+
+    onFullscreenChanged: {
+        if (!active) return;
+        if (fullscreen) {
+            fullscreenControls = true;
+            hideTimer.restart();
+        } else {
+            hideTimer.stop();
+            fullscreenControls = false;
+        }
+    }
+
+    // ---- Drag the window by empty space ----
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
@@ -66,7 +110,7 @@ Item {
         }
     }
 
-    // ---- Изменение размера за края ----
+    // ---- Resize from the edges ----
     MouseArea {
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
         width: 6
@@ -116,7 +160,7 @@ Item {
         onPressed: Window.window.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
     }
 
-    // ---- Полный экран / обратно ----
+    // ---- Fullscreen / back ----
     Rectangle {
         anchors.left: parent.left
         anchors.top: parent.top
@@ -139,7 +183,7 @@ Item {
         MouseArea { anchors.fill: parent; onClicked: pip.fullscreenRequested() }
     }
 
-    // ---- Закрыть PiP (вернуться в основное окно) ----
+    // ---- Close PiP (return to the main window) ----
     Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
@@ -162,7 +206,7 @@ Item {
         MouseArea { anchors.fill: parent; onClicked: pip.closeRequested() }
     }
 
-    // ---- Пауза по центру ----
+    // ---- Center pause button ----
     Rectangle {
         anchors.centerIn: parent
         width: 46; height: 46; radius: 23
@@ -186,7 +230,7 @@ Item {
         }
     }
 
-    // ---- Нижняя панель: перемотка, время, громкость ----
+    // ---- Bottom bar: seek, time, volume ----
     Rectangle {
         id: bottomBar
         anchors.left: parent.left
@@ -197,6 +241,19 @@ Item {
         opacity: pip.showControls ? 1.0 : 0.0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 120 } }
+
+        HoverHandler {
+            id: bottomBarHover
+            onHoveredChanged: {
+                if (!pip.fullscreen) return;
+                if (hovered) {
+                    hideTimer.stop();
+                    pip.fullscreenControls = true;
+                } else {
+                    hideTimer.restart();
+                }
+            }
+        }
 
         Slider {
             id: seekSlider
@@ -237,8 +294,8 @@ Item {
                 border.color: Qt.rgba(0, 0, 0, 0.25)
             }
 
-            // Пока тянем — ползунок идёт за курсором, после отпускания
-            // не даём ему отскочить назад, пока mpv не отдал новую позицию.
+            // While dragging, the slider follows the cursor; after release
+            // don't let it snap back until mpv reports the new position.
             Binding {
                 target: seekSlider
                 property: "value"
@@ -337,13 +394,16 @@ Item {
         }
     }
 
-    // Верхний прозрачный слой: ловит наведение по всему окну, клики проходят
-    // сквозь него (NoButton) к кнопкам ниже.
+    // Top transparent layer: catches hover across the window, clicks pass
+    // through it (NoButton) to the buttons below.
     MouseArea {
         id: hoverArea
         anchors.fill: parent
         z: 100
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
+        cursorShape: pip.fullscreen && !pip.showControls ? Qt.BlankCursor : Qt.ArrowCursor
+        onPositionChanged: pip.revealFullscreenControls()
+        onEntered: pip.revealFullscreenControls()
     }
 }

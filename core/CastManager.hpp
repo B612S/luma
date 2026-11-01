@@ -27,7 +27,7 @@ public:
     Q_INVOKABLE void castTo(const QString &address, quint16 port, const QString &filePath, const QString &title = {});
     Q_INVOKABLE void stopCast();
 
-    // Управление удаленным воспроизведением
+    // Remote playback control
     Q_INVOKABLE void play() { m_client->play(); }
     Q_INVOKABLE void pause() { m_client->pause(); }
     Q_INVOKABLE void seekTo(double pos) { m_client->seekTo(pos); }

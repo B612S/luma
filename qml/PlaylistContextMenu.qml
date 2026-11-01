@@ -9,9 +9,9 @@ Menu {
     z: 1000
 
     property int trackIndex: -1
-    // Свойство НЕ должно называться panel: оно перекрывает id panel из
-    // PlaylistPanel.qml, и привязка `panel: panel` становится самоприсваиванием
-    // (свойство навсегда остаётся null).
+    // The property must NOT be named panel: it shadows the id panel from
+    // PlaylistPanel.qml, and the binding `panel: panel` becomes a self-assignment
+    // (the property stays null forever).
     property var playlistPanel: null
     property int pendingPlayIndex: -1
 
@@ -28,9 +28,9 @@ Menu {
         id: playItem
         text: qsTranslate("PlaylistPanel", "playlist_play")
 
-        // При смене файла mpv на мгновение останавливает вывод кадров, а меню
-        // рисуется тем же потоком рендера — оно «зависает» недорисованным.
-        // Поэтому сначала даём меню закрыться и только потом запускаем файл.
+        // When the file changes, mpv briefly stops rendering frames, and the menu
+        // is drawn on the same render thread — it "freezes" half-drawn.
+        // So let the menu close first and only then start the file.
         Timer {
             id: playStartTimer
             interval: 200

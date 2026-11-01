@@ -28,7 +28,7 @@ Dialog {
     property string originalUrl: ""
     property bool urlDirty: false
 
-    // Кнопка сохранения смотрит на реальное расхождение, а не на флаги.
+    // The save button looks at the actual difference, not at the flags.
     readonly property bool dirty: dialog.isStream
         ? (urlField.text.trim() !== dialog.originalUrl.trim())
         : dialog.tagsDirty
@@ -82,7 +82,7 @@ Dialog {
 
     function saveChanges() {
         if (dialog.isStream) {
-            // Берём именно то, что в поле: обработчик ввода мог не обновить urlValue.
+            // Take exactly what's in the field: the input handler may not have updated urlValue.
             const newUrl = urlField.text.trim();
             if (Media.updateStreamUrl(dialog.originalUrl, newUrl)) {
                 dialog.originalUrl = newUrl;
@@ -136,7 +136,7 @@ Dialog {
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: dialog.lineColor }
 
-                // ---- Ссылка потока (радио) ----
+                // ---- Stream URL (radio) ----
                 Label {
                     Layout.fillWidth: true
                     visible: dialog.isStream
@@ -164,7 +164,7 @@ Dialog {
                     }
                 }
 
-                // ---- Теги аудиофайла ----
+                // ---- Audio file tags ----
                 Repeater {
                     model: dialog.isAudio && !dialog.isStream ? dialog.tagFields : []
 

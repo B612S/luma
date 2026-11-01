@@ -81,11 +81,25 @@
 <message><source>settings_sub_ignore_file_style</source><translation>Ignore subtitle file styling</translation></message>
 <message><source>settings_show_panels_fullscreen</source><translation>Show the control bar in fullscreen</translation></message>
 <message><source>settings_playback</source><translation>Playback</translation></message>
+<message><source>settings_audio</source><translation>Audio</translation></message>
+<message><source>settings_audio_output</source><translation>Audio output</translation></message>
+<message><source>settings_audio_auto</source><translation>Automatic</translation></message>
+<message><source>settings_video_acceleration</source><translation>Video acceleration</translation></message>
+<message><source>settings_hwdec</source><translation>Hardware decoding</translation></message>
+<message><source>settings_hwdec_auto</source><translation>Automatic (best available)</translation></message>
+<message><source>settings_hwdec_auto_copy</source><translation>Automatic (copy-back)</translation></message>
+<message><source>settings_hwdec_disabled</source><translation>Disabled (software decoding)</translation></message>
+<message><source>settings_hwdec_hint</source><translation>“Copy” modes return frames to system memory: they work with video filters but are slower.</translation></message>
 <message><source>settings_ytdlp</source><translation>yt-dlp</translation></message>
 <message><source>settings_ytdlp_quality</source><translation>Video quality</translation></message>
 <message><source>settings_ytdlp_quality_best</source><translation>Best available</translation></message>
 <message><source>settings_ytdlp_quality_audio</source><translation>Audio only</translation></message>
 <message><source>settings_ytdlp_proxy</source><translation>Proxy</translation></message>
+<message><source>settings_ytdlp_proxy_type</source><translation>Proxy type</translation></message>
+<message><source>settings_ytdlp_proxy_address</source><translation>Proxy address</translation></message>
+<message><source>settings_ytdlp_proxy_none</source><translation>Not used</translation></message>
+<message><source>settings_ytdlp_proxy_hint</source><translation>Format: host:port, e.g. 127.0.0.1:1080</translation></message>
+<message><source>settings_ytdlp_proxy_invalid</source><translation>Enter the address as host:port</translation></message>
 <message><source>about_title</source><translation>About</translation></message>
 <message><source>about_version</source><translation>Version %1</translation></message>
 <message><source>about_description</source><translation>A fast, minimalist media player.</translation></message>
@@ -174,6 +188,12 @@
 <message><source>dialog_audio_filter</source><translation>Audio files (*.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
 <message><source>track_default_name</source><translation>Track %1</translation></message>
 <message><source>dialog_media_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
+<message><source>stream_opening</source><translation>Opening link…</translation></message>
+<message><source>download_failed_open</source><translation>Could not open the link</translation></message>
+<message><source>download_failed_start</source><translation>Could not start yt-dlp</translation></message>
+<message><source>download_ytdlp_missing</source><translation>yt-dlp is not installed or could not be started</translation></message>
+<message><source>download_timeout</source><translation>yt-dlp did not respond within 30 seconds</translation></message>
+<message><source>download_no_result</source><translation>yt-dlp did not return a stream URL</translation></message>
 </context>
 
 <context>
