@@ -21,11 +21,48 @@ Rectangle {
     property bool isVolumeSeeking: false
     property bool hasVideo: CastManager.casting || (mpv.duration > 0)
 
+    // Прямой поток (радио): перематывать можно только внутри кэша,
+    // поэтому ползунок показывает окно кэша и прижат вправо.
+    readonly property bool isLive: !CastManager.casting && typeof Media !== "undefined"
+                                   && Media.liveStream === true
+    readonly property real liveWindow: 300 // секунд; совпадает с cache-secs в mpv
+    // В эфире mpv держит буфер впереди плеера, поэтому «длительность» опережает
+    // позицию даже без перемотки. Минимальное наблюдённое отставание считаем
+    // точкой эфира и отчитываем перемотку уже от него.
+    property real liveBaseline: -1
+    readonly property real liveRawBehind: Math.max(0, root.displayDuration - root.displayPosition)
+    readonly property real liveBehind: root.isLive
+        ? (root.liveBaseline < 0
+               ? 0   // точку эфира ещё не измерили — считаем, что мы в эфире
+               : Math.max(0, Math.min(root.liveWindow, root.liveRawBehind - Math.max(0, root.liveBaseline))))
+        : 0
+
+    onIsLiveChanged: root.liveBaseline = -1
+
+    Connections {
+        target: mpv
+        function onPositionChanged() {
+            if (!root.isLive || seekSlider.seeking || root.displayDuration <= 0) return;
+            const raw = root.liveRawBehind;
+            if (root.liveBaseline < 0) {
+                root.liveBaseline = raw;
+                return;
+            }
+            // В начале потока буфер впереди ещё пустой и растёт; пока мы в эфире,
+            // даём baseline подтягиваться за ним (но не прыжком — отмотку не съедаем).
+            if (raw > root.liveBaseline && raw - root.liveBaseline <= 2)
+                root.liveBaseline = raw;
+        }
+        function onSourceChanged() { root.liveBaseline = -1; }
+    }
+
     property bool isPlaylistOpen: false
     signal playlistToggleRequested()
 
     property bool isOpen: true
-    visible: opacity > 0
+    // В полноэкранном режиме панель можно отключить в настройках интерфейса.
+    property bool panelsAllowed: true
+    visible: opacity > 0 && panelsAllowed
     opacity: 1.0
 
     property double displayDuration: CastManager.casting
@@ -42,11 +79,6 @@ Rectangle {
         property: "opacity"
         duration: 150
         easing.type: Easing.InOutQuad
-        onFinished: {
-            if (fadeAnim.to === 0.0) {
-                root.visible = false;
-            }
-        }
     }
 
     Timer {
@@ -65,7 +97,6 @@ Rectangle {
     onIsOpenChanged: {
         if (isOpen) {
             hoverLostTimer.stop();
-            root.visible = true;
             fadeAnim.stop();
             fadeAnim.from = root.opacity;
             fadeAnim.to = 1.0;
@@ -139,12 +170,14 @@ Rectangle {
                 id: seekSlider
                 anchors.fill: parent
                 from: 0
-                to: root.displayDuration
+                to: root.isLive ? root.liveWindow : root.displayDuration
                 focus: false
                 enabled: root.hasVideo
 
                 property bool seeking: false
-                value: seeking ? value : root.displayPosition
+                value: seeking ? value
+                               : (root.isLive ? root.liveWindow - root.liveBehind
+                                              : root.displayPosition)
 
                 onPressedChanged: {
                     if (pressed && root.hasVideo) {
@@ -154,6 +187,12 @@ Rectangle {
                     } else {
                         if (CastManager.casting) {
                             CastManager.seekTo(value)
+                        } else if (root.isLive) {
+                            // value: 0 — начало кэша, liveWindow — прямой эфир.
+                            const behind = Math.max(0, root.liveWindow - value);
+                            const livePos = Math.max(0, root.displayDuration - Math.max(0, root.liveBaseline));
+                            if (livePos > 0)
+                                mpv.seekExact(Math.max(0, livePos - behind));
                         } else {
                             mpv.seekExact(value)
                         }
@@ -205,7 +244,7 @@ Rectangle {
 
             Rectangle {
                 id: seekTooltip
-                visible: seekSlider.seeking
+                visible: seekSlider.seeking && !root.isLive
                 z: 100
                 width: 160
                 height: 90 + 24
@@ -227,7 +266,12 @@ Rectangle {
 
                 Timer {
                     id: thumbDebounce
-                    interval: 30
+                    // Запрашиваем превью регулярно во время перетаскивания:
+                    // декодирование идёт в фоновом потоке, а промежуточные
+                    // запросы склеиваются в MpvItem.
+                    interval: 70
+                    repeat: true
+                    running: seekSlider.seeking && !CastManager.casting
                     onTriggered: {
                         if (seekTooltip.pendingTime >= 0) {
                             let id = "thumb";
@@ -251,10 +295,8 @@ Rectangle {
                 Connections {
                     target: seekSlider
                     function onValueChanged() {
-                        if (seekSlider.seeking && !CastManager.casting) {
+                        if (seekSlider.seeking && !CastManager.casting)
                             seekTooltip.pendingTime = seekSlider.value;
-                            thumbDebounce.restart();
-                        }
                     }
                 }
 
@@ -287,7 +329,11 @@ Rectangle {
         }
 
         Label {
-            text: formatTime(root.displayPosition) + " / " + formatTime(root.displayDuration)
+            text: root.isLive
+                  ? (seekSlider.seeking
+                        ? "-" + formatTime(root.liveWindow - seekSlider.value)
+                        : (root.liveBehind < 1 ? qsTr("live_now") : "-" + formatTime(root.liveBehind)))
+                  : formatTime(root.displayPosition) + " / " + formatTime(root.displayDuration)
             color: Kirigami.Theme.textColor
             font.pixelSize: 13
             font.weight: Font.Medium

@@ -17,6 +17,13 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(MPV REQUIRED mpv)
 
+# TagLib — чтение и запись тегов аудиофайлов.
+pkg_check_modules(TAGLIB REQUIRED taglib)
+
+# Раскладка клавиатуры читается напрямую из Wayland.
+pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
+pkg_check_modules(XKB REQUIRED xkbcommon)
+
 # FFmpeg для превью и Cast
 pkg_check_modules(AVFORMAT REQUIRED libavformat)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
@@ -33,8 +40,11 @@ qt_add_executable(luma
     core/MprisManager.cpp
     core/Logger.cpp
     core/PlaylistModel.cpp
+    core/PlaylistManager.cpp
     core/MediaManager.cpp
     core/OsdManager.cpp
+    core/KeyboardLayoutWatcher.cpp
+    core/TagManager.cpp
     core/ShortcutAction.cpp
     core/ShortcutHandler.cpp
     core/ThumbnailProvider.hpp
@@ -56,7 +66,15 @@ qt_add_qml_module(luma
         qml/Main.qml
         qml/ControlBar.qml
         qml/PlaylistPanel.qml
+        qml/PlaylistTabs.qml
+        qml/PlaylistTabsContextMenu.qml
+        qml/PlaylistDelegate.qml
+        qml/PlaylistContextMenu.qml
+        qml/PlaylistDialogs.qml
         qml/OsdToast.qml
+        qml/PipControls.qml
+        qml/ShortcutsHelp.qml
+        qml/AddUrlDialog.qml
         qml/ContextMenu.qml
         qml/StatsPanel.qml
         qml/SettingsDialog.qml
@@ -69,8 +87,11 @@ qt_add_qml_module(luma
         core/ShortcutAction.hpp
         core/ShortcutHandler.hpp
         core/PlaylistModel.hpp
+        core/PlaylistManager.hpp
         core/MediaManager.hpp
         core/OsdManager.hpp
+        core/KeyboardLayoutWatcher.hpp
+        core/TagManager.hpp
         core/Logger.hpp
         core/ThumbnailProvider.hpp
         core/CastDiscovery.hpp
@@ -89,15 +110,11 @@ qt_add_translations(luma
     TS_FILES
         locales/en.ts
         locales/ru.ts
-        locales/ja.ts
-        locales/zh_CN.ts
 )
 
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/en.qm
     ${CMAKE_CURRENT_BINARY_DIR}/ru.qm
-    ${CMAKE_CURRENT_BINARY_DIR}/ja.qm
-    ${CMAKE_CURRENT_BINARY_DIR}/zh_CN.qm
     DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/translations
 )
 
@@ -105,6 +122,9 @@ target_include_directories(luma PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/mpvqt
     ${MPV_INCLUDE_DIRS}
+    ${TAGLIB_INCLUDE_DIRS}
+    ${WAYLAND_CLIENT_INCLUDE_DIRS}
+    ${XKB_INCLUDE_DIRS}
     ${AVFORMAT_INCLUDE_DIRS}
     ${AVCODEC_INCLUDE_DIRS}
     ${SWSCALE_INCLUDE_DIRS}
@@ -122,6 +142,9 @@ target_link_libraries(luma PRIVATE
     Qt6::OpenGL
     Qt6::OpenGLWidgets
     ${MPV_LIBRARIES}
+    ${TAGLIB_LIBRARIES}
+    ${WAYLAND_CLIENT_LIBRARIES}
+    ${XKB_LIBRARIES}
     ${AVFORMAT_LIBRARIES}
     ${AVCODEC_LIBRARIES}
     ${SWSCALE_LIBRARIES}
@@ -139,3 +162,10 @@ install(TARGETS luma
 
 install(IMPORTED_RUNTIME_ARTIFACTS luma DESTINATION ${CMAKE_INSTALL_LIBDIR}/qt6/qml/luma)
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/luma/ DESTINATION ${CMAKE_INSTALL_LIBDIR}/qt6/qml/luma)
+
+# ---- Автотесты (по умолчанию выключены, в пакет не попадают) ----
+option(LUMA_BUILD_TESTS "Собирать автотесты (Qt Test)" OFF)
+if (LUMA_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

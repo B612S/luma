@@ -14,11 +14,15 @@
 #include <QLocalSocket>
 #include <QLocalServer>
 #include <QProcess>
+#include <QRect>
+#include <QSize>
 
 #include "core/ConfigManager.hpp"
+#include "core/PlaylistManager.hpp"
 #include "core/MprisManager.hpp"
 #include "core/MediaManager.hpp"
 #include "core/OsdManager.hpp"
+#include "core/KeyboardLayoutWatcher.hpp"
 #include "core/ShortcutHandler.hpp"
 #include "core/Logger.hpp"
 #include "core/ThumbnailProvider.hpp"
@@ -38,7 +42,7 @@ void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow 
 }
 
 int main(int argc, char *argv[]) {
-    qputenv("QT_QPA_PLATFORM", QByteArray("wayland;xcb"));
+    qputenv("QT_QPA_PLATFORM", QByteArray("wayland"));
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
     QApplication app(argc, argv);
@@ -48,7 +52,9 @@ int main(int argc, char *argv[]) {
 
     ConfigManager config;
     Logger::instance().setMode(config.value("ui/debug_logging", "info").toString());
+    Logger::installMessageHandler();
 
+    // ---- Single instance ----
     QString serverName = "luma_single_instance_server";
     QLocalSocket socket;
     QLocalServer *server = nullptr;
@@ -77,6 +83,7 @@ int main(int argc, char *argv[]) {
 
     if (!isPrimaryInstance) return 0;
 
+    // ---- Translations ----
     QTranslator *translator = new QTranslator(&app);
 
     auto loadLanguage = [&](const QString &lang) {
@@ -91,13 +98,19 @@ int main(int argc, char *argv[]) {
 
     loadLanguage(config.language());
 
+    // ---- Managers ----
+    PlaylistManager playlists(&config);
+
     MediaManager media(nullptr, &app);
     media.setConfig(&config);
+    media.setPlaylistManager(&playlists);
     media.setPlayMode(config.playlistMode());
 
     OsdManager osd(nullptr, &app);
 
     CastManager castManager;
+
+    KeyboardLayoutWatcher keyboardLayout;
 
     QQmlApplicationEngine engine;
 
@@ -105,24 +118,29 @@ int main(int argc, char *argv[]) {
 
     engine.rootContext()->setContextProperty("Config", &config);
     engine.rootContext()->setContextProperty("Media", &media);
+    engine.rootContext()->setContextProperty("Playlists", &playlists);
     engine.rootContext()->setContextProperty("Osd", &osd);
     engine.rootContext()->setContextProperty("CastManager", &castManager);
+    engine.rootContext()->setContextProperty("Keyboard", &keyboardLayout);
 
     engine.load(QUrl(QStringLiteral("qrc:/luma/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) return -1;
 
     auto root = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
 
+    // ---- Смена языка на лету ----
     QObject::connect(&config, &ConfigManager::languageChanged, [&]() {
         loadLanguage(config.language());
         engine.retranslate();
     });
 
-    int w = config.value("window/width", 960).toInt();
-    int h = config.value("window/height", 640).toInt();
+    // ---- Размер окна ----
+    int w = qMax(400, config.value("window/width", 960).toInt());
+    int h = qMax(300, config.value("window/height", 640).toInt());
     root->setWidth(w);
     root->setHeight(h);
 
+    // ---- Mpv и зависимости ----
     auto mpv = root->findChild<MpvItem*>("mpv");
     if (mpv) {
         media.setMpv(mpv);
@@ -134,6 +152,23 @@ int main(int argc, char *argv[]) {
             mpv->setVolume(config.defaultVolume());
         }
 
+        // ---- Субтитры: применяем настройки и реагируем на изменения ----
+        auto applySubtitleSettings = [&config, mpv]() {
+            mpv->setProperty("sub-font", config.subtitleFont());
+            mpv->setProperty("sub-font-size", config.subtitleFontSize());
+            mpv->setProperty("sub-color", config.subtitleColor());
+            mpv->setProperty("sub-bold", config.subtitleBold() ? QStringLiteral("yes") : QStringLiteral("no"));
+            mpv->setProperty("sub-border-size", config.subtitleBorderSize());
+            mpv->setProperty("sub-border-color", config.subtitleBorderColor());
+            mpv->setProperty("sub-back-color", config.subtitleBackground() ? QStringLiteral("#80000000")
+                                                                           : QStringLiteral("#00000000"));
+            mpv->setProperty("sub-pos", config.subtitlePosition());
+            mpv->setProperty("sub-ass-override", config.subtitleIgnoreFileStyle() ? QStringLiteral("force")
+                                                                                   : QStringLiteral("scale"));
+        };
+        applySubtitleSettings();
+        QObject::connect(&config, &ConfigManager::subtitlesChanged, mpv, applySubtitleSettings);
+
         auto *shortcuts = new ShortcutHandler(mpv, &osd, &media, root, &app);
         shortcuts->setCastManager(&castManager);
 
@@ -141,24 +176,31 @@ int main(int argc, char *argv[]) {
 
         QObject::connect(root, SIGNAL(toggleCropRequested()), shortcuts, SLOT(toggleCrop()));
         QObject::connect(shortcuts, &ShortcutHandler::togglePlaylist, root, [root]() {
+            if (root->property("pipMode").toBool()) return;
             auto *panel = root->findChild<QObject*>("playlistPanel");
             if (panel) panel->setProperty("isOpen", !panel->property("isOpen").toBool());
         });
             QObject::connect(shortcuts, &ShortcutHandler::toggleStats, root, [root]() {
+                if (root->property("pipMode").toBool()) return;
                 auto *panel = root->findChild<QObject*>("statsPanel");
                 if (panel) panel->setProperty("isOpen", !panel->property("isOpen").toBool());
             });
-                QObject::connect(shortcuts, &ShortcutHandler::toggleCsd, root, [root]() {
-                    if (root->flags() & Qt::FramelessWindowHint) root->setFlags(root->flags() & ~Qt::FramelessWindowHint);
-                    else root->setFlags(root->flags() | Qt::FramelessWindowHint);
-                    root->show();
+                QObject::connect(shortcuts, &ShortcutHandler::togglePip, root, [root]() {
+                    QMetaObject::invokeMethod(root, "togglePip");
                 });
+                QObject::connect(shortcuts, &ShortcutHandler::shortcutsHelpVisibleChanged, root,
+                                 [root](bool visible) { root->setProperty("shortcutsHelpVisible", visible); });
 
                 new MprisManager(mpv, &media, &app);
     }
 
+    // ---- Связь: смена активного плейлиста -> обновление QML-биндинга ----
+    QObject::connect(&playlists, &PlaylistManager::activeModelChanged,
+                     &media, &MediaManager::playlistChanged);
+
     handleArguments(app.arguments(), media, root);
 
+    // ---- Единственный экземпляр: приём новых аргументов ----
     if (config.singleInstance() && server) {
         QObject::connect(server, &QLocalServer::newConnection, [server, &media, root]() {
             QLocalSocket *clientSocket = server->nextPendingConnection();
@@ -175,8 +217,17 @@ int main(int argc, char *argv[]) {
         });
     }
 
+    // ---- Сохранение состояния при выходе ----
     QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
-        config.saveWindowSize(root->width(), root->height());
+        // В режиме PiP окно маленькое — сохраняем размер, который был до него.
+        QSize windowSize(root->width(), root->height());
+        if (root->property("pipMode").toBool()) {
+            const QRect saved = root->property("pipSavedGeometry").toRect();
+            windowSize = (saved.width() > 0 && saved.height() > 0) ? saved.size() : QSize(960, 640);
+        }
+        if (windowSize.width() < 400 || windowSize.height() < 300)
+            windowSize = QSize(960, 640);
+        config.saveWindowSize(windowSize.width(), windowSize.height());
         config.setPlaylistMode(media.playMode());
         castManager.stopCast();
 

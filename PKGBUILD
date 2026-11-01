@@ -14,6 +14,7 @@ depends=(
     'qt6-wayland'
     'mpv'
     'ffmpeg'
+    'taglib'
     'kirigami'
     'hicolor-icon-theme'
     'plasma-integration'
@@ -25,6 +26,10 @@ makedepends=(
     'ninja'
     'extra-cmake-modules'
     'qt6-tools'
+)
+
+optdepends=(
+    'yt-dlp: playback of links from video sites'
 )
 
 # Оставляем пустым. Мы скопируем файлы вручную в prepare()

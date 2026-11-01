@@ -1,112 +1,239 @@
 <p align="center">
-  <img src="assets/luma.png" width="128" height="128" alt="Luma Logo" />
+  <img src="assets/luma.png" width="128" height="128" alt="Luma logo" />
 </p>
 
 <h1 align="center">Luma</h1>
 
 <p align="center">
-  <b>Легковесный, быстрый и современный видеоплеер на базе mpv и Qt/QML.</b>
+  A lightweight, fast media player for Linux built on <b>mpv</b> and <b>Qt 6 / QML</b> (Kirigami).
 </p>
 
 <p align="center">
-  <a href="https://www.qt.io/"><img src="https://img.shields.io/badge/Qt-6.5%2B-green?style=flat-square&logo=qt" alt="Qt Version"></a>
-  <a href="https://isocpp.org/"><img src="https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square&logo=c%2B%2B" alt="C++ Standard"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-orange?style=flat-square" alt="License"></a>
+  <a href="https://www.qt.io/"><img src="https://img.shields.io/badge/Qt-6.5%2B-green?style=flat-square&logo=qt" alt="Qt 6.5+" /></a>
+  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-orange?style=flat-square" alt="GPL-3.0-or-later" /></a>
 </p>
 
 <p align="center">
-  <i>Минималистичный интерфейс • Поддержка всех форматов • Аппаратное ускорение • Гибкие настройки</i>
+  <a href="docs/readme/README.ru.md">Русский</a> · <b>English</b>
 </p>
 
 ---
 
-## ✨ Особенности
+## Features
 
-*   **Движок mpv**: Использует мощь `libmpv` для воспроизведения практически любых видео- и аудиоформатов без необходимости установки дополнительных кодеков.
-*   **Современный интерфейс**: Написан на Qt Quick (QML) с использованием компонентов Kirigami. Плавные анимации, тёмная/светлая тема (зависит от системы).
-*   **Аппаратное ускорение**: Поддержка `hwdec` (VA-API, NVDEC, VDPAU) для плавного воспроизведения 4K и 8K видео.
-*   **Плейлист**: Удобный список воспроизведения с поддержкой Drag & Drop (перетаскивание треков), режимами «Повтор», «Перемешать» и добавлением в текущий плейлист.
-*   **Горячие клавиши**: Полноценное управление с клавиатуры (перемотка, громкость, переключение субтитров и аудио).
-*   **Mpris2**: Интеграция с медиа-плеером системы (управление с клавиатуры ноутбука или из виджета на рабочем столе).
-*   **Кастомизация**: Настройки языка, поведения громкости, уведомлений и режимов воспроизведения.
-*   **Скриншоты/Превью**: Генерация превью для перемотки (через FFmpeg).
-*   **Кроссплатформенность**: Отлично работает в Linux (Wayland/X11), с поддержкой нативных окон.
+- **mpv inside** — plays virtually any video/audio format without extra codecs.
+- **Multiple playlists** — tabs with create/rename/delete/clear, drag & drop reordering,
+  add files or a whole folder, “Add to playlist” from the track menu.
+- **Subtitle tuning** — font, size, weight, text/outline colors, outline width,
+  background box, vertical position, ASS style override; applied to mpv live.
+- **Links via yt-dlp** — open a URL from the menu and Luma resolves the stream with
+  `yt-dlp`. Playback only: nothing is downloaded.
+- **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`,
+  HLS re-encode via `ffmpeg`).
+- **Picture in picture** — `P` or the context menu turns the window into a small
+  frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
+- **Shortcut cheat sheet** — hold `?` (`Shift+/`, or `.` on the Russian layout) to see
+  all hotkeys while the key is held.
+- **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.
+- **MPRIS2** — control from the desktop's media widget and media keys.
+- **English and Russian UI** — switchable at runtime.
 
-## 🚀 Установка и сборка
+## Requirements
 
-### Зависимости
+Build dependencies:
 
-Для сборки вам понадобятся следующие пакеты (пример для Arch Linux / Debian / Ubuntu):
+| Dependency | Notes |
+| --- | --- |
+| Qt 6.5+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, OpenGL, OpenGLWidgets, LinguistTools |
+| libmpv | `mpv` / `mpv-libs` |
+| TagLib | reading and writing audio tags (`taglib`) |
+| FFmpeg development libraries | `libavformat`, `libavcodec`, `libswscale`, `libavutil` |
+| CMake ≥ 3.16, Ninja (or Make), a C++17 compiler | |
 
-*   **Qt 6**: `qt6-base`, `qt6-declarative`, `qt6-multimedia`, `qt6-svg` (или `qt6-svg` для иконок), `kirigami2` (или `kirigami` для Qt6).
-*   **mpv**: `mpv` (или `libmpv`).
-*   **FFmpeg**: `ffmpeg`, `libavformat`, `libavcodec`, `libswscale`, `libavutil`.
-*   **CMake** и **Make**.
+Runtime-only QML modules (CMake will **not** detect them, the app fails with a QML import
+error instead):
 
-### Сборка
+- `Kirigami` (`kirigami` / `kirigami2`)
+- `qqc2-desktop-style` (KDE desktop style for Qt Quick Controls)
 
-1.  Клонируйте репозиторий:
-    ```bash
-    git clone https://github.com/B612S/luma.git
-    cd luma
-    ```
+Optional:
 
-2.  Соберите проект с помощью скрипта:
-    ```bash
-    chmod +x build.sh
-    ./build.sh
-    ```
+- `yt-dlp` — playback of links from video sites.
+- `avahi` (`avahi-browse`) and the `ffmpeg` binary — Chromecast.
 
-    Или вручную через CMake:
-    ```bash
-    mkdir build && cd build
-    cmake ..
-    make -j$(nproc)
-    sudo make install
-    ```
+On Arch Linux:
 
-3.  Запустите плеер:
-    ```bash
-    ./build/luma
-    ```
+```bash
+sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-wayland \
+    kirigami qqc2-desktop-style mpv ffmpeg taglib
+```
 
-## ⌨️ Горячие клавиши
+## Build
 
-| Клавиша | Действие |
-| :--- | :--- |
-| `Space` | Пауза / Воспроизведение |
-| `Left` / `Right` | Перемотка на 5 сек. |
-| `Ctrl + Left` / `Right` | Перемотка на 60 сек. |
-| `Alt + Left` / `Right` | Покадровая перемотка |
-| `Up` / `Down` | Громкость + / - |
-| `M` | Выключить звук |
-| `S` | Открыть/Закрыть плейлист |
-| `I` | Показать статистику |
-| `T` | Закрепить время на экране (OSD) |
-| `C` | Переключить субтитры |
-| `A` | Переключить аудиодорожку |
-| `F` | Полноэкранный режим |
-| `Esc` | Выйти из полноэкранного режима |
+```bash
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+./build/bin/luma                       # the binary lives in build/bin/, not build/
+./build/bin/luma /path/to/video.mkv    # open a file right away
+```
 
-## 📸 Скриншоты
+Install system-wide:
 
-*(Здесь вы можете добавить свои скриншоты после того, как загрузите их в репозиторий)*
-> <img width="800" alt="Luma Player" src="ссылка_на_ваш_скриншот">
+```bash
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build -j"$(nproc)"
+sudo cmake --install build
+```
 
-## 🛠️ Технологии
+## Arch Linux package
 
-*   **C++17**
-*   **Qt 6** (Core, Gui, Quick, QuickControls2, DBus, Network)
-*   **libmpv** (MPV Media Player)
-*   **FFmpeg** (для генерации превью)
-*   **Kirigami** (стилизация интерфейса)
-*   **CMake** (система сборки)
+A `PKGBUILD` is included:
 
-## 📝 Лицензия
+```bash
+makepkg -si
+```
 
-Этот проект распространяется под лицензией **GPLv3**. Подробности смотрите в файле [LICENSE](LICENSE).
+## Tests
 
----
-<p align="center">
-  <sub>Сделано с ❤️ для сообщества Open Source.</sub>
-</p>
+Tests are **off by default** — they are not built during a normal build or included in
+packages. Enable them explicitly when you want to run them:
+
+```bash
+cmake -B build -S . -DLUMA_BUILD_TESTS=ON
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+```
+
+The suite uses Qt Test and covers the core logic: the keyboard shortcut table, the
+playlist model and manager, the configuration file and the yt-dlp config. Tests run with
+`XDG_CONFIG_HOME`/`XDG_CACHE_HOME` pointing at a temporary directory, so your own settings
+are not touched. Qt6::Test is optional — if the module is missing, the tests are skipped
+during configuration.
+
+## Usage
+
+- **Open a file/folder** — right-click the video → *Open*, or drag & drop a file onto
+  the window, or pass a path on the command line.
+- **Open a link** — right-click the video → *Open* → *Open from URL…*; the link is
+  resolved by yt-dlp and played as a stream.
+- **Playlists** — the playlist button in the control bar opens the panel. Tabs at the
+  top switch playlists; right-click a tab for *Add files…*, *Add folder…*,
+  *Clear playlist*, *Rename*, *Delete*. Right-click a track for playback, shuffle,
+  “Add to playlist”, properties, opening the containing folder and removal.
+- **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.
+- **Casting** — *Playback → Screen output* in the context menu.
+
+## Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `Space` | Play / pause |
+| `←` / `→` | Seek back / forward 5 s |
+| `Ctrl+←` / `Ctrl+→` | Seek back / forward 60 s |
+| `Alt+←` / `Alt+→` | Previous / next frame |
+| `↑` / `↓` | Volume +5 % / −5 % |
+| `M` | Mute |
+| `Q` / `E` | Previous / next file |
+| `S` | Toggle the playlist panel |
+| `I` | Toggle the media information panel |
+| `F` | Toggle fullscreen |
+| `T` | Pin the time counter on screen |
+| `P` | Picture in picture |
+| `?` (hold) | Show the keyboard shortcuts |
+| `C` | Cycle subtitles |
+| `A` | Cycle audio tracks |
+| `D` | Cycle deinterlacing (`auto` / `yes` / `no`) |
+| `R` | Cycle aspect ratio |
+| `J` | Detect and crop black bars |
+| Right click | Context menu |
+| Double click | Toggle fullscreen |
+| `Esc` | Exit fullscreen / close a menu |
+
+## Configuration
+
+All per-user files live in `~/.config/luma/`:
+
+| File | Purpose |
+| --- | --- |
+| `luma.conf` | Application settings (INI) |
+| `mpv.conf` | Extra mpv options, included at startup |
+| `yt-dlp.conf` | Options passed to yt-dlp when opening links |
+| `playlists/*.json` | Saved named playlists |
+
+Logs are written to `~/.cache/luma/luma.log`; set `debug_logging=debug` in
+`[ui]` for verbose output (or `none` to disable logging).
+
+`luma.conf` sections:
+
+```ini
+[ui]
+remember_volume=true
+default_volume=80
+volume=80
+language=en              # en, ru
+single_instance=true
+notifications=true
+append_to_playlist=false
+control_bar_mode=float   # hidden, float, pinned
+show_panels_fullscreen=true
+debug_logging=info
+
+[playlist]
+mode=sequential          # sequential, repeat, shuffle, stop
+
+[window]
+width=960
+height=600
+
+[subtitles]
+font=sans-serif
+size=55
+bold=false
+color=#FFFFFFFF         # #RRGGBB или #AARRGGBB
+border_size=3
+border_color=#FF000000
+background=false
+position=100            # 0..100, 100 = bottom
+ignore_file_style=false
+```
+
+The subtitle page in the settings dialog writes these keys; the font picker lists the
+system fonts.
+
+`yt-dlp.conf` holds one option per line and is read for every link. Video quality and the
+proxy are configured in *Settings → Playback*; Luma writes them into this file and keeps
+any other lines you add, e.g.:
+
+```ini
+--no-playlist
+--format=best
+--proxy=socks5://127.0.0.1:1080
+```
+
+Luma only asks yt-dlp for the stream URL (`-g`), so **no files are downloaded**.
+
+## Localization
+
+Source strings are in Qt `.ts` files under `locales/` (`en`, `ru`). Japanese and Chinese
+are temporarily disabled. To add a language: create `locales/<lang>.ts`, add it to
+`qt_add_translations(...)` and the `install(FILES ...)` list in `CMakeLists.txt`, and add
+the language to the list in `qml/SettingsDialog.qml`.
+
+Translations of this README live in [`docs/readme/`](docs/readme/).
+
+## Troubleshooting
+
+- **Launching a second copy does nothing.** Single-instance mode forwards arguments to
+  the running player and exits. Quit the running instance, or set
+  `single_instance=false` in `luma.conf`.
+- **The app does not start on X11 or headless.** `main.cpp` forces the Wayland platform
+  plugin and the OpenGL RHI.
+- **A QML import error on startup.** Install the runtime QML modules: `kirigami` and
+  `qqc2-desktop-style`.
+- **Casting finds no devices.** Make sure `avahi` and `ffmpeg` are installed and the TV
+  is on the same network.
+
+## License
+
+Luma is licensed under the **GPL-3.0-or-later**. The vendored `mpvqt/` code is
+LGPL-2.1-only (see the file headers); its license headers are kept intact.

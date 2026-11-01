@@ -18,6 +18,48 @@ void FrameDecoder::cleanup() {
     if (m_swsCtx) { sws_freeContext(m_swsCtx); m_swsCtx = nullptr; }
     if (m_codecCtx) { avcodec_free_context(&m_codecCtx); m_codecCtx = nullptr; }
     if (m_fmtCtx) { avformat_close_input(&m_fmtCtx); m_fmtCtx = nullptr; }
+    m_currentPath.clear();
+    m_videoStreamIndex = -1;
+}
+
+bool FrameDecoder::openFile(const QString &filePath) {
+    cleanup();
+
+    if (avformat_open_input(&m_fmtCtx, filePath.toUtf8().constData(), nullptr, nullptr) != 0) {
+        cleanup();
+        return false;
+    }
+    if (avformat_find_stream_info(m_fmtCtx, nullptr) < 0) {
+        cleanup();
+        return false;
+    }
+
+    m_videoStreamIndex = av_find_best_stream(m_fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    if (m_videoStreamIndex < 0) {
+        cleanup();
+        return false;
+    }
+
+    AVStream *stream = m_fmtCtx->streams[m_videoStreamIndex];
+    const AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    if (!codec) {
+        cleanup();
+        return false;
+    }
+
+    m_codecCtx = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(m_codecCtx, stream->codecpar);
+
+    m_codecCtx->thread_count = 1;
+    m_codecCtx->flags2 |= AV_CODEC_FLAG2_FAST;
+
+    if (avcodec_open2(m_codecCtx, codec, nullptr) < 0) {
+        cleanup();
+        return false;
+    }
+
+    m_currentPath = filePath;
+    return true;
 }
 
 QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) {
@@ -28,40 +70,19 @@ QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) 
         return *m_cache.object(cacheKey);
     }
 
-    cleanup();
-
-    if (avformat_open_input(&m_fmtCtx, filePath.toUtf8().constData(), nullptr, nullptr) != 0) {
-        return QImage();
+    // Файл уже открыт — только перематываемся, без повторного открытия.
+    if (m_currentPath != filePath || !m_fmtCtx || !m_codecCtx) {
+        if (!openFile(filePath)) {
+            return QImage();
+        }
     }
 
-    if (m_cancelFlag.loadRelaxed()) { cleanup(); return QImage(); }
+    if (m_cancelFlag.loadRelaxed()) { return QImage(); }
 
-    if (avformat_find_stream_info(m_fmtCtx, nullptr) < 0) {
-        cleanup(); return QImage();
-    }
-
-    int videoStreamIndex = av_find_best_stream(m_fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-    if (videoStreamIndex < 0) { cleanup(); return QImage(); }
-
-    AVStream *stream = m_fmtCtx->streams[videoStreamIndex];
-    const AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
-    if (!codec) { cleanup(); return QImage(); }
-
-    m_codecCtx = avcodec_alloc_context3(codec);
-    avcodec_parameters_to_context(m_codecCtx, stream->codecpar);
-
-    m_codecCtx->thread_count = 1;
-    m_codecCtx->flags2 |= AV_CODEC_FLAG2_FAST;
-
-    if (avcodec_open2(m_codecCtx, codec, nullptr) < 0) {
-        cleanup(); return QImage();
-    }
-
-    if (m_cancelFlag.loadRelaxed()) { cleanup(); return QImage(); }
-
+    int videoStreamIndex = m_videoStreamIndex;
     int64_t seekTarget = static_cast<int64_t>(timeInSeconds * AV_TIME_BASE);
     if (av_seek_frame(m_fmtCtx, -1, seekTarget, AVSEEK_FLAG_BACKWARD) < 0) {
-        cleanup(); return QImage();
+        return QImage();
     }
     avcodec_flush_buffers(m_codecCtx);
 
@@ -113,7 +134,6 @@ QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) 
 
     av_packet_free(&packet);
     av_frame_free(&frame);
-    cleanup();
 
     if (!result.isNull() && !m_cancelFlag.loadRelaxed()) {
         m_cache.insert(cacheKey, new QImage(result));

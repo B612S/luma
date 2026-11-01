@@ -332,11 +332,11 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
         case ShortcutAction::ToggleMute:
             if (!autoRepeat && m_mpv) {
                 m_isInternalVolume = true;
-                m_mpv->setMuted(!m_mpv->muted());
-                if (m_osd) {
-                    if (m_mpv->muted()) m_osd->showVolume(0.0);
-                    else m_osd->showVolume(m_mpv->volume());
-                }
+                // muted() обновляется асинхронно от mpv, поэтому решаем по
+                // новому состоянию, иначе OSD показывал инвертированный статус.
+                const bool newMuted = !m_mpv->muted();
+                m_mpv->setMuted(newMuted);
+                if (m_osd) m_osd->showVolume(newMuted ? 0.0 : m_mpv->volume(), newMuted);
                 m_volResetTimer->start();
             }
             break;
@@ -362,15 +362,20 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             break;
         case ShortcutAction::ToggleFullscreen:
             if (!autoRepeat && m_window) {
+                // В режиме «картинка в картинке» полноэкранный режим не нужен.
+                if (m_window->property("pipMode").toBool()) break;
                 if (m_window->windowStates() & Qt::WindowFullScreen) m_window->showNormal();
                 else m_window->showFullScreen();
             }
             break;
-        case ShortcutAction::ToggleCsd:
-            if (!autoRepeat) emit toggleCsd();
-            break;
         case ShortcutAction::ToggleTimeOsd:
             if (!autoRepeat && m_osd) m_osd->togglePinTimeOsd();
+            break;
+        case ShortcutAction::TogglePip:
+            if (!autoRepeat) emit togglePip();
+            break;
+        case ShortcutAction::ShowShortcutsHelp:
+            if (!autoRepeat) emit shortcutsHelpVisibleChanged(true);
             break;
         case ShortcutAction::CycleSubtitles:
             if (!autoRepeat) cycleSubtitles();
@@ -393,9 +398,17 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
 }
 
 bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
+    if (!m_enabled) return false;
+
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
         if (!m_mpv) return false;
+
+        // Игнорируем, если фокус в текстовом поле (TextField, TextInput и т.д.)
+        QObject *focus = QGuiApplication::focusObject();
+        if (focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextField"))) {
+            return false;
+        }
 
         if (key->key() == Qt::Key_Escape && !key->isAutoRepeat()) {
             if (m_window && (m_window->windowStates() & Qt::WindowFullScreen)) {
@@ -426,6 +439,10 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 
                 case ShortcutAction::FrameBackward:
                 case ShortcutAction::FrameForward:
+                    return true;
+
+                case ShortcutAction::ShowShortcutsHelp:
+                    emit shortcutsHelpVisibleChanged(false);
                     return true;
 
                 case ShortcutAction::VolumeUp:

@@ -1,0 +1,130 @@
+app-id: org.B612S.luma
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+command: luma
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --device=dri
+  - --share=network
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=/usr/lib/x86_64-linux-gnu/dri:ro
+  - --filesystem=/usr/lib/dri:ro
+  - --env=LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri:/usr/lib/dri
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - '*.la'
+
+modules:
+  - name: x264
+    config-opts:
+      - --enable-shared
+      - --enable-pic
+      - --disable-cli
+    sources:
+      - type: git
+        url: https://code.videolan.org/videolan/x264.git
+        tag: stable
+    cleanup:
+      - /share/man
+
+  - name: x265
+    buildsystem: cmake-ninja
+    subdir: source
+    builddir: true
+    config-opts:
+      - -DENABLE_SHARED=ON
+      - -DENABLE_CLI=OFF
+      - -DHIGH_BIT_DEPTH=OFF
+    sources:
+      - type: archive
+        url: https://bitbucket.org/multicoreware/x265_git/downloads/x265_4.2.tar.gz
+        sha256: 40b1ea0453e0309f0eba934e0ddf533f8f6295966679e8894e8f1c1c8d5e1210
+
+  - name: ffmpeg
+    config-opts:
+      - --disable-static
+      - --enable-shared
+      - --disable-doc
+      - --disable-programs
+      - --disable-everything
+      - --enable-decoder=h264,hevc,vp8,vp9,av1,mpeg4,mpeg2video,opus,aac,mp3,flac,vorbis,ac3,eac3,dts
+      - --enable-parser=h264,hevc,vp8,vp9,av1,mpeg4video,opus,aac,mp3,flac
+      - --enable-demuxer=matroska,mov,mp3,ogg,wav,avi,mpegts,flv
+      - --enable-protocol=file,http,https,tcp
+      - --enable-encoder=libx264,libx265,aac
+      - --enable-muxer=mpegts,hls
+
+      - --enable-libx264
+      - --enable-libx265
+      - --enable-gpl
+    sources:
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+        sha256: 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+
+  - name: libass
+    buildsystem: autotools
+    config-opts:
+      - --disable-static
+    sources:
+      - type: archive
+        url: https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz
+        sha256: 2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc
+
+  - name: libplacebo
+    buildsystem: meson
+    config-opts:
+      - -Ddemos=false
+      - -Dtests=false
+      - -Dvulkan=disabled
+      - -Dshaderc=disabled
+    sources:
+      - type: git
+        url: https://code.videolan.org/videolan/libplacebo.git
+        tag: v7.351.0
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+      - '*.a'
+      - '*.la'
+
+  - name: mpv
+    buildsystem: meson
+    config-opts:
+      - -Dlibmpv=true
+      - -Dcplayer=false
+      - -Dgl=enabled
+      - -Dpipewire=enabled
+      - -Dpulse=disabled
+      - -Dalsa=disabled
+      - -Dlua=disabled
+      - -Djavascript=disabled
+      - -Dlibarchive=disabled
+      - -Dlibbluray=disabled
+      - -Ddvdnav=disabled
+      - -Dcdda=disabled
+      - -Dvapoursynth=disabled
+      - -Duchardet=disabled
+      - -Dvaapi=enabled
+    sources:
+      - type: git
+        url: https://github.com/mpv-player/mpv.git
+        tag: v0.41.0
+    cleanup:
+      - /share/man
+      - /share/doc
+
+  - name: luma
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/app
+    sources:
+      - type: dir
+        path: .

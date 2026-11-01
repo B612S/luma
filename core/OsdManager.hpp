@@ -25,6 +25,7 @@ public:
 
     Q_INVOKABLE void showVolume();
     Q_INVOKABLE void showVolume(double vol);
+    void showVolume(double vol, bool muted);
     Q_INVOKABLE void showInfo(const QString &text);
 
 signals:

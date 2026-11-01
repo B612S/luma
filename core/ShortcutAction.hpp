@@ -21,8 +21,9 @@ enum class ShortcutAction {
     TogglePlaylist,
     ToggleStats,
     ToggleFullscreen,
-    ToggleCsd,
     ToggleTimeOsd,
+    TogglePip,
+    ShowShortcutsHelp,
     // Tracks
     CycleSubtitles,
     CycleAudio,
@@ -63,8 +64,12 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::TogglePlaylist,    "S",      39,  Qt::NoModifier },
         { ShortcutAction::ToggleStats,       "I",      31,  Qt::NoModifier },
         { ShortcutAction::ToggleFullscreen,  "F",      41,  Qt::NoModifier },
-        { ShortcutAction::ToggleCsd,         "N",      57,  Qt::NoModifier },
         { ShortcutAction::ToggleTimeOsd,     "T",      28,  Qt::NoModifier },
+        { ShortcutAction::TogglePip,         "P",      33,  Qt::NoModifier },
+
+        // Удержание «?» (Shift+/) или «.» на русской раскладке — подсказки.
+        { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::NoModifier },
+        { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::ShiftModifier },
 
         // ---- Tracks ----
         { ShortcutAction::CycleSubtitles,    "C",      54,  Qt::NoModifier },

@@ -23,9 +23,15 @@ public:
 
     void setWindow(QQuickWindow *window);
     void setCastManager(CastManager *cast) { m_castManager = cast; }
-    void setSliderSeeking(bool seeking);
+    // Вызывается из QML, пока пользователь тянет ползунок перемотки.
+    Q_INVOKABLE void setSliderSeeking(bool seeking);
 
     bool eventFilter(QObject *obj, QEvent *event) override;
+
+    void setEnabled(bool enabled) { m_enabled = enabled; }
+    // Вызывается из QML при открытии диалогов: отключает горячие клавиши
+    // и прокрутку колесом как регулировку громкости.
+    Q_INVOKABLE void setShortcutsEnabled(bool enabled) { m_enabled = enabled; }
 
 public slots:
     void toggleCrop();
@@ -33,7 +39,8 @@ public slots:
 signals:
     void togglePlaylist();
     void toggleStats();
-    void toggleCsd();
+    void togglePip();
+    void shortcutsHelpVisibleChanged(bool visible);
 
 private:
     void executeAction(ShortcutAction action, bool autoRepeat);
@@ -48,6 +55,7 @@ private:
     void onFileChanged();
     void onPositionChanged();
     void onVolumeChanged();
+    bool m_enabled = true;
 
     MpvItem *m_mpv = nullptr;
     OsdManager *m_osd = nullptr;

@@ -144,13 +144,17 @@ void OsdManager::hideOsd() {
 }
 
 void OsdManager::showVolume(double vol) {
+    showVolume(vol, m_mpv ? m_mpv->muted() : false);
+}
+
+void OsdManager::showVolume(double vol, bool muted) {
     if (!m_mpv) return;
 
     // Временное перекрытие
     m_state = StateOverlayVolume;
 
     int volInt = qRound(vol);
-    m_message = m_mpv->muted() ? "Muted" : QString::number(volInt) + "%";
+    m_message = (muted || volInt <= 0) ? tr("osd_muted") : QString::number(volInt) + "%";
 
     m_visible = true;
     emit messageChanged();

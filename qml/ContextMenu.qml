@@ -10,6 +10,33 @@ Popup {
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    parent: Overlay.overlay
+    z: 1000
+
+    property string currentPage: "main"
+    property var tracksList: []
+    property int currentTrackId: -1
+    property var mpv: null
+    property string currentAspect: "original"
+    // Окно приложения: в обработчиках QML нельзя обращаться к неявному
+    // `window` (ReferenceError), поэтому ссылку передаём явно.
+    property var hostWindow: null
+
+    signal toggleCropRequested()
+    signal togglePlaylistRequested()
+    signal togglePipRequested()
+    signal openUrlRequested()
+
+    onOpened: {
+        const w = hostWindow;
+        if (w && w.currentOpenMenu && w.currentOpenMenu !== menu) w.currentOpenMenu.close();
+        if (w) w.currentOpenMenu = menu;
+    }
+
+    onClosed: {
+        const w = hostWindow;
+        if (w && w.currentOpenMenu === menu) w.currentOpenMenu = null;
+    }
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 150; easing.type: Easing.InOutQuad }
@@ -25,15 +52,6 @@ Popup {
         radius: 8
         border.color: "transparent"
     }
-
-    property string currentPage: "main"
-    property var tracksList: []
-    property int currentTrackId: -1
-    property var mpv: null
-    property string currentAspect: "original"
-
-    signal toggleCropRequested()
-    signal togglePlaylistRequested()
 
     onCurrentPageChanged: {
         if (currentPage === "aspect_ratio") {
@@ -101,7 +119,6 @@ Popup {
             onClicked: { if (btn.isEnabled) btn.clicked() }
         }
 
-        // Тултип для отображения IP-адреса и другой информации
         ToolTip.visible: hoverArea.containsMouse && btn.tooltipText !== ""
         ToolTip.text: btn.tooltipText
         ToolTip.delay: 500
@@ -158,6 +175,12 @@ Popup {
                 onClicked: { menu.togglePlaylistRequested(); menu.close() }
             }
 
+            MenuButton {
+                text: qsTr("menu_pip")
+                isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false
+                onClicked: { menu.togglePipRequested(); menu.close() }
+            }
+
             MenuButton { text: qsTr("menu_stats"); onClicked: { statsPanel.isOpen = !statsPanel.isOpen; menu.close() } }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
@@ -175,9 +198,10 @@ Popup {
             width: parent.width
             spacing: 2
 
+            // Одна кнопка для всех медиафайлов
             MenuButton { text: qsTr("menu_open_file"); onClicked: { menu.close(); Media.openFileDialog() } }
             MenuButton { text: qsTr("menu_open_folder"); onClicked: { menu.close(); Media.openFolderDialog() } }
-            MenuButton { text: qsTr("menu_open_url"); onClicked: { menu.close(); Media.openUrlDialog() } }
+            MenuButton { text: qsTr("menu_open_url"); onClicked: { menu.close(); menu.openUrlRequested() } }
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
@@ -388,7 +412,6 @@ Popup {
             width: parent.width
             spacing: 2
 
-            // Кнопка поиска / остановки
             MenuButton {
                 text: CastManager.casting ? qsTr("menu_stop_cast") : qsTr("menu_refresh_devices")
                 onClicked: {
@@ -401,20 +424,17 @@ Popup {
                 }
             }
 
-            // РАЗДЕЛИТЕЛЬ МЕЖДУ ПОИСКОМ И СПИСКОМ УСТРОЙСТВ
             Rectangle {
                 width: parent.width; height: 1
                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)
             }
 
-            // Индикатор загрузки (под разделителем)
             MenuButton {
                 visible: CastManager.discovery.scanning
                 text: qsTr("menu_searching_devices")
                 isEnabled: false
             }
 
-            // Список найденных устройств (в тултипе показываем IP-адрес)
             Repeater {
                 model: CastManager.discovery.devices
                 MenuButton {
@@ -433,14 +453,12 @@ Popup {
                 }
             }
 
-            // Сообщение, если ничего не найдено
             MenuButton {
                 visible: !CastManager.discovery.scanning && CastManager.discovery.devices.length === 0
                 text: qsTr("menu_no_devices")
                 isEnabled: false
             }
 
-            // Статус активной трансляции
             Rectangle {
                 visible: CastManager.casting
                 width: parent.width; height: 1
@@ -453,7 +471,6 @@ Popup {
                 isEnabled: false
             }
 
-            // РАЗДЕЛИТЕЛЬ ПЕРЕД "BACK"
             Rectangle {
                 width: parent.width; height: 1
                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)

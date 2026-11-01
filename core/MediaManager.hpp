@@ -8,20 +8,26 @@
 #include "PlaylistModel.hpp"
 
 class ConfigManager;
+class PlaylistManager;
+class QProcess;
 
 class MediaManager : public QObject {
     Q_OBJECT
-    Q_PROPERTY(PlaylistModel* playlist READ playlist CONSTANT)
+    Q_PROPERTY(PlaylistModel* playlist READ playlist NOTIFY playlistChanged)
     Q_PROPERTY(QString playMode READ playMode WRITE setPlayMode NOTIFY playModeChanged)
     Q_PROPERTY(bool isManualSwitch READ isManualSwitch NOTIFY isManualSwitchChanged)
     Q_PROPERTY(QString currentFileName READ currentFileName NOTIFY fileChanged)
+    // Идёт прямой поток (радио): можно мотать только внутри кэша.
+    Q_PROPERTY(bool liveStream READ liveStream NOTIFY liveStreamChanged)
 
 public:
     explicit MediaManager(MpvItem *mpv = nullptr, QObject *parent = nullptr);
     ~MediaManager() override;
 
-    PlaylistModel* playlist() { return m_playlist; }
-    void setMpv(MpvItem *mpv) { m_mpv = mpv; }
+    PlaylistModel* playlist() const;
+    void setPlaylistManager(PlaylistManager *pm);
+    PlaylistManager* playlistManager() const { return m_playlists; }
+    void setMpv(MpvItem *mpv);
     void setConfig(ConfigManager *config) { m_config = config; }
 
     bool isManualSwitch() const { return m_isManualSwitch; }
@@ -31,6 +37,7 @@ public:
     void setPlayMode(const QString &mode);
 
     QString currentFileName() const;
+    bool liveStream() const { return m_liveStream; }
 
     Q_INVOKABLE void openFile(const QString &path);
     Q_INVOKABLE void openFolder(const QString &folder);
@@ -43,10 +50,14 @@ public:
     Q_INVOKABLE void removeFromPlaylist(int index);
     Q_INVOKABLE QString getDefaultFileManagerName();
     Q_INVOKABLE QVariantMap getFileInfo(const QString &path);
+    // Теги аудиофайла: чтение и запись в сам файл (через TagLib).
+    Q_INVOKABLE QVariantMap readTags(const QString &path);
+    Q_INVOKABLE bool saveTags(const QString &path, const QVariantMap &tags);
+    // Правка ссылки у потоковой записи плейлиста.
+    Q_INVOKABLE bool updateStreamUrl(const QString &oldUrl, const QString &newUrl);
 
     Q_INVOKABLE void openFileDialog();
     Q_INVOKABLE void openFolderDialog();
-    Q_INVOKABLE void openUrlDialog();
     Q_INVOKABLE void openSubtitlesDialog();
     Q_INVOKABLE void openAudioDialog();
 
@@ -62,12 +73,23 @@ signals:
     void fileChanged(const QString &path);
     void playModeChanged();
     void isManualSwitchChanged();
+    void playlistChanged();
+    void liveStreamChanged();
 
 private:
     void _sendNotification(const QString &body);
+    void _sendNotification(const QString &summary, const QString &body, const QString &coverPath);
+    // Уведомление с метаданными трека (исполнитель, альбом, обложка).
+    void _notifyForFile(const QString &path);
+    // Живой заголовок потока (ICY у радио).
+    void onMediaTitleChanged();
+    // yt-dlp: сначала получаем прямой поток, файлы не скачиваются.
+    void openUrlAsync(const QString &url);
+    void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
+    QStringList ytdlpConfigArgs() const;
 
     MpvItem *m_mpv;
-    PlaylistModel *m_playlist;
+    PlaylistManager *m_playlists = nullptr;
     ConfigManager *m_config = nullptr;
     QStringList m_history;
     QString m_playMode = "sequential";
@@ -75,6 +97,10 @@ private:
 
     QString m_lastPlayedFile;
     QElapsedTimer m_lastPlayedTimer;
+    QString m_lastStreamTitle;
+    bool m_liveStream = false;
+    void setLiveStream(bool live);
 
     QDBusInterface *m_notifyInterface = nullptr;
+    QProcess *m_ytdlpProcess = nullptr;
 };

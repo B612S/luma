@@ -22,11 +22,17 @@ public:
     void cancelCurrentDecode();
 
 private:
+    bool openFile(const QString &filePath);
     void cleanup();
 
     AVFormatContext *m_fmtCtx = nullptr;
     AVCodecContext *m_codecCtx = nullptr;
     SwsContext *m_swsCtx = nullptr;
+
+    // Открытый файл переиспользуется между запросами превью: повторное
+    // avformat_open_input на каждый кадр — самая дорогая часть.
+    QString m_currentPath;
+    int m_videoStreamIndex = -1;
 
     QCache<QString, QImage> m_cache;
     QAtomicInt m_cancelFlag;

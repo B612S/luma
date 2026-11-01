@@ -222,6 +222,11 @@ void MpvController::init()
     // и автоматический переход на следующий файл работал.
     mpv_set_property_string(d_ptr->m_mpv, "keep-open", "no");
 
+    // Кэш потоков: даёт перемотку назад примерно на 5 минут, но не больше.
+    mpv_set_property_string(d_ptr->m_mpv, "cache", "yes");
+    mpv_set_property_string(d_ptr->m_mpv, "cache-secs", "300");
+    mpv_set_property_string(d_ptr->m_mpv, "demuxer-max-bytes", "256MiB");
+
     // Умные настройки (применяем только если пользователь их не менял)
     char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");
     if (sync_mode) {
