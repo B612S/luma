@@ -7,8 +7,6 @@ Item {
     id: root
     implicitHeight: 36
     property string activeId: Playlists.activeId
-    // Main menu (ContextMenu from Main.qml), so it can be closed from the tab menu.
-    property var rootContextMenu: null
 
     function closeMenus() { tabContextMenu.close(); tabListMenu.close(); }
 
@@ -173,8 +171,17 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 onClicked: {
-                    if (tabListMenu.visible) tabListMenu.close();
-                    else tabListMenu.open();
+                    if (tabListMenu.visible) {
+                        tabListMenu.close();
+                        return;
+                    }
+                    // Position the menu at open time: at component creation the
+                    // panel is not laid out yet, and the popup positioner would
+                    // keep the stale (pre-layout) position.
+                    const pos = allTabsBtn.mapToItem(null, 0, allTabsBtn.height);
+                    tabListMenu.x = pos.x;
+                    tabListMenu.y = pos.y + 4;
+                    tabListMenu.open();
                 }
             }
 
@@ -205,7 +212,7 @@ Item {
                 wheelAnimation.start();
             }
 
-            onMovementStarted: { wheelAnimation.stop(); root.tabScrollAnimation.stop(); }
+            onMovementStarted: { wheelAnimation.stop(); tabScrollAnimation.stop(); }
 
             NumberAnimation {
                 id: wheelAnimation
@@ -325,16 +332,11 @@ Item {
                                     tabContextMenu.targetName = tabBtn.info.name;
                                     tabContextMenu.targetIsDefault = tabBtn.isDefault;
 
-                                    // The menu position is relative to its parent (root),
-                                    // not in window coordinates.
+                                    // The menu is parented to the window overlay, so it
+                                    // uses scene coordinates like the click position.
                                     let scenePos = mapToItem(null, mouse.x, mouse.y);
-                                    let win = root.window;
-                                    let maxX = win ? win.width - tabContextMenu.width - 10 : scenePos.x;
-                                    let localPos = root.mapFromItem(null,
-                                        Math.max(10, Math.min(scenePos.x, maxX)),
-                                        Math.max(10, scenePos.y));
-                                    tabContextMenu.x = localPos.x;
-                                    tabContextMenu.y = localPos.y;
+                                    tabContextMenu.x = scenePos.x;
+                                    tabContextMenu.y = scenePos.y;
                                     tabContextMenu.open();
                                 } else {
                                     Playlists.activeId = tabBtn.info.id;
@@ -382,39 +384,32 @@ Item {
     }
 
     // List of all playlists (the tab row can be scrolled away).
-    Menu {
+    LumaMenu {
         id: tabListMenu
         width: 220
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        x: Math.max(8, Math.min(root.width - width - 8,
-                                allTabsBtn.mapToItem(root, 0, 0).x))
-        y: allTabsBtn.mapToItem(root, 0, allTabsBtn.height).y + 4
+        // x/y are set in the button's handler in scene coordinates; the menu is
+        // parented to the window overlay and LumaMenu keeps it inside the window.
 
-        onOpened: {
-            if (root.rootContextMenu) root.rootContextMenu.close();
-            tabContextMenu.close();
-        }
+        Column {
+            width: parent.width
+            spacing: 2
 
-        background: Rectangle {
-            color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.95)
-            radius: 8; border.color: "transparent"
-        }
-
-        Instantiator {
-            model: Playlists.playlists
-            delegate: MenuItem {
-                text: (modelData.id === Playlists.activeId ? "✓ " : "") + modelData.name
-                onTriggered: Playlists.activeId = modelData.id
+            Repeater {
+                model: Playlists.playlists
+                LumaMenuButton {
+                    text: modelData.name
+                    checked: modelData.id === Playlists.activeId
+                    onClicked: {
+                        Playlists.activeId = modelData.id;
+                        tabListMenu.close();
+                    }
+                }
             }
-            onObjectAdded: (index, object) => tabListMenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => tabListMenu.removeItem(object)
         }
     }
 
     PlaylistTabsContextMenu {
         id: tabContextMenu
-        rootContextMenu: root.rootContextMenu
         onAddFilesRequested: (id) => root.addFilesRequested(id)
         onAddFolderRequested: (id) => root.addFolderRequested(id)
         onAddUrlRequested: (id) => root.addUrlRequested(id)

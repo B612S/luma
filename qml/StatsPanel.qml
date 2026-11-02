@@ -33,7 +33,6 @@ Rectangle {
     property string _tagsInfoPath: ""
     property string _tagsSignature: ""
     property var statLines: []
-    property var hostWindow: null
 
     readonly property bool audioOrRadio: !hasVideo
     readonly property bool isRadio: typeof Media !== "undefined" && Media.liveStream === true
@@ -194,7 +193,7 @@ Rectangle {
             samplerateLabel.text = "<b>" + qsTr("stats_samplerate") + ":</b> " + safeString(statsProperty("audio-params/samplerate")) + " Hz"
 
             let audBitrate = statsProperty("audio-bitrate");
-            audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatAudioBitrate(audBitrate)
+            audBitrateLabel.text = "<b>" + qsTr("stats_aud_bitrate") + ":</b> " + formatBitrate(audBitrate)
 
             // Smart Audio Output query (try QML first, then C++)
             let aoDriver = safeString(statsProperty("current-ao"));
@@ -227,7 +226,7 @@ Rectangle {
             lines.push(qsTr("stats_audio") + ": " + _staticAudioCodec);
             lines.push(qsTr("stats_channels") + ": " + safeString(statsProperty("audio-params/channel-count")));
             lines.push(qsTr("stats_samplerate") + ": " + safeString(statsProperty("audio-params/samplerate")) + " Hz");
-            lines.push(qsTr("stats_aud_bitrate") + ": " + formatAudioBitrate(audBitrate));
+            lines.push(qsTr("stats_aud_bitrate") + ": " + formatBitrate(audBitrate));
             lines.push(qsTr("stats_ao") + ": " + safeString(aoDriver));
             lines.push(qsTr("stats_audio_device") + ": " + safeString(statsProperty("audio-device")));
             lines.push(qsTr("stats_avsync") + ": " + safeNumber(statsProperty("avsync"), 3) + " s");
@@ -693,16 +692,6 @@ Rectangle {
         return (bps / 1000).toFixed(0) + " kbps";
     }
 
-    // Guard against mpv glitches (it sometimes reports huge audio values at startup)
-    function formatAudioBitrate(bps) {
-        if (!bps || isNaN(bps) || bps <= 0) return "0 kbps";
-
-        const kbps = bps / 1000;
-        if (kbps > 1500) return "N/A"; // Audio > 1500 kbps is an mpv bug
-
-        return kbps.toFixed(0) + " kbps";
-    }
-
     function formatTime(seconds) {
         if (seconds === undefined || seconds === null) return "00:00";
         let total = Math.floor(seconds);
@@ -720,63 +709,34 @@ Rectangle {
             statsContextMenu.close();
             return;
         }
+        // The menu is parented to the window overlay: use scene coordinates.
+        // LumaMenu keeps it inside the window.
         const scene = statsPanel.mapToItem(null, localX, localY);
-        let px = scene.x;
-        let py = scene.y;
-        if (hostWindow) {
-            px = Math.min(px, hostWindow.width - statsContextMenu.width - 10);
-            py = Math.min(py, hostWindow.height - statsContextMenu.height - 10);
-        }
-        statsContextMenu.x = Math.max(10, px);
-        statsContextMenu.y = Math.max(10, py);
+        statsContextMenu.x = scene.x;
+        statsContextMenu.y = scene.y;
         statsContextMenu.open();
-        if (hostWindow) {
-            if (statsContextMenu.x + statsContextMenu.width > hostWindow.width - 10)
-                statsContextMenu.x = Math.max(10, hostWindow.width - statsContextMenu.width - 10);
-            if (statsContextMenu.y + statsContextMenu.height > hostWindow.height - 10)
-                statsContextMenu.y = Math.max(10, hostWindow.height - statsContextMenu.height - 10);
-        }
     }
 
     function closeContextMenu() {
         statsContextMenu.close();
     }
 
-    Menu {
+    LumaMenu {
         id: statsContextMenu
-        parent: Overlay.overlay
-        width: Math.max(80, (copyItem.contentItem ? copyItem.contentItem.implicitWidth : 0)
-                            + copyItem.leftPadding + copyItem.rightPadding
-                            + leftPadding + rightPadding + 12)
-        padding: 4
-        modal: false
-        z: 1000
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        width: Math.max(140, copyItem.contentWidth + leftPadding + rightPadding)
 
-        background: Rectangle {
-            color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
-                           Kirigami.Theme.backgroundColor.g,
-                           Kirigami.Theme.backgroundColor.b, 0.95)
-            radius: 8
-            border.color: "transparent"
-        }
+        Column {
+            width: parent.width
+            spacing: 2
 
-        onOpened: {
-            if (hostWindow && hostWindow.currentOpenMenu
-                    && hostWindow.currentOpenMenu !== statsContextMenu)
-                hostWindow.currentOpenMenu.close();
-            if (hostWindow) hostWindow.currentOpenMenu = statsContextMenu;
-        }
-        onClosed: {
-            if (hostWindow && hostWindow.currentOpenMenu === statsContextMenu)
-                hostWindow.currentOpenMenu = null;
-        }
-
-        MenuItem {
-            id: copyItem
-            text: qsTr("stats_copy")
-            implicitHeight: 30
-            onTriggered: statsPanel.copyStats()
+            LumaMenuButton {
+                id: copyItem
+                text: qsTr("stats_copy")
+                onClicked: {
+                    statsContextMenu.close();
+                    statsPanel.copyStats();
+                }
+            }
         }
     }
 

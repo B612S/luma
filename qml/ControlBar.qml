@@ -280,7 +280,8 @@ Rectangle {
                     let maxX = seekSlider.width - width;
                     return Math.max(minX, Math.min(maxX, targetX));
                 }
-                y: seekSlider.topPadding + seekSlider.availableHeight / 2 - seekSlider.handle.height / 2 - 4 - height
+                anchors.bottom: seekSlider.verticalCenter
+                anchors.bottomMargin: 12
 
                 property real pendingTime: -1
                 property string currentThumbId: ""

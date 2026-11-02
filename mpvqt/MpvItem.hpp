@@ -75,6 +75,9 @@ public:
     Q_INVOKABLE void seekFast(double pos);
     Q_INVOKABLE void seekExact(double pos);
     Q_INVOKABLE void requestThumbnail(double seekTime, const QString &requestId);
+    // Unloads the file and returns to the "nothing opened" state: the renderer
+    // paints black and the control bar no longer shows the finished file.
+    void stopPlayback();
 
     Q_INVOKABLE QString getAudioOutput();
     Q_INVOKABLE QString getAudioDevice();

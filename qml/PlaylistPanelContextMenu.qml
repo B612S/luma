@@ -1,34 +1,29 @@
 import QtQuick
 import QtQuick.Controls
-import org.kde.kirigami as Kirigami
 
-Menu {
+// Clear-playlist menu for the body of the playlist panel. Not used at the
+// moment (the tab menu has the same action), but kept in the same style as the
+// other in-app menus.
+LumaMenu {
     id: playlistContextMenu
     width: 220
-    modal: false
-    z: 1000
 
     // The property must NOT be named panel (see PlaylistContextMenu.qml).
     property var playlistPanel: null
 
-    onOpened: {
-        if (playlistPanel && playlistPanel.rootContextMenu) playlistPanel.rootContextMenu.close();
-    }
+    Column {
+        width: parent.width
+        spacing: 2
 
-    background: Rectangle {
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.95)
-        radius: 8; border.color: "transparent"
-    }
-
-    MenuItem {
-        text: qsTranslate("PlaylistPanel", "playlist_clear")
-        contentItem: Text {
-            text: parent.text; color: Kirigami.Theme.negativeTextColor
-            font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 8
-        }
-        onTriggered: {
-            if (playlistContextMenu.playlistPanel)
-                playlistContextMenu.playlistPanel.openClearDialog(Playlists.activeId, Playlists.playlistName(Playlists.activeId));
+        LumaMenuButton {
+            text: qsTranslate("PlaylistPanel", "playlist_clear")
+            destructive: true
+            onClicked: {
+                playlistContextMenu.close();
+                if (playlistContextMenu.playlistPanel)
+                    playlistContextMenu.playlistPanel.openClearDialog(Playlists.activeId,
+                                                                     Playlists.playlistName(Playlists.activeId));
+            }
         }
     }
 }

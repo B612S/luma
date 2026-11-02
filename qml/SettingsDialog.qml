@@ -18,7 +18,7 @@ Dialog {
     background: Rectangle {
         color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                        Kirigami.Theme.backgroundColor.g,
-                       Kirigami.Theme.backgroundColor.b, 0.85)
+                       Kirigami.Theme.backgroundColor.b, 0.95)
         radius: 8
         border.color: "transparent"
     }

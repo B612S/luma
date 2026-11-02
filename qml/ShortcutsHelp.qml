@@ -89,16 +89,6 @@ Dialog {
         }
     }
 
-    footer: DialogButtonBox {
-        alignment: Qt.AlignRight
-        Button {
-            text: qsTranslate("SettingsDialog", "about_close")
-            DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-            onClicked: root.closeRequested()
-        }
-        Item { implicitWidth: 16; implicitHeight: 1 }
-    }
-
     property var rows: []
 
     function refreshRows() {

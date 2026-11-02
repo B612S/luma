@@ -149,6 +149,33 @@ void MpvItem::setPaused(bool p) {
     setProperty("pause", p);
 }
 
+void MpvItem::stopPlayback() {
+    if (m_isCasting) return;
+
+    // Unload the file instead of pausing at the end: mpv drops the last frame
+    // and the renderer clears its framebuffer to black on the next paint.
+    command(QStringList() << QStringLiteral("stop"));
+
+    // mpv stops reporting time-pos/duration while idle and the property-change
+    // handler keeps the last value, so the control bar would still show the
+    // finished file. Reset them to the "nothing opened" state instead.
+    m_position = 0.0;
+    m_duration = 0.0;
+    m_paused = true;
+    // Keep mpv's own state in sync so MPRIS reports "Paused", not "Playing".
+    setProperty("pause", true);
+    emit positionChanged();
+    emit durationChanged();
+    emit pausedChanged();
+
+    // The file end is not followed by a redraw on its own: force one so the
+    // last frame is replaced by the cleared framebuffer. The stop command is
+    // queued to mpv's thread, so repaint again shortly after in case this first
+    // repaint happens before the file is actually unloaded.
+    update();
+    QTimer::singleShot(100, this, [this]() { update(); });
+}
+
 void MpvItem::setMuted(bool m) {
     if (m_isCasting) return;
     setProperty("mute", m);

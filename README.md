@@ -40,6 +40,7 @@
   HLS re-encode via `ffmpeg`).
 - **Picture in picture** — `P` or the context menu turns the window into a small
   frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
+  On KDE Plasma the PiP window stays above the other windows.
 - **Shortcut cheat sheet** — hold `?` (`Shift+/`) to see
   all hotkeys while the key is held.
 - **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.

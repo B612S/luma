@@ -43,3 +43,6 @@ Thumbs.db
 .apptest
 .probe
 .icontest
+
+# Temporary test artifacts
+.tmp-*/

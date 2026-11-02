@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import luma 1.0
 import org.kde.kirigami as Kirigami
+import org.kde.kirigami.primitives as KirigamiPrimitives
 
 ApplicationWindow {
     id: root
@@ -12,8 +13,17 @@ ApplicationWindow {
     // but it can't be too tiny: the controls would start overlapping.
     minimumWidth: pipMode ? 320 : 640
     minimumHeight: pipMode ? 180 : 480
-    title: "Luma"
-    color: "black"
+    // The "PiP" title is what the KWin keep-above script looks for (see KWinBridge).
+    title: root.pipMode ? "Luma PiP" : "Luma"
+    // Windowed PiP is drawn as a floating card: the window keeps a transparent
+    // margin for the card's shadow, so the compositor never samples the video at
+    // the window edge (KWin/NVIDIA leaves a 1px artifact there on a bare window).
+    readonly property bool pipCard: root.pipMode && root.visibility !== Window.FullScreen
+    // The PiP content is rectangular, so the card is square-cornered too; the
+    // margin only holds the shadow and keeps the window edge transparent.
+    readonly property int pipCardMargin: root.pipCard ? 10 : 0
+    readonly property int pipContentMargin: root.pipCardMargin
+    color: root.pipCard ? "transparent" : "black"
 
     property bool controlsVisible: true
     signal toggleCropRequested()
@@ -78,12 +88,23 @@ ApplicationWindow {
 
         const screenW = root.screen ? root.screen.width : 1280;
         const screenH = root.screen ? root.screen.height : 720;
-        let w = Math.min(480, Math.round(screenW * 0.4));
-        let h = Math.round(w * 9 / 16);
-        if (h > screenH * 0.5) {
-            h = Math.round(screenH * 0.5);
-            w = Math.round(h * 16 / 9);
+
+        // Size the window to the video's aspect ratio, so windowed PiP has no
+        // letterbox bars. The card margin around the content is added on top.
+        let aspect = 16 / 9;
+        const videoW = Number(mpv ? mpv.observedProperty("width") : 0);
+        const videoH = Number(mpv ? mpv.observedProperty("height") : 0);
+        if (videoW > 0 && videoH > 0)
+            aspect = Math.max(0.4, Math.min(3, videoW / videoH));
+        const margin = root.pipContentMargin * 2;
+        let contentW = Math.min(480, Math.round(screenW * 0.4));
+        let contentH = Math.round(contentW / aspect);
+        if (contentH > screenH * 0.5 - margin) {
+            contentH = Math.round(screenH * 0.5 - margin);
+            contentW = Math.round(contentH * aspect);
         }
+        const w = contentW + margin;
+        const h = contentH + margin;
 
         // On Wayland window flags only apply to a hidden window. The size is
         // also set before show(): otherwise the window appears for a frame at the old
@@ -93,6 +114,12 @@ ApplicationWindow {
         root.flags = root.flags | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint;
         root.width = w;
         root.height = h;
+
+        // Wayland cannot raise the window itself: KWin keeps the "Luma PiP"
+        // window above the others with a small helper script. Set this up while
+        // the window is hidden, so the large window is not restacked before it
+        // is resized (KWin can leave a stale plane behind on NVIDIA).
+        KWinBridge.setPipActive(true);
         // Show on the next tick: by then the flags and size are already
         // applied, and the window's first buffer is created at PiP size right away.
         Qt.callLater(function() {
@@ -122,6 +149,7 @@ ApplicationWindow {
             root.height = pipSavedGeometry.height;
         }
         root.show();
+        KWinBridge.setPipActive(false);
 
         if (pipSavedGeometry.width > 0) {
             root.x = pipSavedGeometry.x;
@@ -218,6 +246,20 @@ ApplicationWindow {
         }
     }
 
+    // The card behind the PiP content (windowed PiP only). Its shadow is drawn
+    // outside the item, into the window's transparent margin.
+    KirigamiPrimitives.ShadowedRectangle {
+        anchors.fill: parent
+        anchors.margins: root.pipCardMargin
+        visible: root.pipCard
+        z: -1
+        radius: 0
+        color: "black"
+        shadow.size: 8
+        shadow.color: Qt.rgba(0, 0, 0, 0.4)
+        shadow.yOffset: 2
+    }
+
     MpvItem {
         id: mpv
         objectName: "mpv"
@@ -225,6 +267,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: root.controlBarPinned ? controlBar.top : parent.bottom
+        anchors.margins: root.pipContentMargin
         isCasting: CastManager.casting
         z: 0
         visible: !CastManager.casting
@@ -327,14 +370,12 @@ ApplicationWindow {
         anchors.bottom: (root.controlBarPinned || (controlBar.visible && controlBar.isOpen)) ? controlBar.top : parent.bottom
         anchors.bottomMargin: 20
         width: 300; mpv: mpv; model: Media.playlist; isOpen: false; z: 4
-        rootContextMenu: contextMenu
     }
 
     StatsPanel {
         id: statsPanel; objectName: "statsPanel"
         anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 20
         width: 300; maxHeight: root.height - controlBar.height - 60; mpv: mpv; isOpen: false; z: 5
-        hostWindow: root
     }
 
     OsdToast {
@@ -345,6 +386,7 @@ ApplicationWindow {
     // In picture-in-picture mode — only minimal custom buttons.
     PipControls {
         anchors.fill: parent
+        anchors.margins: root.pipContentMargin
         mpv: mpv
         active: root.pipMode
         onCloseRequested: root.exitPip()
@@ -380,7 +422,6 @@ ApplicationWindow {
     ContextMenu {
         id: contextMenu
         mpv: mpv; z: 1000; parent: Overlay.overlay
-        hostWindow: root
         onToggleCropRequested: root.toggleCropRequested()
         onTogglePipRequested: root.togglePip()
         onOpenUrlRequested: root.openUrlDialog()

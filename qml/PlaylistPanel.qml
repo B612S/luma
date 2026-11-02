@@ -13,7 +13,6 @@ Rectangle {
     property bool hovered: hoverArea.containsMouse
     property bool isOpen: false
     property bool _processingClick: false
-    property var rootContextMenu: null
 
     property bool isDragging: false
     property int draggedIndex: -1
@@ -100,18 +99,13 @@ Rectangle {
 
     // The track menu lives in this file: from outside (the delegate) we call it by
     // function name, not via `panel.contextMenu` — an id is not an object property.
+    // The menu is parented to the window overlay, so scenePos is already in its
+    // coordinate space; LumaMenu keeps it inside the window.
     function openTrackMenu(index, scenePos) {
         contextMenuIndex = index;
-        let win = panel.window;
-        let maxX = win ? win.width - contextMenu.width - 10 : scenePos.x;
-        let localPos = panel.mapFromItem(null,
-            Math.max(10, Math.min(scenePos.x, maxX)),
-            Math.max(10, scenePos.y));
-        contextMenu.x = localPos.x;
-        contextMenu.y = localPos.y;
+        contextMenu.x = scenePos.x;
+        contextMenu.y = scenePos.y;
         contextMenu.open();
-        if (contextMenu.y + contextMenu.height > panel.height - 10)
-            contextMenu.y = Math.max(10, panel.height - contextMenu.height - 10);
     }
 
     function openInfoDialog(path) {
@@ -204,7 +198,6 @@ Rectangle {
 
         PlaylistTabs {
             id: tabs; Layout.fillWidth: true; Layout.preferredHeight: 36
-            rootContextMenu: panel.rootContextMenu
             onCreateRequested: dialogs.nameDialog.openForCreate()
             onRenameRequested: (id, currentName) => dialogs.nameDialog.openForRename(id, currentName)
             onDeleteRequested: (id, name) => dialogs.deleteDialog.openFor(id, name)

@@ -1,12 +1,12 @@
 import QtQuick
 import QtQuick.Controls
-import org.kde.kirigami as Kirigami
 
-Menu {
+// Right-click menu of a playlist entry. Uses the same custom popup as the
+// player's main menu (LumaMenu/ContextMenu.qml), with the playlist actions on
+// one page and the "add to playlist" list on the next one.
+LumaMenu {
     id: trackContextMenu
     width: 220
-    modal: false
-    z: 1000
 
     property int trackIndex: -1
     // The property must NOT be named panel: it shadows the id panel from
@@ -15,86 +15,117 @@ Menu {
     property var playlistPanel: null
     property int pendingPlayIndex: -1
 
-    onOpened: {
-        if (playlistPanel && playlistPanel.rootContextMenu) playlistPanel.rootContextMenu.close();
+    function trackPath() {
+        return (playlistPanel && playlistPanel.model)
+                ? playlistPanel.model.fileAt(trackIndex) : "";
     }
 
-    background: Rectangle {
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.95)
-        radius: 8; border.color: "transparent"
-    }
+    // Always start from the first page when the menu is opened again.
+    onAboutToShow: currentPage = "main"
 
-    MenuItem {
-        id: playItem
-        text: qsTranslate("PlaylistPanel", "playlist_play")
-
-        // When the file changes, mpv briefly stops rendering frames, and the menu
-        // is drawn on the same render thread — it "freezes" half-drawn.
-        // So let the menu close first and only then start the file.
-        Timer {
-            id: playStartTimer
-            interval: 200
-            repeat: false
-            onTriggered: {
-                if (trackContextMenu.pendingPlayIndex < 0) return;
-                const index = trackContextMenu.pendingPlayIndex;
-                trackContextMenu.pendingPlayIndex = -1;
-                Media.playIndex(index);
-            }
-        }
-
+    // When the file changes, mpv briefly stops rendering frames, and the menu
+    // is drawn on the same render thread — it "freezes" half-drawn.
+    // So let the menu close first and only then start the file.
+    Timer {
+        id: playStartTimer
+        interval: 200
+        repeat: false
         onTriggered: {
-            trackContextMenu.pendingPlayIndex = trackContextMenu.trackIndex;
-            playStartTimer.start();
+            if (trackContextMenu.pendingPlayIndex < 0) return;
+            const index = trackContextMenu.pendingPlayIndex;
+            trackContextMenu.pendingPlayIndex = -1;
+            Media.playIndex(index);
         }
     }
-    MenuSeparator {}
 
-    Menu {
-        id: addToPlaylistSubmenu
-        title: qsTranslate("PlaylistPanel", "playlist_add_to")
-        Instantiator {
-            model: Playlists.playlists
-            delegate: MenuItem {
-                text: modelData.name
-                enabled: modelData.id !== Playlists.activeId
-                onTriggered: {
-                    let path = trackContextMenu.playlistPanel && trackContextMenu.playlistPanel.model ? trackContextMenu.playlistPanel.model.fileAt(trackContextMenu.trackIndex) : "";
-                    if (path) Playlists.addFilesToPlaylist(modelData.id, [path]);
+    Column {
+        width: parent.width
+        spacing: 2
+
+        // --- TRACK PAGE ---
+        Column {
+            visible: trackContextMenu.currentPage === "main"
+            width: parent.width
+            spacing: 2
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistPanel", "playlist_play")
+                onClicked: {
+                    trackContextMenu.pendingPlayIndex = trackContextMenu.trackIndex;
+                    trackContextMenu.close();
+                    playStartTimer.start();
                 }
             }
-            onObjectAdded: (index, object) => addToPlaylistSubmenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => addToPlaylistSubmenu.removeItem(object)
+
+            LumaMenuSeparator {}
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistPanel", "playlist_add_to")
+                hasArrow: true
+                onClicked: trackContextMenu.showPage("add_to")
+            }
+
+            LumaMenuSeparator {}
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistPanel", "playlist_info")
+                onClicked: {
+                    const path = trackContextMenu.trackPath();
+                    if (!path) return;
+                    trackContextMenu.close();
+                    if (trackContextMenu.playlistPanel)
+                        trackContextMenu.playlistPanel.openInfoDialog(path);
+                }
+            }
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistPanel", "playlist_open_folder").arg(Media.getDefaultFileManagerName())
+                onClicked: {
+                    const path = trackContextMenu.trackPath();
+                    if (!path) return;
+                    trackContextMenu.close();
+                    Media.openInFileManager(path);
+                }
+            }
+
+            LumaMenuSeparator {}
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistPanel", "playlist_remove")
+                destructive: true
+                onClicked: {
+                    const index = trackContextMenu.trackIndex;
+                    trackContextMenu.close();
+                    Media.removeFromPlaylist(index);
+                }
+            }
         }
-    }
 
-    MenuSeparator {}
+        // --- ADD TO PLAYLIST PAGE ---
+        Column {
+            visible: trackContextMenu.currentPage === "add_to"
+            width: parent.width
+            spacing: 2
 
-    MenuItem {
-        text: qsTranslate("PlaylistPanel", "playlist_info")
-        onTriggered: {
-            let path = trackContextMenu.playlistPanel && trackContextMenu.playlistPanel.model ? trackContextMenu.playlistPanel.model.fileAt(trackContextMenu.trackIndex) : "";
-            if (!path) return;
-            if (trackContextMenu.playlistPanel) trackContextMenu.playlistPanel.openInfoDialog(path);
+            Repeater {
+                model: Playlists.playlists
+                LumaMenuButton {
+                    text: modelData.name
+                    isEnabled: modelData.id !== Playlists.activeId
+                    onClicked: {
+                        const path = trackContextMenu.trackPath();
+                        if (path) Playlists.addFilesToPlaylist(modelData.id, [path]);
+                        trackContextMenu.close();
+                    }
+                }
+            }
+
+            LumaMenuSeparator {}
+
+            LumaMenuButton {
+                text: qsTranslate("ContextMenu", "menu_back")
+                onClicked: trackContextMenu.showPage("main")
+            }
         }
-    }
-
-    MenuItem {
-        text: qsTranslate("PlaylistPanel", "playlist_open_folder").arg(Media.getDefaultFileManagerName())
-        onTriggered: {
-            let path = trackContextMenu.playlistPanel && trackContextMenu.playlistPanel.model ? trackContextMenu.playlistPanel.model.fileAt(trackContextMenu.trackIndex) : "";
-            if (path) Media.openInFileManager(path);
-        }
-    }
-
-    MenuSeparator {}
-
-    MenuItem {
-        text: qsTranslate("PlaylistPanel", "playlist_remove")
-        contentItem: Text {
-            text: parent.text; color: Kirigami.Theme.negativeTextColor
-            font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 8
-        }
-        onTriggered: Media.removeFromPlaylist(trackContextMenu.trackIndex)
     }
 }

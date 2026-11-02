@@ -21,6 +21,7 @@ private slots:
     void cleanupTestCase();
     void openAudio();
     void openVideo();
+    void endOfPlaylistStopsPlayback();
     void fileInfoRequest();
     void youtubeLinkThroughYtdlp();
     void realYouTubeLink();
@@ -142,6 +143,38 @@ void TestMediaOpen::openVideo()
     QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("16:9"), 5000);
     m_media->setAspectRatio("original");
     QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("original"), 5000);
+}
+
+void TestMediaOpen::endOfPlaylistStopsPlayback()
+{
+    stopPlayback();
+
+    // openVideo() already left this file in the playlist and as the current
+    // entry, so openFile() would be a no-op; restart it explicitly.
+    const QString path = QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4");
+    PlaylistModel *def = m_playlists->defaultModel();
+    QVERIFY(def);
+    int index = def->indexOf(path);
+    if (index < 0) {
+        m_media->openFile(path);
+        index = def->indexOf(path);
+    }
+    QVERIFY(index >= 0);
+
+    // The fixture is 0.5 s long: play it through and let it end.
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    QSignalSpy ended(m_mpv, &MpvItem::fileEnded);
+    m_media->playIndex(index);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(ended.count() > 0, 15000);
+
+    // What ShortcutHandler does for EOF. The last item of the playlist in
+    // sequential mode must unload the file, not leave the finished frame.
+    m_media->playNext();
+    QTRY_COMPARE_WITH_TIMEOUT(m_mpv->duration(), 0.0, 2000);
+    QCOMPARE(m_mpv->position(), 0.0);
+    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->paused(), 2000);
+    QVERIFY(!m_media->isLoading());
 }
 
 void TestMediaOpen::fileInfoRequest()

@@ -92,6 +92,9 @@ signals:
     void fileInfoReady(const QString &path, const QVariantMap &info);
 
 private:
+    // Nothing is playing any more (end of the playlist or "stop" mode): unload
+    // the file so the video area goes black and the player looks idle again.
+    void stopPlayback();
     void _sendNotification(const QString &body);
     void _sendNotification(const QString &summary, const QString &body, const QString &coverPath);
     // Notification with track metadata (artist, album, cover art).

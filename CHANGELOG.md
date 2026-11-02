@@ -8,6 +8,11 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Picture-in-picture stays above all other windows on KDE Plasma: Wayland has no client
+  request for this and KWin ignores `Qt::WindowStaysOnTopHint`, so while PiP is active a
+  small KWin script is loaded through KWin's D-Bus scripting interface and unloaded when
+  PiP ends. The PiP window's title becomes “Luma PiP” so the script only raises that
+  window. On other compositors nothing changes.
 - Playlist tab bar: an all-playlists dropdown on the left, using the current icon theme's
   monochrome playlist icon (also bundled in the AppImage fallback theme).
 - Per-playlist playback modes. Each named playlist stores its own
@@ -58,6 +63,14 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- New application icon: a flat orange rounded square with a white play button (the vector
+  source is in `assets/luma.svg`).
+- Picture-in-picture is now drawn as a square floating card with a small soft shadow, and
+  the window is sized to the video's aspect ratio so it has no letterbox bars. The window
+  keeps a transparent margin for the shadow, so KWin on NVIDIA no longer leaves a 1px strip
+  of the video around the PiP window after it is moved. The card is only used in windowed
+  PiP; fullscreen PiP is unchanged.
+
 - Luma is now Wayland-only in code: it refuses to start without a Wayland session, forces
   the Wayland QPA plugin, rejects other platform plugins, and has no X11 renderer path.
 - CMake requires `Qt6::WaylandClient`; the AppImage no longer ships Qt's xcb platform
@@ -74,9 +87,26 @@ All notable changes to Luma are documented here. The format is based on
   [`mpvqt/README.md`](mpvqt/README.md)).
 - The old `ui/debug_logging` setting is migrated to `debug/luma`; new logging
   settings live under the `[debug]` section.
+- The Settings dialog background is less transparent (0.95 alpha), matching the keyboard
+  shortcuts help, so the video shows through much less while settings are open.
+- The media information dialog uses the same less transparent background as the Settings
+  dialog and the shortcuts help.
+- The playlist entry, playlist tab, all-playlists and statistics context menus now use the
+  same custom popup as the player's main menu instead of the platform menu style. The
+  submenus (“Add to playlist”, “Sort”) are pages of the same popup. The shared row,
+  separator and popup styling lives in `LumaMenu.qml`, `LumaMenuButton.qml` and
+  `LumaMenuSeparator.qml`, which the main menu uses as well. The menus are placed in window
+  coordinates and kept inside the window, switching pages fades like in the main menu, and
+  opening one menu closes the previously open one, so only one menu is visible at a time.
 
 ### Fixed
 
+- The statistics panel no longer shows “N/A” for the audio bitrate of high-bitrate audio
+  (for example multichannel FLAC, whose bitrate can legitimately exceed 1500 kbps); the
+  value is formatted like the video bitrate and switches to Mbps when it is that high.
+- When the last file of the playlist ends (or the “stop” playback mode is used), the file is
+  now unloaded instead of leaving its last frame on screen together with the finished
+  position/duration: the video area goes black and the control bar shows `00:00 / 00:00`.
 - Settings changed by another running instance are reloaded from `luma.conf`, `mpv.conf`
   and `yt-dlp.conf`; an open Settings dialog updates without a restart.
 - A link edited in the media information dialog fetches its title again instead of staying
@@ -140,6 +170,8 @@ All notable changes to Luma are documented here. The format is based on
 ### Removed
 
 - The unofficial X11/xcb fallback. X11 is not supported and support is not planned.
+- The “Close” button in the keyboard shortcuts help; the help still hides as soon as `?`
+  is released or the window loses focus.
 
 ## [1.0.0]
 

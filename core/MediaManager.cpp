@@ -1219,16 +1219,26 @@ void MediaManager::playNext() {
         playIndex(next);
     }
     else if (m_playMode == "stop") {
-        if (m_mpv) m_mpv->setPaused(true);
+        stopPlayback();
     }
     else {
         int next = current + 1;
         if (next < count) {
             playIndex(next);
         } else {
-            if (m_mpv) m_mpv->setPaused(true);
+            stopPlayback();
         }
     }
+}
+
+void MediaManager::stopPlayback() {
+    if (!m_mpv) return;
+    // Unload the file so the video area goes black and the control bar returns
+    // to 00:00 instead of leaving the last frame of the finished playlist on
+    // screen.
+    m_mpv->stopPlayback();
+    setLiveStream(false);
+    setLoading(false);
 }
 
 void MediaManager::playPrev() {

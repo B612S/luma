@@ -54,6 +54,7 @@ qt_add_executable(luma
     core/PlaylistManager.cpp
     core/MediaManager.cpp
     core/OsdManager.cpp
+    core/KWinBridge.cpp
     core/TagManager.cpp
     core/TagScanner.cpp
     core/ShortcutAction.cpp
@@ -90,6 +91,9 @@ qt_add_qml_module(luma
         qml/ShortcutField.qml
         qml/AddUrlDialog.qml
         qml/ContextMenu.qml
+        qml/LumaMenu.qml
+        qml/LumaMenuButton.qml
+        qml/LumaMenuSeparator.qml
         qml/StatsPanel.qml
         qml/SettingsDialog.qml
         qml/MediaInfoDialog.qml
@@ -105,6 +109,7 @@ qt_add_qml_module(luma
         core/PlaylistManager.hpp
         core/MediaManager.hpp
         core/OsdManager.hpp
+        core/KWinBridge.hpp
         core/TagManager.hpp
         core/Logger.hpp
         core/ThumbnailProvider.hpp

@@ -29,6 +29,7 @@
 #include "core/MprisManager.hpp"
 #include "core/MediaManager.hpp"
 #include "core/OsdManager.hpp"
+#include "core/KWinBridge.hpp"
 #include "core/ShortcutHandler.hpp"
 #include "core/Logger.hpp"
 #include "core/ThumbnailProvider.hpp"
@@ -180,9 +181,17 @@ int main(int argc, char *argv[]) {
 
     CastManager castManager;
 
+    // Keeps the picture-in-picture window above the others on KDE Plasma.
+    KWinBridge kwinBridge;
+
     // Local HTTP bridge for SOCKS proxies: mpv/FFmpeg cannot do SOCKS themselves.
     SocksHttpProxy streamProxy(&app);
 
+
+    // The picture-in-picture window draws its own shadow inside the window.
+    // The transparent margin around it keeps the composition free of the 1px
+    // edge artifact that KWin/NVIDIA shows around a bare window.
+    QQuickWindow::setDefaultAlphaBuffer(true);
 
     QQmlApplicationEngine engine;
 
@@ -193,6 +202,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("Playlists", &playlists);
     engine.rootContext()->setContextProperty("Osd", &osd);
     engine.rootContext()->setContextProperty("CastManager", &castManager);
+    engine.rootContext()->setContextProperty("KWinBridge", &kwinBridge);
 
     auto *shortcuts = new ShortcutHandler(nullptr, nullptr, nullptr, nullptr, &app,
                                           config.singleInstance());

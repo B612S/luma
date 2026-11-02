@@ -1,18 +1,16 @@
 import QtQuick
 import QtQuick.Controls
-import org.kde.kirigami as Kirigami
 
-Menu {
+// Right-click menu of a playlist tab. Uses the same custom popup as the
+// player's main menu (LumaMenu/ContextMenu.qml), with the sorting actions on a
+// second page.
+LumaMenu {
     id: tabContextMenu
-    width: 200
-    modal: false
-    z: 1000
+    width: 220
 
     property string targetId: ""
     property string targetName: ""
     property bool targetIsDefault: false
-    // App main menu, so it can be closed when the tab menu opens.
-    property var rootContextMenu: null
 
     signal addFilesRequested(string id)
     signal addFolderRequested(string id)
@@ -21,76 +19,142 @@ Menu {
     signal renameRequested(string id, string name)
     signal deleteRequested(string id, string name)
 
-    onOpened: {
-        if (rootContextMenu) rootContextMenu.close();
-    }
+    // Always start from the first page when the menu is opened again.
+    onAboutToShow: currentPage = "main"
 
-    background: Rectangle {
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.95)
-        radius: 8; border.color: "transparent"
-    }
+    Column {
+        width: parent.width
+        spacing: 2
 
-    MenuItem { text: qsTranslate("PlaylistTabs", "tabs_add_file"); onTriggered: tabContextMenu.addFilesRequested(tabContextMenu.targetId) }
-    MenuItem { text: qsTranslate("PlaylistTabs", "tabs_add_folder"); onTriggered: tabContextMenu.addFolderRequested(tabContextMenu.targetId) }
-    MenuItem { text: qsTranslate("PlaylistTabs", "tabs_add_url"); onTriggered: tabContextMenu.addUrlRequested(tabContextMenu.targetId) }
-    MenuSeparator {}
+        // --- TAB PAGE ---
+        Column {
+            visible: tabContextMenu.currentPage === "main"
+            width: parent.width
+            spacing: 2
 
-    Menu {
-        id: sortMenu
-        title: qsTranslate("PlaylistTabs", "tabs_sort")
-        enabled: tabContextMenu.targetId.length > 0
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_add_file")
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.addFilesRequested(tabContextMenu.targetId);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_add_folder")
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.addFolderRequested(tabContextMenu.targetId);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_add_url")
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.addUrlRequested(tabContextMenu.targetId);
+                }
+            }
 
-        MenuItem {
-            text: qsTranslate("PlaylistTabs", "tabs_sort_name_asc")
-            onTriggered: Playlists.sortPlaylist(tabContextMenu.targetId, "name", true)
-        }
-        MenuItem {
-            text: qsTranslate("PlaylistTabs", "tabs_sort_name_desc")
-            onTriggered: Playlists.sortPlaylist(tabContextMenu.targetId, "name", false)
-        }
-        MenuItem {
-            text: qsTranslate("PlaylistTabs", "tabs_shuffle")
-            onTriggered: Playlists.shufflePlaylist(tabContextMenu.targetId)
-        }
-        MenuSeparator { visible: Playlists.playlistHasAudio(tabContextMenu.targetId) }
-        MenuItem {
-            text: qsTranslate("PlaylistTabs", "tabs_sort_artist")
-            visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
-            onTriggered: Playlists.sortPlaylist(tabContextMenu.targetId, "artist", true)
-        }
-        MenuItem {
-            text: qsTranslate("PlaylistTabs", "tabs_sort_year")
-            visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
-            onTriggered: Playlists.sortPlaylist(tabContextMenu.targetId, "year", true)
-        }
-        MenuItem {
-            text: qsTranslate("PlaylistTabs", "tabs_sort_album")
-            visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
-            onTriggered: Playlists.sortPlaylist(tabContextMenu.targetId, "album", true)
-        }
-    }
+            LumaMenuSeparator {}
 
-    MenuSeparator {}
-    MenuItem {
-        text: qsTranslate("PlaylistTabs", "tabs_rename"); enabled: !tabContextMenu.targetIsDefault
-        onTriggered: tabContextMenu.renameRequested(tabContextMenu.targetId, tabContextMenu.targetName)
-    }
-    MenuItem {
-        text: qsTranslate("PlaylistTabs", "tabs_clear")
-        contentItem: Text {
-            text: parent.text
-            color: Kirigami.Theme.negativeTextColor
-            font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 8
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_sort")
+                hasArrow: true
+                isEnabled: tabContextMenu.targetId.length > 0
+                onClicked: tabContextMenu.showPage("sort")
+            }
+
+            LumaMenuSeparator {}
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_rename")
+                isEnabled: !tabContextMenu.targetIsDefault
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.renameRequested(tabContextMenu.targetId, tabContextMenu.targetName);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_clear")
+                destructive: true
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.clearRequested(tabContextMenu.targetId);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_delete")
+                destructive: true
+                isEnabled: !tabContextMenu.targetIsDefault
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.deleteRequested(tabContextMenu.targetId, tabContextMenu.targetName);
+                }
+            }
         }
-        onTriggered: tabContextMenu.clearRequested(tabContextMenu.targetId)
-    }
-    MenuItem {
-        text: qsTranslate("PlaylistTabs", "tabs_delete"); enabled: !tabContextMenu.targetIsDefault
-        contentItem: Text {
-            text: parent.text
-            color: parent.enabled ? Kirigami.Theme.negativeTextColor : Qt.rgba(Kirigami.Theme.negativeTextColor.r, Kirigami.Theme.negativeTextColor.g, Kirigami.Theme.negativeTextColor.b, 0.4)
-            font.pixelSize: 14; verticalAlignment: Text.AlignVCenter; leftPadding: 8
+
+        // --- SORT PAGE ---
+        Column {
+            visible: tabContextMenu.currentPage === "sort"
+            width: parent.width
+            spacing: 2
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_sort_name_asc")
+                onClicked: {
+                    tabContextMenu.close();
+                    Playlists.sortPlaylist(tabContextMenu.targetId, "name", true);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_sort_name_desc")
+                onClicked: {
+                    tabContextMenu.close();
+                    Playlists.sortPlaylist(tabContextMenu.targetId, "name", false);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_shuffle")
+                onClicked: {
+                    tabContextMenu.close();
+                    Playlists.shufflePlaylist(tabContextMenu.targetId);
+                }
+            }
+
+            LumaMenuSeparator {
+                visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
+            }
+
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_sort_artist")
+                visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
+                onClicked: {
+                    tabContextMenu.close();
+                    Playlists.sortPlaylist(tabContextMenu.targetId, "artist", true);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_sort_year")
+                visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
+                onClicked: {
+                    tabContextMenu.close();
+                    Playlists.sortPlaylist(tabContextMenu.targetId, "year", true);
+                }
+            }
+            LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_sort_album")
+                visible: Playlists.playlistHasAudio(tabContextMenu.targetId)
+                onClicked: {
+                    tabContextMenu.close();
+                    Playlists.sortPlaylist(tabContextMenu.targetId, "album", true);
+                }
+            }
+
+            LumaMenuSeparator {}
+
+            LumaMenuButton {
+                text: qsTranslate("ContextMenu", "menu_back")
+                onClicked: tabContextMenu.showPage("main")
+            }
         }
-        onTriggered: tabContextMenu.deleteRequested(tabContextMenu.targetId, tabContextMenu.targetName)
     }
 }
