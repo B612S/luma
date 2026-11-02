@@ -123,8 +123,10 @@ void MprisManager::Stop() {
     if (!m_mpv || !m_media) return;
     m_media->setManualSwitch(true);
     m_mpv->command(QStringList() << "stop");
-    QTimer::singleShot(1000, m_media, [this]() {
-        if (m_media) m_media->setManualSwitch(false);
+    // Capturing this would be unsafe if the manager were ever destroyed before
+    // the timer fires; the media manager owns the timer context.
+    QTimer::singleShot(1000, m_media, [media = m_media]() {
+        if (media) media->setManualSwitch(false);
     });
 }
 

@@ -1,3 +1,4 @@
+// Luma-specific file: not part of upstream KDE mpvqt (see mpvqt/README.md).
 #include "MpvItem.hpp"
 #include <QDebug>
 #include <QVariantMap>
@@ -27,13 +28,15 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     m_thumbThread = new QThread(this);
     m_thumbWorker = new ThumbnailWorker;
     m_thumbWorker->moveToThread(m_thumbThread);
-    connect(m_thumbThread, &QThread::finished, m_thumbWorker, &QObject::deleteLater);
-    connect(m_thumbWorker, &ThumbnailWorker::decoded, this, &MpvItem::onThumbnailDecoded);
+    connect(m_thumbThread, &QThread::finished, m_thumbWorker.data(), &QObject::deleteLater);
+    connect(m_thumbWorker.data(), &ThumbnailWorker::decoded, this, &MpvItem::onThumbnailDecoded);
     m_thumbThread->start();
 
     m_positionTimer.start();
 
     connect(mpvController(), &MpvController::propertyChanged, this, &MpvItem::onMpvPropertyChanged);
+    connect(mpvController(), &MpvController::logMessage, this, &MpvItem::mpvLogMessage,
+            Qt::QueuedConnection);
 
     connect(mpvController(), &MpvController::fileLoaded, this, [this]() {
         m_source = getProperty("path").toString();
@@ -68,8 +71,13 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     observeProperty("volume", MPV_FORMAT_DOUBLE);
     observeProperty("mute", MPV_FORMAT_FLAG);
     observeProperty("vid", MPV_FORMAT_NODE);
+    observeProperty("aid", MPV_FORMAT_INT64);
+    observeProperty("sid", MPV_FORMAT_INT64);
+    observeProperty("track-list", MPV_FORMAT_NODE);
+    observeProperty("video-aspect-override", MPV_FORMAT_NODE);
     observeProperty("deinterlace", MPV_FORMAT_STRING);
     observeProperty("media-title", MPV_FORMAT_STRING);
+    observeProperty("metadata", MPV_FORMAT_NODE);
 
     // Used by the statistics panel. Reading these through getProperty() from
     // QML would block the GUI thread while mpv is opening or buffering a file.
@@ -95,8 +103,17 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
 MpvItem::~MpvItem() {
     if (m_thumbThread) {
         m_thumbThread->quit();
-        m_thumbThread->wait();
+        // A corrupt file can block FFmpeg for a long time; do not hang the
+        // shutdown indefinitely.
+        if (!m_thumbThread->wait(2000)) {
+            m_thumbThread->terminate();
+            m_thumbThread->wait(1000);
+        }
     }
+    // Normally deleted through QThread::finished -> deleteLater; delete it
+    // explicitly if the deferred delete did not run (e.g. after terminate()).
+    if (m_thumbWorker)
+        delete m_thumbWorker.data();
 }
 
 void MpvItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) {
@@ -191,7 +208,7 @@ void MpvItem::dispatchThumbnail() {
 
     m_thumbBusy = true;
     m_thumbPending = false;
-    QMetaObject::invokeMethod(m_thumbWorker, "decode", Qt::QueuedConnection,
+    QMetaObject::invokeMethod(m_thumbWorker.data(), "decode", Qt::QueuedConnection,
                               Q_ARG(QString, m_source),
                               Q_ARG(double, m_thumbPendingTime),
                               Q_ARG(QString, m_thumbPendingId));
@@ -231,6 +248,12 @@ QString MpvItem::getAudioDevice() {
         return device.toString();
     }
     return "N/A";
+}
+
+void MpvItem::setLogLevel(const QString &mode) {
+    if (!mpvController()) return;
+    QMetaObject::invokeMethod(mpvController(), "setLogLevel", Qt::QueuedConnection,
+                              Q_ARG(QString, mode));
 }
 
 void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &value) {

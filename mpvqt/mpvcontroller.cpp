@@ -2,6 +2,25 @@
  * SPDX-FileCopyrightText: 2023 George Florea Bănuș <georgefb899@gmail.com>
  *
  * SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
+ *
+ * Modified for Luma, relative to upstream mpvqt v1.2.1:
+ *   - Disable mpv's own configuration (config=no) and include Luma's
+ *     ~/.config/luma/mpv.conf before mpv_initialize(), instead of the upstream
+ *     ~/.config/mpvqt/mpvqt.conf loaded after initialization.
+ *   - Force vo=libmpv (vo=null when built with LUMA_TEST_MPV_VO for headless
+ *     tests), audio-client-name=luma, keep-open=no, cache=yes, cache-secs=300
+ *     and demuxer-max-bytes=256MiB after initialization.
+ *   - Set video-sync=display-resample when the current value is "audio".
+ *   - Add setLogLevel() for the optional mpv.log.
+ *   - Stop the event loop instead of spinning when mpv_wait_event() returns
+ *     nullptr.
+ *   - Free the caller-created mpv_node after setProperty/setPropertyAsync and
+ *     command/commandAsync (upstream leaked the string/list contents).
+ *   - Ignore property-change/async replies with a null data pointer (the
+ *     property is unavailable) instead of dereferencing it.
+ *   - Read MPV_FORMAT_FLAG as the C int used by the mpv API, and read command
+ *     replies from mpv_event_command::result.
+ *   - Formatting: switch/case indentation and compact error-name mapping.
  */
 
 #include "mpvcontroller.h"
@@ -244,6 +263,18 @@ void MpvController::init()
     d_ptr->m_mpvHandleManager = std::make_shared<MpvHandleManager>(d_ptr->m_mpv);
 }
 
+void MpvController::setLogLevel(const QString &mode)
+{
+    if (!d_ptr || !d_ptr->m_mpv) return;
+
+    const QString m = mode.trimmed().toLower();
+    QByteArray level = "no";
+    if (m == QLatin1String("error")) level = "error";
+    else if (m == QLatin1String("info")) level = "info";
+    else if (m == QLatin1String("debug")) level = "debug";
+    mpv_request_log_messages(d_ptr->m_mpv, level.constData());
+}
+
 void MpvController::mpvEvents(void *ctx)
 {
     if (ctx == nullptr) {
@@ -298,8 +329,8 @@ void MpvController::eventHandler()
 
             case MPV_EVENT_GET_PROPERTY_REPLY: {
                 const mpv_event_property *prop = static_cast<mpv_event_property *>(event->data);
-                if (prop == nullptr) {
-                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_GET_PROPERTY_REPLY: prop is nullptr";
+                if (prop == nullptr || prop->data == nullptr) {
+                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_GET_PROPERTY_REPLY: prop/data is nullptr";
                     continue;
                 }
                 const auto data = d_ptr->nodeToVariant(reinterpret_cast<mpv_node *>(prop->data));
@@ -313,20 +344,21 @@ void MpvController::eventHandler()
             }
 
             case MPV_EVENT_COMMAND_REPLY: {
-                mpv_event_property *prop = static_cast<mpv_event_property *>(event->data);
-                if (prop == nullptr) {
-                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_COMMAND_REPLY: prop is nullptr";
+                const auto *cmd = static_cast<const mpv_event_command *>(event->data);
+                if (cmd == nullptr) {
+                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_COMMAND_REPLY: cmd is nullptr";
                     continue;
                 }
-                auto data = d_ptr->nodeToVariant(reinterpret_cast<mpv_node *>(prop));
+                auto data = d_ptr->nodeToVariant(&cmd->result);
                 Q_EMIT asyncReply(data, {*event});
                 break;
             }
 
             case MPV_EVENT_PROPERTY_CHANGE: {
                 const mpv_event_property *prop = static_cast<mpv_event_property *>(event->data);
-                if (prop == nullptr) {
-                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_PROPERTY_CHANGE: prop is nullptr";
+                if (prop == nullptr || prop->data == nullptr) {
+                    // The property became unavailable; keep the last value.
+                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_PROPERTY_CHANGE: prop/data is nullptr";
                     continue;
                 }
                 QVariant data;
@@ -341,7 +373,8 @@ void MpvController::eventHandler()
                         data = qlonglong(*reinterpret_cast<int64_t *>(prop->data));
                         break;
                     case MPV_FORMAT_FLAG:
-                        data = *reinterpret_cast<bool *>(prop->data);
+                        // mpv represents flags as C int, not bool.
+                        data = (*reinterpret_cast<int *>(prop->data)) != 0;
                         break;
                     case MPV_FORMAT_NODE:
                         data = d_ptr->nodeToVariant(reinterpret_cast<mpv_node *>(prop->data));
@@ -431,14 +464,18 @@ int MpvController::setProperty(const QString &property, const QVariant &value)
 {
     mpv_node node;
     d_ptr->setNode(&node, value);
-    return mpv_set_property(d_ptr->m_mpv, property.toUtf8().constData(), MPV_FORMAT_NODE, &node);
+    const int err = mpv_set_property(d_ptr->m_mpv, property.toUtf8().constData(), MPV_FORMAT_NODE, &node);
+    // mpv copies the node contents; the caller still owns (and must free) them.
+    d_ptr->freeNode(&node);
+    return err;
 }
 
 int MpvController::setPropertyAsync(const QString &property, const QVariant &value, int id)
 {
     mpv_node node;
     d_ptr->setNode(&node, value);
-    int err = mpv_set_property_async(d_ptr->m_mpv, id, property.toUtf8().constData(), MPV_FORMAT_NODE, &node);
+    const int err = mpv_set_property_async(d_ptr->m_mpv, id, property.toUtf8().constData(), MPV_FORMAT_NODE, &node);
+    d_ptr->freeNode(&node);
     return err;
 }
 
@@ -464,7 +501,8 @@ QVariant MpvController::command(const QStringList &params)
     mpv_node node;
     d_ptr->setNode(&node, params);
     mpv_node result;
-    int err = mpv_command_node(d_ptr->m_mpv, &node, &result);
+    const int err = mpv_command_node(d_ptr->m_mpv, &node, &result);
+    d_ptr->freeNode(&node);
     if (err < 0) {
         qCDebug(MpvQt_MpvController) << getError(err) << params;
         return QVariant::fromValue(ErrorReturn(err));
@@ -477,7 +515,9 @@ int MpvController::commandAsync(const QVariant &params, int id)
 {
     mpv_node node;
     d_ptr->setNode(&node, params);
-    return mpv_command_node_async(d_ptr->m_mpv, id, &node);
+    const int err = mpv_command_node_async(d_ptr->m_mpv, id, &node);
+    d_ptr->freeNode(&node);
+    return err;
 }
 
 std::shared_ptr<MpvHandleManager> MpvController::mpvHandleManager() const

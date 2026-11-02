@@ -1,8 +1,11 @@
 #pragma once
 #include <QObject>
+#include <QElapsedTimer>
 #include "CastDiscovery.hpp"
 #include "CastStreamServer.hpp"
 #include "CastV2Client.hpp"
+
+class QTimer;
 
 class CastManager : public QObject {
     Q_OBJECT
@@ -40,8 +43,14 @@ signals:
     void remoteStatusChanged();
 
 private:
+    void stopEncodingWait();
+
     CastDiscovery *m_discovery;
     CastStreamServer *m_server;
     CastV2Client *m_client;
     bool m_casting = false;
+    // Only the current "wait for FFmpeg to finish encoding" timer; stopped and
+    // deleted when the cast is cancelled or replaced.
+    QTimer *m_castWaitTimer = nullptr;
+    QElapsedTimer m_castElapsed;
 };

@@ -2,6 +2,9 @@
  * SPDX-FileCopyrightText: 2023 George Florea Bănuș <georgefb899@gmail.com>
  *
  * SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
+ *
+ * Modified for Luma, relative to upstream mpvqt v1.2.1:
+ *   - Add setLogLevel() for the optional mpv.log.
  */
 
 #ifndef MPVCONTROLLER_H
@@ -93,6 +96,9 @@ public:
 
 public Q_SLOTS:
     void init();
+    // "off"/"none", "error", "info" or "debug"; forwarded to
+    // mpv_request_log_messages().
+    void setLogLevel(const QString &mode);
 
     /**
      * Get a notification whenever the given property changes. You will receive

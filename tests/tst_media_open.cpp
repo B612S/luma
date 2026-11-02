@@ -21,6 +21,7 @@ private slots:
     void cleanupTestCase();
     void openAudio();
     void openVideo();
+    void fileInfoRequest();
     void youtubeLinkThroughYtdlp();
     void realYouTubeLink();
 
@@ -130,6 +131,32 @@ void TestMediaOpen::openVideo()
     QCOMPARE(m_mpv->property("width").toInt(), 64);
     QCOMPARE(m_mpv->property("height").toInt(), 64);
     QVERIFY(m_media->hasVideo());
+
+    // These read values observed by MpvItem instead of blocking the mpv thread.
+    QTRY_VERIFY_WITH_TIMEOUT(!m_media->getTracks("video").isEmpty(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!m_media->getTracks("audio").isEmpty(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->currentTrackId("vid") > 0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->currentTrackId("aid") > 0, 5000);
+
+    m_media->setAspectRatio("16:9");
+    QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("16:9"), 5000);
+    m_media->setAspectRatio("original");
+    QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("original"), 5000);
+}
+
+void TestMediaOpen::fileInfoRequest()
+{
+    const QString path = QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav");
+    QSignalSpy spy(m_media, &MediaManager::fileInfoReady);
+    m_media->requestFileInfo(path);
+
+    QVERIFY(spy.wait(5000));
+    QCOMPARE(spy.count(), 1);
+    const QList<QVariant> args = spy.takeFirst();
+    QCOMPARE(args.at(0).toString(), path);
+    const QVariantMap info = args.at(1).toMap();
+    QCOMPARE(info.value("path").toString(), path);
+    QCOMPARE(info.value("isAudio").toBool(), true);
 }
 
 void TestMediaOpen::youtubeLinkThroughYtdlp()

@@ -10,6 +10,8 @@ endif()
 add_library(luma_testcore STATIC
     ${CMAKE_SOURCE_DIR}/core/ConfigManager.cpp
     ${CMAKE_SOURCE_DIR}/core/ConfigManager.hpp
+    ${CMAKE_SOURCE_DIR}/core/Logger.cpp
+    ${CMAKE_SOURCE_DIR}/core/Logger.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistModel.cpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistModel.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistManager.cpp
@@ -43,6 +45,7 @@ set(LUMA_TESTS
     tst_playlistmodel
     tst_configmanager
     tst_playlistmanager
+    tst_logger
 )
 
 foreach(test_name IN LISTS LUMA_TESTS)
@@ -55,6 +58,18 @@ foreach(test_name IN LISTS LUMA_TESTS)
         TIMEOUT 60
     )
 endforeach()
+
+# Wayland-only policy: the binary must refuse to start without a Wayland
+# session instead of falling back to X11. It exits before QApplication is
+# created, so no display or mpv is needed.
+if(TARGET luma)
+    add_test(NAME wayland_only
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/check_wayland_only.sh $<TARGET_FILE:luma>)
+    set_tests_properties(wayland_only PROPERTIES
+        ENVIRONMENT "WAYLAND_DISPLAY=;WAYLAND_SOCKET=;DISPLAY=:99;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 15
+    )
+endif()
 
 # Integration tests with the real libmpv: headless, no display, no network by
 # default. The optional real YouTube test runs only with LUMA_TEST_YOUTUBE_URL.
@@ -85,6 +100,7 @@ target_link_libraries(tst_media_open PRIVATE
     Qt6::Quick
     Qt6::DBus
     Qt6::Network
+    Qt6::Concurrent
     Qt6::OpenGL
     Qt6::OpenGLWidgets
     ${MPV_LIBRARIES}

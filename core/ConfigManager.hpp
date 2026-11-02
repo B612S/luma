@@ -4,6 +4,9 @@
 #include <QStringList>
 #include <QVariant>
 
+class QFileSystemWatcher;
+class QTimer;
+
 class ConfigManager : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool rememberVolume READ rememberVolume WRITE setRememberVolume NOTIFY rememberVolumeChanged)
@@ -31,6 +34,9 @@ class ConfigManager : public QObject {
     Q_PROPERTY(QString ytdlpProxy READ ytdlpProxy WRITE setYtdlpProxy NOTIFY ytdlpSettingsChanged)
     Q_PROPERTY(QString ytdlpProxyType READ ytdlpProxyType WRITE setYtdlpProxyType NOTIFY ytdlpSettingsChanged)
     Q_PROPERTY(QString ytdlpProxyAddress READ ytdlpProxyAddress WRITE setYtdlpProxyAddress NOTIFY ytdlpSettingsChanged)
+    Q_PROPERTY(QString lumaLogMode READ lumaLogMode WRITE setLumaLogMode NOTIFY loggingChanged)
+    Q_PROPERTY(QString mpvLogMode READ mpvLogMode WRITE setMpvLogMode NOTIFY loggingChanged)
+    Q_PROPERTY(QString ytdlpLogMode READ ytdlpLogMode WRITE setYtdlpLogMode NOTIFY loggingChanged)
 
 public:
     explicit ConfigManager(QObject *parent = nullptr);
@@ -112,6 +118,15 @@ public:
     QString ytdlpConfigPath() const;
     QStringList ytdlpConfigArgs() const;
 
+    // Log collection modes: "off", "error", "info", "debug". Stored in
+    // luma.conf under [debug]; files go to ~/.cache/luma/{luma,mpv,yt-dlp}.log.
+    QString lumaLogMode() const;
+    void setLumaLogMode(const QString &mode);
+    QString mpvLogMode() const;
+    void setMpvLogMode(const QString &mode);
+    QString ytdlpLogMode() const;
+    void setYtdlpLogMode(const QString &mode);
+
     Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
     Q_INVOKABLE void setValue(const QString &key, const QVariant &value);
 
@@ -132,6 +147,7 @@ signals:
     void audioOutputChanged();
     void hwdecChanged();
     void ytdlpSettingsChanged();
+    void loggingChanged();
 
 private:
     void loadPlaybackSettingsFromMpvConf();
@@ -141,9 +157,16 @@ private:
     void removeYtdlpComments();
     void loadYtdlpConfig();
     void writeYtdlpConfig();
+    // Another instance may rewrite the config files while this one is running;
+    // watch them and reload, so the UI shows the values that are on disk.
+    void setupFileWatcher();
+    void reloadFromDisk();
 
     QSettings *m_settings;
     QString m_configDir;
+    QFileSystemWatcher *m_watcher = nullptr;
+    QTimer *m_reloadTimer = nullptr;
+    bool m_reloading = false;
     QString m_audioOutput = QStringLiteral("auto");
     QString m_hwdec = QStringLiteral("auto");
     QStringList m_ytdlpExtra;

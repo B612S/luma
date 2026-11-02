@@ -71,14 +71,12 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
         case Qt::DisplayRole: {
             QString name = e.title;
             if (e.path.contains(QStringLiteral("://"))) {
-                // For URLs without a title, show the host rather than a URL fragment.
+                // Until yt-dlp returns a title (or if the link is broken), show
+                // the actual URL — including the query. Dropping it made every
+                // broken YouTube link look like a valid "youtube.com/watch".
                 const QString fileName = QFileInfo(e.path).fileName();
-                if (name.isEmpty() || (!fileName.isEmpty() && name == fileName)) {
-                    const QUrl url(e.path);
-                    name = url.host();
-                    if (!url.path().isEmpty() && url.path() != QStringLiteral("/"))
-                        name += url.path();
-                }
+                if (name.isEmpty() || (!fileName.isEmpty() && name == fileName))
+                    name = e.path;
             } else {
                 // Don't show the extension for local files.
                 const QString fileName = QFileInfo(e.path).fileName();
@@ -155,6 +153,7 @@ void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
     beginResetModel();
     m_entries.clear();
     m_originalPaths.clear();
+    m_paths.clear();
     for (const QString &f : files) {
         Entry e;
         e.path = f;
@@ -163,6 +162,7 @@ void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
                                                     : QFileInfo(f).completeBaseName();
         m_entries.append(e);
         m_originalPaths << f;
+        m_paths.insert(f);
     }
     m_currentPlayingFile = current;
     m_currentIndex = -1;
@@ -178,11 +178,13 @@ void PlaylistModel::setEntries(const QVariantList &entries, const QString &curre
     beginResetModel();
     m_entries.clear();
     m_originalPaths.clear();
+    m_paths.clear();
     for (const QVariant &v : entries) {
         Entry e = variantToEntry(v.toMap());
         if (e.path.isEmpty()) continue;
         m_entries.append(e);
         m_originalPaths << e.path;
+        m_paths.insert(e.path);
     }
     m_currentPlayingFile = current;
     m_currentIndex = -1;
@@ -208,10 +210,7 @@ QString PlaylistModel::currentFile() const {
 }
 
 bool PlaylistModel::contains(const QString &path) const {
-    for (const Entry &e : m_entries) {
-        if (e.path == path) return true;
-    }
-    return false;
+    return m_paths.contains(path);
 }
 
 int PlaylistModel::indexOf(const QString &path) const {
@@ -398,6 +397,14 @@ void PlaylistModel::removeItem(int index) {
     QString path = m_entries[index].path;
     m_entries.removeAt(index);
     m_originalPaths.removeAll(path);
+    m_paths.remove(path);
+    // Playlist files from old versions may contain duplicate paths.
+    for (const Entry &e : m_entries) {
+        if (e.path == path) {
+            m_paths.insert(path);
+            break;
+        }
+    }
     endRemoveRows();
 
     if (wasCurrent) {
@@ -424,6 +431,7 @@ void PlaylistModel::clear() {
     beginResetModel();
     m_entries.clear();
     m_originalPaths.clear();
+    m_paths.clear();
     m_currentIndex = -1;
     m_currentPlayingFile.clear();
     endResetModel();
@@ -436,14 +444,13 @@ void PlaylistModel::appendEntry(const QVariantMap &entry) {
     Entry e = variantToEntry(entry);
     if (e.path.isEmpty()) return;
 
-    // Filter out duplicates by path
-    for (const Entry &existing : m_entries) {
-        if (existing.path == e.path) return;
-    }
+    // Filter out duplicates by path (O(1) even for large folders).
+    if (m_paths.contains(e.path)) return;
 
     beginInsertRows(QModelIndex(), m_entries.size(), m_entries.size());
     m_entries.append(e);
     m_originalPaths << e.path;
+    m_paths.insert(e.path);
     endInsertRows();
 
     emit countChanged();

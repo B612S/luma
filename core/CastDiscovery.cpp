@@ -8,27 +8,45 @@ CastDiscovery::CastDiscovery(QObject *parent) : QObject(parent) {}
 void CastDiscovery::refresh() {
     if (m_scanning) return;
     m_scanning = true;
+    const quint64 generation = ++m_scanGeneration;
     emit scanningChanged();
 
     m_devices.clear();
     emit devicesChanged();
 
-    m_process = new QProcess(this);
-    connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, [this](int, QProcess::ExitStatus) {
-                parseAvahiOutput(QString::fromUtf8(m_process->readAllStandardOutput()));
+    auto *proc = new QProcess(this);
+    m_process = proc;
+
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, proc, generation](int, QProcess::ExitStatus) {
+                if (generation != m_scanGeneration || m_process != proc) return;
+                m_process = nullptr;
+                const QByteArray output = proc->readAllStandardOutput();
+                proc->deleteLater();
+                parseAvahiOutput(QString::fromUtf8(output));
                 m_scanning = false;
                 emit scanningChanged();
-                m_process->deleteLater();
-                m_process = nullptr;
             });
 
-    m_process->start("avahi-browse", QStringList() << "-rt" << "_googlecast._tcp");
+    // FailedToStart does not emit finished(); without this the menu would stay
+    // in "searching" forever and the process object would never be released.
+    connect(proc, &QProcess::errorOccurred, this,
+            [this, proc, generation](QProcess::ProcessError error) {
+        if (generation != m_scanGeneration || error != QProcess::FailedToStart
+                || m_process != proc)
+            return;
+        m_process = nullptr;
+        proc->deleteLater();
+        m_scanning = false;
+        emit scanningChanged();
+    });
 
-    QTimer::singleShot(5000, this, [this]() {
-        if (m_process && m_process->state() == QProcess::Running) {
-            m_process->kill();
-        }
+    proc->start("avahi-browse", QStringList() << "-rt" << "_googlecast._tcp");
+
+    QTimer::singleShot(5000, this, [this, proc, generation]() {
+        if (generation == m_scanGeneration && m_process == proc
+                && proc->state() == QProcess::Running)
+            proc->kill();
     });
 }
 

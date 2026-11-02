@@ -1,6 +1,7 @@
 #pragma once
 #include <QAbstractListModel>
 #include <QVector>
+#include <QSet>
 #include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
@@ -79,6 +80,9 @@ private:
     Entry variantToEntry(const QVariantMap &m) const;
 
     QStringList m_originalPaths;   // for disabling shuffle
+    // Fast duplicate check when a whole folder is appended (appendEntry used
+    // to scan every existing entry for every new file).
+    QSet<QString> m_paths;
     QVector<Entry> m_entries;
     int m_currentIndex = -1;
     QString m_currentPlayingFile;

@@ -48,6 +48,16 @@ public:
     Q_INVOKABLE QString playlistName(const QString &id) const;
     Q_INVOKABLE void saveActive();
 
+    // Playback mode ("sequential" | "repeat" | "shuffle" | "stop") is stored
+    // per playlist. The Default playlist takes its mode from the settings;
+    // named playlists keep their own mode in the playlist file.
+    Q_INVOKABLE QString playlistMode(const QString &id) const;
+    Q_INVOKABLE void setPlaylistMode(const QString &id, const QString &mode);
+    // Re-emits the translated playlist list after a language change.
+    void retranslate();
+    // Fetches the title of a link via yt-dlp (also used when the URL is edited).
+    void fetchUrlTitle(const QString &id, const QString &url);
+
 signals:
     void playlistsChanged();
     void activeIdChanged();
@@ -57,7 +67,6 @@ private:
     void loadAll();
     void savePlaylist(const QString &id);
     void loadPlaylist(const QString &id);
-    void fetchUrlTitle(const QString &id, const QString &url);
     void saveOrder();
     // Changes (drag and drop, additions) arrive very often, so writing to disk
     // and the playlistsChanged signal are coalesced via a timer.
@@ -73,6 +82,7 @@ private:
     PlaylistModel *m_defaultModel;
     QHash<QString, PlaylistModel*> m_models;
     QHash<QString, QString> m_names;
+    QHash<QString, QString> m_modes;
     QStringList m_order;
     QString m_activeId = DEFAULT_ID;
     bool m_loading = false;

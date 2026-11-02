@@ -4,7 +4,10 @@ import org.kde.kirigami as Kirigami
 
 Rectangle {
     id: osd
-    width: label.implicitWidth + 32
+    // Long messages (e.g. the link yt-dlp is opening) must not overflow the
+    // window; such text is elided in the middle instead.
+    readonly property real maxWidth: Window.window ? Math.max(200, Window.window.width - 80) : 900
+    width: Math.min(label.implicitWidth + 32, maxWidth)
     height: 40
     radius: 8
     color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
@@ -45,8 +48,11 @@ Rectangle {
     Label {
         id: label
         anchors.centerIn: parent
+        width: osd.width - 32
+        horizontalAlignment: Text.AlignHCenter
         color: Kirigami.Theme.textColor
         font.pixelSize: 16
         wrapMode: Text.NoWrap
+        elide: Text.ElideMiddle
     }
 }

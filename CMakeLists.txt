@@ -20,9 +20,10 @@ set(CMAKE_AUTOUIC ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Luma is Wayland-only: the Qt Wayland client integration is required, not optional.
 find_package(Qt6 REQUIRED COMPONENTS
-    Core Gui Quick QuickControls2 Widgets DBus Network
-    OpenGL OpenGLWidgets LinguistTools
+    Core Gui Quick QuickControls2 Widgets DBus Network Concurrent
+    OpenGL OpenGLWidgets LinguistTools WaylandClient
 )
 find_package(PkgConfig REQUIRED)
 
@@ -40,8 +41,6 @@ pkg_check_modules(AVFORMAT REQUIRED libavformat)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
 pkg_check_modules(SWSCALE REQUIRED libswscale)
 pkg_check_modules(AVUTIL REQUIRED libavutil)
-
-find_package(Qt6 QUIET COMPONENTS WaylandClient)
 
 qt_standard_project_setup()
 
@@ -156,6 +155,7 @@ target_link_libraries(luma PRIVATE
     Qt6::Widgets
     Qt6::DBus
     Qt6::Network
+    Qt6::Concurrent
     Qt6::OpenGL
     Qt6::OpenGLWidgets
     ${MPV_LIBRARIES}
@@ -170,9 +170,8 @@ target_link_libraries(luma PRIVATE
 
 target_compile_definitions(luma PRIVATE LUMA_VERSION="${PROJECT_VERSION}")
 
-if (TARGET Qt6::WaylandClient)
-    target_link_libraries(luma PRIVATE Qt6::WaylandClient)
-endif()
+# Required: Luma has no X11 fallback.
+target_link_libraries(luma PRIVATE Qt6::WaylandClient)
 
 install(TARGETS luma
     BUNDLE DESTINATION .

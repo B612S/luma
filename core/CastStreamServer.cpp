@@ -1,10 +1,20 @@
 #include "CastStreamServer.hpp"
 #include <QTcpSocket>
+#include <QHostAddress>
 #include <QNetworkInterface>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
+#include <QPointer>
+#include <QTimer>
+#include <QUuid>
 #include <QDebug>
+
+namespace {
+// The Chromecast only sends small GET/OPTIONS requests; anything larger is
+// either broken or an attempt to exhaust memory.
+constexpr int kMaxRequestBytes = 16 * 1024;
+}
 
 CastStreamServer::CastStreamServer(QObject *parent) : QObject(parent) {}
 
@@ -55,6 +65,7 @@ bool CastStreamServer::start(const QString &inputFile, const QString &targetIP) 
         return false;
     }
 
+    m_token = QUuid::createUuid().toString(QUuid::WithoutBraces);
     const QString playlist = playlistPath();
 
     m_ffmpeg = new QProcess(this);
@@ -65,6 +76,17 @@ bool CastStreamServer::start(const QString &inputFile, const QString &targetIP) 
         if (!err.isEmpty()) {
             qWarning().noquote() << "[ffmpeg]" << QString::fromUtf8(err).trimmed();
         }
+    });
+    connect(m_ffmpeg, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        qWarning() << "CastStreamServer: ffmpeg failed to start";
+        // FailedToStart may be emitted synchronously from start(); stop the
+        // server (and clean up) only after start() has returned.
+        QPointer<QProcess> failed = m_ffmpeg;
+        QTimer::singleShot(0, this, [this, failed]() {
+            if (failed && m_ffmpeg == failed.data())
+                stop();
+        });
     });
 
     QStringList args;
@@ -89,8 +111,11 @@ bool CastStreamServer::start(const QString &inputFile, const QString &targetIP) 
         }
     });
 
-    if (!m_server->listen(QHostAddress::Any, 0)) {
-        qWarning() << "CastStreamServer: listen failed:" << m_server->errorString();
+    // Bind to the interface we advertise to the TV instead of every interface
+    // (which would expose the stream on unrelated networks).
+    if (!m_server->listen(QHostAddress(m_localIP), 0)) {
+        qWarning() << "CastStreamServer: listen failed on" << m_localIP
+                   << ":" << m_server->errorString();
         stop();
         return false;
     }
@@ -114,36 +139,62 @@ bool CastStreamServer::isFullyEncoded() const {
 }
 
 void CastStreamServer::stop() {
-    if (m_ffmpeg) {
-        m_ffmpeg->disconnect(this);
-        m_ffmpeg->kill();
-        m_ffmpeg->waitForFinished(1000);
-        m_ffmpeg->deleteLater();
-        m_ffmpeg = nullptr;
-    }
+    // Stop serving first: a late readyRead() must not touch the temporary
+    // directory after it is deleted below.
     if (m_server) {
+        const QList<QTcpSocket *> clients = m_server->findChildren<QTcpSocket *>();
+        for (QTcpSocket *client : clients) {
+            client->disconnect(this);
+            client->close();
+            client->deleteLater();
+        }
         m_server->close();
         m_server->deleteLater();
         m_server = nullptr;
+    }
+    if (m_ffmpeg) {
+        m_ffmpeg->disconnect(this);
+        if (m_ffmpeg->state() != QProcess::NotRunning) {
+            m_ffmpeg->kill();
+            // Keep this bounded: stop() is called from the GUI thread. SIGKILL
+            // is normally processed immediately; the process object is deleted
+            // later.
+            m_ffmpeg->waitForFinished(100);
+        }
+        m_ffmpeg->deleteLater();
+        m_ffmpeg = nullptr;
     }
     if (m_tempDir) {
         delete m_tempDir;
         m_tempDir = nullptr;
     }
+    m_token.clear();
     m_port = 0;
 }
 
 QString CastStreamServer::url() const {
-    if (!isRunning()) return {};
-    return QString("http://%1:%2/stream/playlist.m3u8").arg(m_localIP).arg(m_port);
+    if (!isRunning() || m_token.isEmpty()) return {};
+    return QString("http://%1:%2/stream/%3/playlist.m3u8")
+        .arg(m_localIP).arg(m_port).arg(m_token);
 }
 
 void CastStreamServer::handleClient(QTcpSocket *socket) {
     connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
 
     connect(socket, &QTcpSocket::readyRead, this, [this, socket]() {
-        QByteArray request = socket->readAll();
+        if (!m_tempDir) {
+            socket->close();
+            return;
+        }
+
+        const QByteArray request = socket->read(kMaxRequestBytes + 1);
         if (request.isEmpty()) return;
+        if (request.size() > kMaxRequestBytes) {
+            socket->write("HTTP/1.1 431 Request Header Fields Too Large\r\n"
+                          "Content-Length: 0\r\nConnection: close\r\n\r\n");
+            socket->disconnectFromHost();
+            return;
+        }
 
         const QByteArray method = request.left(request.indexOf(' ')).toUpper();
 
@@ -168,7 +219,17 @@ void CastStreamServer::handleClient(QTcpSocket *socket) {
         }
 
         QString path = QString::fromUtf8(request).section(' ', 1, 1);
-        QString fileName = path.section('/', -1).split('?').first();
+        const int query = path.indexOf(QLatin1Char('?'));
+        if (query >= 0) path.truncate(query);
+
+        // Only URLs handed to the Cast device (with the random token) work.
+        const QString prefix = QStringLiteral("/stream/%1/").arg(m_token);
+        if (m_token.isEmpty() || !path.startsWith(prefix)) {
+            socket->write("HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            socket->disconnectFromHost();
+            return;
+        }
+        const QString fileName = path.mid(prefix.size());
 
         if (fileName.isEmpty() || fileName.contains("..") || fileName.contains('/')) {
             socket->write("HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");

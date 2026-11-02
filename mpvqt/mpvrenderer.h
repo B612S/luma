@@ -2,6 +2,13 @@
  * SPDX-FileCopyrightText: 2023 George Florea Bănuș <georgefb899@gmail.com>
  *
  * SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
+ *
+ * Modified for Luma, relative to upstream mpvqt v1.2.1:
+ *   - Include <QOpenGLFramebufferObject> for the createFramebufferObject()
+ *     return type.
+ *   - Remove the m_isFramebufferReady flag; renderer readiness is no longer
+ *     reported through MpvAbstractItem::ready() (see mpvrenderer.cpp).
+ *   - Remove upstream implementation comments and redundant blank lines.
  */
 
 #ifndef MPVRENDERER_H

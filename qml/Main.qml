@@ -334,6 +334,7 @@ ApplicationWindow {
         id: statsPanel; objectName: "statsPanel"
         anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 20
         width: 300; maxHeight: root.height - controlBar.height - 60; mpv: mpv; isOpen: false; z: 5
+        hostWindow: root
     }
 
     OsdToast {
@@ -387,10 +388,12 @@ ApplicationWindow {
         property bool cursorWasVisible: true
 
         onOpened: {
-            // Close the playlist menus (tracks and tabs)
+            // Close the playlist menus (tracks and tabs) and the stats menu.
             if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
                 playlistPanel.closeContextMenu();
             }
+            if (typeof statsPanel !== "undefined" && statsPanel !== null)
+                statsPanel.closeContextMenu();
             cursorWasVisible = root.cursorVisible;
             root.cursorY = -1;
             idleTimer.restart();
@@ -424,4 +427,5 @@ ApplicationWindow {
     function openUrlDialog() {
         urlDialog.openWith(qsTranslate("MediaManager", "dialog_open_url"), "");
     }
+
 }

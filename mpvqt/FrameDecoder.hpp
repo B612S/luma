@@ -1,3 +1,4 @@
+// Luma-specific file: not part of upstream KDE mpvqt (see mpvqt/README.md).
 #pragma once
 #include <QObject>
 #include <QImage>

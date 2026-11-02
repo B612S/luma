@@ -85,7 +85,7 @@ void TagScanner::stop()
 
 void TagScanner::enqueue(const QString &path)
 {
-    if (path.isEmpty() || m_pending.contains(path))
+    if (!m_worker || path.isEmpty() || m_pending.contains(path))
         return;
     m_pending.insert(path);
 

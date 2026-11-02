@@ -27,6 +27,8 @@ CastManager::CastManager(QObject *parent) : QObject(parent) {
 
 void CastManager::castTo(const QString &address, quint16 port,
                          const QString &filePath, const QString &title) {
+    // Cancel a pending wait from a previous (possibly still encoding) cast.
+    stopEncodingWait();
     if (m_casting) stopCast();
 
     QFileInfo fi(filePath);
@@ -43,25 +45,19 @@ void CastManager::castTo(const QString &address, quint16 port,
     const QString url = m_server->url();
     const QString mediaTitle = title.isEmpty() ? fi.fileName() : title;
 
-    QTimer *waitTimer = new QTimer(this);
-    QElapsedTimer *elapsed = new QElapsedTimer();
-    elapsed->start();
+    m_castElapsed.start();
+    m_castWaitTimer = new QTimer(this);
+    m_castWaitTimer->setInterval(200);
 
-    waitTimer->setInterval(200);
-
-    connect(waitTimer, &QTimer::timeout, this, [this, waitTimer, elapsed, address, port, url, mediaTitle]() {
+    connect(m_castWaitTimer, &QTimer::timeout, this, [this, address, port, url, mediaTitle]() {
         if (!m_server->isRunning()) {
-            waitTimer->stop();
-            waitTimer->deleteLater();
-            delete elapsed;
+            stopEncodingWait();
             emit castFailed("Stream server stopped unexpectedly");
             return;
         }
 
         if (m_server->isFullyEncoded()) {
-            waitTimer->stop();
-            waitTimer->deleteLater();
-            delete elapsed;
+            stopEncodingWait();
 
             qDebug() << "CastManager: Encoding finished. Sending LOAD to Chromecast...";
 
@@ -72,29 +68,34 @@ void CastManager::castTo(const QString &address, quint16 port,
             return;
         }
 
-        if (elapsed->elapsed() > 30000) {
-            waitTimer->stop();
-            waitTimer->deleteLater();
-            delete elapsed;
+        if (m_castElapsed.elapsed() > 30000) {
+            stopEncodingWait();
             qWarning() << "CastManager: Timeout waiting for encoding.";
-            emit castFailed("FFmpeg did not finish encoding in time");
+            // Stop the server before emitting: a handler may start a new cast
+            // synchronously and must not be stopped by this old timeout.
             m_server->stop();
+            emit castFailed("FFmpeg did not finish encoding in time");
         }
     });
 
-    waitTimer->start();
-                         }
+    m_castWaitTimer->start();
+}
 
-                         void CastManager::stopCast() {
-                             for (QTimer *t : findChildren<QTimer*>()) {
-                                 t->stop();
-                             }
+void CastManager::stopEncodingWait() {
+    if (!m_castWaitTimer) return;
+    m_castWaitTimer->stop();
+    m_castWaitTimer->deleteLater();
+    m_castWaitTimer = nullptr;
+}
 
-                             m_client->stop();
-                             m_server->stop();
+void CastManager::stopCast() {
+    stopEncodingWait();
 
-                             if (m_casting) {
-                                 m_casting = false;
-                                 emit castingChanged();
-                             }
-                         }
+    m_client->stop();
+    m_server->stop();
+
+    if (m_casting) {
+        m_casting = false;
+        emit castingChanged();
+    }
+}

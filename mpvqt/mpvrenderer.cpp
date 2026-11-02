@@ -2,6 +2,20 @@
  * SPDX-FileCopyrightText: 2023 George Florea Bănuș <georgefb899@gmail.com>
  *
  * SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
+ *
+ * Modified for Luma, relative to upstream mpvqt v1.2.1:
+ *   - Wayland-only display setup: the X11 (xcb) branch is removed, platform
+ *     names starting with "wayland" are accepted, and the native interface is
+ *     null-checked.
+ *   - Clear the framebuffer to black and skip rendering while casting or while
+ *     video output is disabled in MpvItem.
+ *   - Add null guards for the item, the resource manager, the render context
+ *     and the framebuffer object.
+ *   - Pass MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME (0) to mpv.
+ *   - Do not emit MpvAbstractItem::ready() from synchronize(); the
+ *     m_isFramebufferReady flag was removed accordingly (see mpvrenderer.h).
+ *   - The return value of mpv_render_context_render() is no longer logged.
+ *   - Formatting cleanups.
  */
 
 #include "mpvrenderer.h"
@@ -104,17 +118,12 @@ mpv_render_context *MpvRenderer::createMpvRenderContext()
     #if defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN) && !defined(Q_OS_ANDROID) && !defined(Q_OS_HAIKU)
     const QString platform = QGuiApplication::platformName();
 
+    // Luma is Wayland-only; there is deliberately no X11 display path here.
     if (platform.startsWith(QStringLiteral("wayland"))) {
         if (auto *ni = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>()) {
             display.type = MPV_RENDER_PARAM_WL_DISPLAY;
             display.data = ni->display();
             qCDebug(MpvQt_MpvRenderer) << "mpv: using Wayland display";
-        }
-    } else if (platform == QStringLiteral("xcb")) {
-        if (auto *ni = qGuiApp->nativeInterface<QNativeInterface::QX11Application>()) {
-            display.type = MPV_RENDER_PARAM_X11_DISPLAY;
-            display.data = ni->display();
-            qCDebug(MpvQt_MpvRenderer) << "mpv: using X11 display";
         }
     }
     #endif

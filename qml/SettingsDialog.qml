@@ -26,7 +26,13 @@ Dialog {
     readonly property int controlWidth: 200
 
     // While the dialog is open, shortcuts (including wheel = volume) are disabled.
-    onOpened: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(false); }
+    onOpened: {
+        if (typeof shortcuts !== "undefined" && shortcuts !== null)
+            shortcuts.setShortcutsEnabled(false);
+        // The dialog's custom content is not focusable by default; without
+        // active focus Escape is not delivered to the popup.
+        settingsContent.forceActiveFocus();
+    }
     onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
 
     // Validate color in mpv format: #RRGGBB or #AARRGGBB.
@@ -41,7 +47,14 @@ Dialog {
     }
 
     contentItem: RowLayout {
+        id: settingsContent
         spacing: 0
+        focus: true
+        // Escape must close the dialog even when a child control has focus.
+        Keys.onEscapePressed: (event) => {
+            settingsDialog.close();
+            event.accepted = true;
+        }
 
         Rectangle {
             Layout.preferredWidth: 200
@@ -93,6 +106,7 @@ Dialog {
                 CategoryButton { text: qsTr("settings_interface"); isActive: settingsDialog.currentCategory === "interface"; onClicked: settingsDialog.currentCategory = "interface" }
                 CategoryButton { text: qsTr("settings_subtitles"); isActive: settingsDialog.currentCategory === "subtitles"; onClicked: settingsDialog.currentCategory = "subtitles" }
                 CategoryButton { text: qsTr("settings_playback"); isActive: settingsDialog.currentCategory === "playback"; onClicked: settingsDialog.currentCategory = "playback" }
+                CategoryButton { text: qsTr("settings_debug"); isActive: settingsDialog.currentCategory === "debug"; onClicked: settingsDialog.currentCategory = "debug" }
                 CategoryButton { text: qsTr("settings_about"); isActive: settingsDialog.currentCategory === "about"; onClicked: settingsDialog.currentCategory = "about" }
 
                 Item { Layout.fillHeight: true }
@@ -194,7 +208,12 @@ Dialog {
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.appendToPlaylist; onToggled: Config.appendToPlaylist = checked }
                             }
 
-                            Label { text: qsTr("settings_play_mode"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Label {
+                                text: qsTr("settings_play_mode")
+                                color: Kirigami.Theme.textColor; font.pixelSize: 14
+                                Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                                wrapMode: Text.WordWrap
+                            }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
                                 Layout.preferredHeight: 40
@@ -209,11 +228,19 @@ Dialog {
                                     ]
                                     textRole: "text"; valueRole: "value"
                                     currentIndex: { let idx = model.findIndex(item => item.value === Config.playlistMode); return idx !== -1 ? idx : 0 }
-                                    onActivated: (index) => {
-                                        Config.playlistMode = model[index].value;
-                                        Media.playMode = model[index].value;
-                                    }
+                                    // Only the Default playlist's mode is stored in the
+                                    // settings; named playlists keep their own mode.
+                                    onActivated: (index) => { Config.playlistMode = model[index].value; }
                                 }
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                text: qsTr("settings_play_mode_hint")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
                             }
                         }
                     }
@@ -669,6 +696,110 @@ Dialog {
                     }
 
                     ColumnLayout {
+                        visible: settingsDialog.currentCategory === "debug"
+                        Layout.fillWidth: true
+                        spacing: 22
+
+                        Label {
+                            text: qsTr("settings_debug")
+                            font.pixelSize: 20; font.weight: Font.Bold
+                            color: Kirigami.Theme.textColor
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; height: 1
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)
+                        }
+
+                        component LogModeCombo: ComboBox {
+                            id: logModeCombo
+                            property string currentMode: "off"
+                            signal modeChosen(string mode)
+
+                            font.pixelSize: 14
+                            model: [
+                                { text: qsTr("settings_log_off"), value: "off" },
+                                { text: qsTr("settings_log_error"), value: "error" },
+                                { text: qsTr("settings_log_info"), value: "info" },
+                                { text: qsTr("settings_log_debug"), value: "debug" }
+                            ]
+                            textRole: "text"
+                            valueRole: "value"
+                            currentIndex: {
+                                for (let i = 0; i < model.length; ++i) {
+                                    if (model[i].value === currentMode) return i;
+                                }
+                                return 0;
+                            }
+                            onActivated: (index) => logModeCombo.modeChosen(model[index].value)
+                        }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            Label {
+                                text: qsTr("settings_log_luma")
+                                color: Kirigami.Theme.textColor; font.pixelSize: 14
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                LogModeCombo {
+                                    anchors.fill: parent
+                                    currentMode: Config.lumaLogMode
+                                    onModeChosen: (mode) => Config.lumaLogMode = mode
+                                }
+                            }
+
+                            Label {
+                                text: qsTr("settings_log_mpv")
+                                color: Kirigami.Theme.textColor; font.pixelSize: 14
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                LogModeCombo {
+                                    anchors.fill: parent
+                                    currentMode: Config.mpvLogMode
+                                    onModeChosen: (mode) => Config.mpvLogMode = mode
+                                }
+                            }
+
+                            Label {
+                                text: qsTr("settings_log_ytdlp")
+                                color: Kirigami.Theme.textColor; font.pixelSize: 14
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                LogModeCombo {
+                                    anchors.fill: parent
+                                    currentMode: Config.ytdlpLogMode
+                                    onModeChosen: (mode) => Config.ytdlpLogMode = mode
+                                }
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                text: qsTr("settings_debug_hint")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
                         visible: settingsDialog.currentCategory === "about"
                         Layout.fillWidth: true
                         spacing: 22
@@ -778,6 +909,7 @@ Dialog {
     }
 
     property string currentCategory: "general"
+
 
     footer: DialogButtonBox {
         alignment: Qt.AlignRight

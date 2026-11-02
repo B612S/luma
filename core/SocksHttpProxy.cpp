@@ -165,6 +165,12 @@ private:
             return;
         }
         m_proxyBuffer += m_proxy->readAll();
+        // The SOCKS handshake messages are tiny; never let a misbehaving proxy
+        // grow this buffer without bounds.
+        if (m_proxyBuffer.size() > kMaxHttpHeader) {
+            fail(502, QStringLiteral("SOCKS response is too large"));
+            return;
+        }
         processSocks();
     }
 
@@ -194,6 +200,10 @@ private:
                     }
                     const QByteArray u = user.toUtf8();
                     const QByteArray p = pass.toUtf8();
+                    if (u.size() > 255 || p.size() > 255) {
+                        fail(502, QStringLiteral("SOCKS credentials are too long"));
+                        return;
+                    }
                     QByteArray auth;
                     auth.append(char(0x01));
                     auth.append(char(u.size()));
@@ -467,6 +477,12 @@ void SocksHttpProxy::handleNewConnection()
     while (m_server.hasPendingConnections()) {
         QTcpSocket *client = m_server.nextPendingConnection();
         if (!client) return;
+        if (m_connections.size() >= 128) {
+            // Do not let a local process exhaust Luma's memory/socket limit.
+            client->disconnectFromHost();
+            client->deleteLater();
+            continue;
+        }
         auto *connection = new SocksHttpProxyConnection(this, client);
         m_connections.append(connection);
         connection->start();

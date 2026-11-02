@@ -25,6 +25,7 @@
 <message><source>playback_repeat</source><translation>Repeat current file</translation></message>
 <message><source>playback_shuffle</source><translation>Shuffle</translation></message>
 <message><source>playback_stop</source><translation>Stop after current file</translation></message>
+<message><source>playback_mode_for</source><translation>Playlist: %1</translation></message>
 <message><source>aspect_original</source><translation>Original</translation></message>
 <message><source>osd_aspect</source><translation>Aspect ratio: %1</translation></message>
 <message><source>menu_playlist</source><translation>Playlist</translation></message>
@@ -58,7 +59,8 @@
 <message><source>settings_default_volume</source><translation>Startup volume</translation></message>
 <message><source>settings_notifications</source><translation>Show notifications</translation></message>
 <message><source>settings_single_instance</source><translation>Single instance</translation></message>
-<message><source>settings_play_mode</source><translation>Default playback mode</translation></message>
+<message><source>settings_play_mode</source><translation>Default playlist playback mode</translation></message>
+<message><source>settings_play_mode_hint</source><translation>Used only by the Default playlist. Named playlists keep their own mode (Playback → Playback mode).</translation></message>
 <message><source>settings_append_playlist</source><translation>Append files to the playlist</translation></message>
 <message><source>settings_close</source><translation>Close</translation></message>
 <message><source>about_close</source><translation>Close</translation></message>
@@ -81,6 +83,16 @@
 <message><source>settings_sub_ignore_file_style</source><translation>Ignore subtitle file styling</translation></message>
 <message><source>settings_show_panels_fullscreen</source><translation>Show the control bar in fullscreen</translation></message>
 <message><source>settings_playback</source><translation>Playback</translation></message>
+<message><source>settings_debug</source><translation>Debug</translation></message>
+<message><source>settings_debug_hint</source><translation>Each component writes its own file to ~/.cache/luma/: luma.log, mpv.log and yt-dlp.log.</translation></message>
+<message><source>settings_log_luma</source><translation>Luma log</translation></message>
+<message><source>settings_log_mpv</source><translation>mpv log</translation></message>
+<message><source>settings_log_ytdlp</source><translation>yt-dlp log</translation></message>
+<message><source>settings_log_off</source><translation>Off</translation></message>
+<message><source>settings_log_error</source><translation>Errors</translation></message>
+<message><source>settings_log_info</source><translation>Info</translation></message>
+<message><source>settings_log_debug</source><translation>Debug</translation></message>
+
 <message><source>settings_audio</source><translation>Audio</translation></message>
 <message><source>settings_audio_output</source><translation>Audio output</translation></message>
 <message><source>settings_audio_auto</source><translation>Automatic</translation></message>
@@ -148,6 +160,7 @@
 <message><source>tabs_rename</source><translation>Rename</translation></message>
 <message><source>tabs_delete</source><translation>Delete</translation></message>
 <message><source>tabs_new</source><translation>New playlist</translation></message>
+<message><source>tabs_all</source><translation>All playlists</translation></message>
 </context>
 
 <context>
@@ -180,6 +193,57 @@
 <message><source>stats_avsync</source><translation>A/V sync</translation></message>
 <message><source>stats_cache</source><translation>Cache</translation></message>
 <message><source>stats_path</source><translation>File path</translation></message>
+<message><source>stats_tags</source><translation>Tags</translation></message>
+<message><source>stats_copy</source><translation>Copy</translation></message>
+<message><source>stats_tag_title</source><translation>Title</translation></message>
+<message><source>stats_tag_artist</source><translation>Artist</translation></message>
+<message><source>stats_tag_album</source><translation>Album</translation></message>
+<message><source>stats_tag_album_artist</source><translation>Album artist</translation></message>
+<message><source>stats_tag_genre</source><translation>Genre</translation></message>
+<message><source>stats_tag_year</source><translation>Year</translation></message>
+<message><source>stats_tag_track</source><translation>Track</translation></message>
+<message><source>stats_tag_disc</source><translation>Disc</translation></message>
+<message><source>stats_tag_comment</source><translation>Comment</translation></message>
+<message><source>stats_tag_composer</source><translation>Composer</translation></message>
+<message><source>stats_tag_encoder</source><translation>Encoder</translation></message>
+<message><source>stats_tag_encoded_by</source><translation>Encoded by</translation></message>
+<message><source>stats_tag_track_total</source><translation>Total tracks</translation></message>
+<message><source>stats_tag_disc_total</source><translation>Total discs</translation></message>
+<message><source>stats_tag_copyright</source><translation>Copyright</translation></message>
+<message><source>stats_tag_publisher</source><translation>Publisher</translation></message>
+<message><source>stats_tag_language</source><translation>Language</translation></message>
+<message><source>stats_tag_bpm</source><translation>BPM</translation></message>
+<message><source>stats_tag_isrc</source><translation>ISRC</translation></message>
+<message><source>stats_tag_lyrics</source><translation>Lyrics</translation></message>
+<message><source>stats_tag_lyricist</source><translation>Lyricist</translation></message>
+<message><source>stats_tag_conductor</source><translation>Conductor</translation></message>
+<message><source>stats_tag_performer</source><translation>Performer</translation></message>
+<message><source>stats_tag_producer</source><translation>Producer</translation></message>
+<message><source>stats_tag_engineer</source><translation>Engineer</translation></message>
+<message><source>stats_tag_mixer</source><translation>Mixer</translation></message>
+<message><source>stats_tag_arranger</source><translation>Arranger</translation></message>
+<message><source>stats_tag_grouping</source><translation>Grouping</translation></message>
+<message><source>stats_tag_compilation</source><translation>Compilation</translation></message>
+<message><source>stats_tag_original_artist</source><translation>Original artist</translation></message>
+<message><source>stats_tag_original_album</source><translation>Original album</translation></message>
+<message><source>stats_tag_original_year</source><translation>Original year</translation></message>
+<message><source>stats_tag_description</source><translation>Description</translation></message>
+<message><source>stats_tag_creation_time</source><translation>Creation time</translation></message>
+<message><source>stats_tag_icy_samplerate</source><translation>Stream sample rate</translation></message>
+<message><source>stats_tag_icy_channels</source><translation>Stream channels</translation></message>
+<message><source>stats_tag_icy_pub</source><translation>Public stream</translation></message>
+<message><source>stats_tag_icy_notice1</source><translation>Stream notice 1</translation></message>
+<message><source>stats_tag_icy_notice2</source><translation>Stream notice 2</translation></message>
+
+
+
+<message><source>stats_tag_icy_title</source><translation>Stream title</translation></message>
+<message><source>stats_tag_icy_name</source><translation>Station</translation></message>
+<message><source>stats_tag_icy_genre</source><translation>Station genre</translation></message>
+<message><source>stats_tag_icy_url</source><translation>Station URL</translation></message>
+<message><source>stats_tag_icy_description</source><translation>Description</translation></message>
+<message><source>stats_tag_icy_br</source><translation>Stream bitrate</translation></message>
+
 </context>
 
 <context>
@@ -195,7 +259,7 @@
 <message><source>dialog_audio_filter</source><translation>Audio files (*.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
 <message><source>track_default_name</source><translation>Track %1</translation></message>
 <message><source>dialog_media_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
-<message><source>stream_opening</source><translation>Opening link…</translation></message>
+<message><source>stream_opening</source><translation>Opening %1</translation></message>
 <message><source>download_failed_open</source><translation>Could not open the link</translation></message>
 <message><source>download_failed_start</source><translation>Could not start yt-dlp</translation></message>
 <message><source>download_ytdlp_missing</source><translation>yt-dlp is not installed or could not be started</translation></message>
@@ -256,6 +320,7 @@
 <context>
 <name>MediaInfoDialog</name>
 <message><source>info_title</source><translation>Information</translation></message>
+<message><source>info_loading</source><translation>Loading…</translation></message>
 <message><source>field_path</source><translation>Path</translation></message>
 <message><source>tags_title</source><translation>Tags</translation></message>
 <message><source>tag_title</source><translation>Title</translation></message>

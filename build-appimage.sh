@@ -3,8 +3,9 @@
 #
 # The result is a self-contained x86_64/aarch64 AppImage for glibc-based
 # distributions. It bundles Qt, QML modules, libmpv, FFmpeg, TagLib and the
-# required Wayland/X11 platform plugins. Build on the oldest distribution you
-# intend to support: the AppImage cannot bundle the build host's glibc.
+# Wayland platform plugins. Luma is Wayland-only: there is no X11 support and
+# none is planned. Build on the oldest distribution you intend to support: the
+# AppImage cannot bundle the build host's glibc.
 #
 # Requirements: cmake, ninja (or make), a C++17 compiler, Qt 6 development
 # packages, qmake6, curl, and the runtime QML modules used by the app
@@ -78,8 +79,9 @@ cmake --build "$BUILD_DIR" -j "$JOBS"
 rm -rf "$APPDIR"
 DESTDIR="$SCRIPT_DIR/$APPDIR" cmake --install "$BUILD_DIR"
 
-# The AppImage must work on Wayland and X11. xcb is deployed by the Qt plugin
-# by default; add the Wayland platform plugin explicitly.
+# Luma is Wayland-only, so the Wayland platform plugin is added explicitly.
+# (The Qt plugin may still deploy xcb by default; that is not a supported
+# platform.)
 export QML_SOURCES_PATHS="$SCRIPT_DIR/qml"
 export QMAKE="${QMAKE:-$(command -v qmake6)}"
 QT_PLUGINS_DIR="$(qmake6 -query QT_INSTALL_PLUGINS)"
@@ -97,6 +99,12 @@ echo "Deploying Qt/QML dependencies..."
     --executable "$APPDIR/usr/bin/luma" \
     --desktop-file "$APPDIR/usr/share/applications/luma.desktop" \
     --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/luma.png"
+
+# Luma is Wayland-only. The Qt plugin deploys the host's platform plugin (xcb
+# on an X11 host) by default, so remove the X11 platform plugin and the X11 GL
+# integrations — the image must not be able to start a non-Wayland session.
+rm -f "$APPDIR/usr/plugins/platforms/libqxcb.so"
+rm -rf "$APPDIR/usr/plugins/xcbglintegrations"
 
 # Some mpv builds (e.g. Arch's) link against libmujs for JavaScript support.
 # linuxdeploy treats it as a system library and may leave it out; on a machine
@@ -230,6 +238,8 @@ export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="$HERE/usr/plugins"
 export QML2_IMPORT_PATH="$HERE/usr/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
 export QT_QUICK_CONTROLS_STYLE="${QT_QUICK_CONTROLS_STYLE:-org.kde.desktop}"
+# Wayland only: never let Qt pick another platform plugin.
+export QT_QPA_PLATFORM=wayland
 export LUMA_APPIMAGE=1
 export PATH="$HERE/usr/bin:$PATH"
 export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"

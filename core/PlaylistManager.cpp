@@ -1,10 +1,12 @@
 #include "PlaylistManager.hpp"
 #include "ConfigManager.hpp"
+#include "Logger.hpp"
 #include "TagScanner.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -12,6 +14,7 @@
 #include <QUuid>
 #include <QDebug>
 #include <QProcess>
+#include <memory>
 
 const QString PlaylistManager::DEFAULT_ID = "__default__";
 
@@ -27,6 +30,17 @@ static const QStringList &audioExtensions()
 static bool isAudioPath(const QString &path)
 {
     return audioExtensions().contains(QFileInfo(path).suffix().toLower());
+}
+
+static bool isPlaylistMode(const QString &mode)
+{
+    return mode == QLatin1String("sequential") || mode == QLatin1String("repeat")
+           || mode == QLatin1String("shuffle") || mode == QLatin1String("stop");
+}
+
+static QString normalizedPlaylistMode(const QString &mode)
+{
+    return isPlaylistMode(mode) ? mode : QStringLiteral("sequential");
 }
 
 PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
@@ -161,6 +175,8 @@ void PlaylistManager::loadPlaylist(const QString &id) {
     QString name = obj.value("name").toString();
     if (name.isEmpty()) name = id;
     m_names.insert(id, name);
+    if (obj.contains("mode"))
+        m_modes.insert(id, normalizedPlaylistMode(obj.value("mode").toString()));
 
     PlaylistModel *model = m_models.value(id, nullptr);
     if (!model) {
@@ -189,6 +205,7 @@ void PlaylistManager::savePlaylist(const QString &id) {
     QJsonObject obj;
     obj["id"] = id;
     obj["name"] = m_names.value(id, id);
+    obj["mode"] = normalizedPlaylistMode(m_modes.value(id));
 
     QJsonArray entries;
     for (const QVariant &v : model->toVariantList()) {
@@ -196,10 +213,11 @@ void PlaylistManager::savePlaylist(const QString &id) {
     }
     obj["entries"] = entries;
 
-    QFile f(playlistFilePath(id));
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    // Atomic replace: a crash while saving must not truncate the playlist.
+    QSaveFile f(playlistFilePath(id));
+    if (f.open(QIODevice::WriteOnly)) {
         f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
-        f.close();
+        f.commit();
     }
 }
 
@@ -259,6 +277,7 @@ QString PlaylistManager::createPlaylist(const QString &name) {
     PlaylistModel *model = new PlaylistModel(this);
     m_models.insert(id, model);
     m_names.insert(id, clean);
+    m_modes.insert(id, QStringLiteral("sequential"));
     m_order << id;
 
     connect(model, &PlaylistModel::modified, this, [this, id]() {
@@ -290,9 +309,39 @@ void PlaylistManager::deletePlaylist(const QString &id) {
         model->deleteLater();
     }
     m_names.remove(id);
+    m_modes.remove(id);
     m_order.removeAll(id);
 
     saveOrder();
+    emit playlistsChanged();
+}
+
+QString PlaylistManager::playlistMode(const QString &id) const
+{
+    if (id == DEFAULT_ID)
+        return m_config ? normalizedPlaylistMode(m_config->playlistMode())
+                        : QStringLiteral("sequential");
+    return normalizedPlaylistMode(m_modes.value(id));
+}
+
+void PlaylistManager::setPlaylistMode(const QString &id, const QString &mode)
+{
+    const QString normalized = normalizedPlaylistMode(mode);
+    if (id == DEFAULT_ID) {
+        // The Default playlist's mode is the one edited in the settings.
+        if (m_config) m_config->setPlaylistMode(normalized);
+        return;
+    }
+    if (!m_models.contains(id)) return;
+    if (m_modes.value(id) == normalized) return;
+    m_modes.insert(id, normalized);
+    savePlaylist(id);
+}
+
+void PlaylistManager::retranslate()
+{
+    // The playlist names (including the Default one) come from C++ tr(),
+    // so the QML bindings have to be re-evaluated after a language change.
     emit playlistsChanged();
 }
 
@@ -418,12 +467,24 @@ void PlaylistManager::fetchUrlTitle(const QString &id, const QString &url) {
     const QString exe = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
     if (exe.isEmpty()) return;
 
+    constexpr qsizetype kMaxTitleOutput = 64 * 1024;
+    auto output = std::make_shared<QByteArray>();
+    auto errorOutput = std::make_shared<QByteArray>();
+    const QString ytdlpLogMode = Logger::instance().componentMode(QStringLiteral("yt-dlp"));
+    if (ytdlpLogMode == QLatin1String("info") || ytdlpLogMode == QLatin1String("debug"))
+        Logger::instance().writeComponent(
+            QStringLiteral("yt-dlp"),
+            QStringLiteral("yt-dlp --get-title %1").arg(url));
+
     auto *proc = new QProcess(this);
     QStringList args = m_config ? m_config->ytdlpConfigArgs() : QStringList();
+    if (ytdlpLogMode == QLatin1String("debug"))
+        args << QStringLiteral("--verbose");
     args << QStringLiteral("--get-title")
-         << QStringLiteral("--no-playlist")
-         << QStringLiteral("--no-warnings")
-         << QStringLiteral("--no-progress")
+         << QStringLiteral("--no-playlist");
+    if (ytdlpLogMode != QLatin1String("debug"))
+        args << QStringLiteral("--no-warnings");
+    args << QStringLiteral("--no-progress")
          << url;
     proc->setProgram(exe);
     proc->setArguments(args);
@@ -436,15 +497,62 @@ void PlaylistManager::fetchUrlTitle(const QString &id, const QString &url) {
         if (proc->state() != QProcess::NotRunning)
             proc->kill();
     });
-    connect(proc, &QProcess::errorOccurred, this, [proc](QProcess::ProcessError error) {
-        if (error == QProcess::FailedToStart)
-            proc->deleteLater();
+    connect(proc, &QProcess::readyReadStandardOutput, this, [proc, output]() {
+        // Always drain the pipe, even when the retained buffer is full.
+        const QByteArray chunk = proc->readAllStandardOutput();
+        if (output->size() < kMaxTitleOutput)
+            output->append(chunk);
+        if (output->size() >= kMaxTitleOutput) {
+            output->truncate(kMaxTitleOutput);
+            if (proc->state() == QProcess::Running)
+                proc->kill();
+        }
+    });
+    connect(proc, &QProcess::readyReadStandardError, this,
+            [proc, errorOutput, ytdlpLogMode]() {
+        const QByteArray chunk = proc->readAllStandardError();
+        if (errorOutput->size() < 64 * 1024)
+            errorOutput->append(chunk);
+        if (ytdlpLogMode == QLatin1String("info") || ytdlpLogMode == QLatin1String("debug"))
+            Logger::instance().writeComponent(QStringLiteral("yt-dlp"),
+                                              QString::fromUtf8(chunk));
+    });
+    connect(proc, &QProcess::errorOccurred, this,
+            [proc, ytdlpLogMode](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        if (ytdlpLogMode != QLatin1String("off"))
+            Logger::instance().writeComponent(
+                QStringLiteral("yt-dlp"),
+                QStringLiteral("failed to start yt-dlp: %1").arg(proc->errorString()));
+        proc->deleteLater();
     });
     connect(proc, &QProcess::finished, this,
-            [this, proc, id, url](int code, QProcess::ExitStatus status) {
-        const QString output = QString::fromUtf8(proc->readAllStandardOutput()).trimmed();
-        if (status == QProcess::NormalExit && code == 0 && !output.isEmpty()) {
-            const QString title = output.section(QLatin1Char('\n'), 0, 0).trimmed();
+            [this, proc, id, url, output, errorOutput, ytdlpLogMode]
+            (int code, QProcess::ExitStatus status) {
+        output->append(proc->readAllStandardOutput());
+        if (output->size() > kMaxTitleOutput)
+            output->truncate(kMaxTitleOutput);
+
+        const QByteArray rest = proc->readAllStandardError();
+        if (!rest.isEmpty()) {
+            if (errorOutput->size() < 64 * 1024)
+                errorOutput->append(rest);
+            if (ytdlpLogMode == QLatin1String("info") || ytdlpLogMode == QLatin1String("debug"))
+                Logger::instance().writeComponent(QStringLiteral("yt-dlp"),
+                                                  QString::fromUtf8(rest));
+        }
+
+        const bool ok = status == QProcess::NormalExit && code == 0;
+        if (ytdlpLogMode == QLatin1String("error") && !ok) {
+            QString detail = QString::fromUtf8(*errorOutput).trimmed();
+            if (detail.isEmpty())
+                detail = QStringLiteral("yt-dlp exited with code %1").arg(code);
+            Logger::instance().writeComponent(QStringLiteral("yt-dlp"), detail);
+        }
+
+        const QString text = QString::fromUtf8(*output).trimmed();
+        if (ok && !text.isEmpty()) {
+            const QString title = text.section(QLatin1Char('\n'), 0, 0).trimmed();
             if (!title.isEmpty()) {
                 if (PlaylistModel *model = m_models.value(id, nullptr))
                     model->setVideoTitle(url, title);

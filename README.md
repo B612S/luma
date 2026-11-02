@@ -8,13 +8,19 @@
   A lightweight, fast media player for Linux built on <b>mpv</b> and <b>Qt 6 / QML</b> (Kirigami).
 </p>
 
+> **Platform: Wayland only.** Luma is built for Wayland sessions (KWin, GNOME, Sway,
+> Hyprland, …). X11 is **not** supported, and support for it is **not planned**. The
+> application refuses to start without a Wayland session.
+
 <p align="center">
   <a href="https://www.qt.io/"><img src="https://img.shields.io/badge/Qt-6.5%2B-green?style=flat-square&logo=qt" alt="Qt 6.5+" /></a>
+  <a href="https://wayland.freedesktop.org/"><img src="https://img.shields.io/badge/platform-Wayland%20only-blue?style=flat-square" alt="Wayland only" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-orange?style=flat-square" alt="GPL-3.0-or-later" /></a>
 </p>
 
 <p align="center">
-  <a href="docs/readme/README.ru.md">Русский</a> · <b>English</b>
+  <a href="docs/readme/README.ru.md">Русский</a> · <b>English</b> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
@@ -42,11 +48,14 @@
 
 ## Requirements
 
+A **Wayland session** is required. X11 is not supported and support is not planned.
+
 Build dependencies:
 
 | Dependency | Notes |
 | --- | --- |
-| Qt 6.5+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, OpenGL, OpenGLWidgets, LinguistTools |
+| Qt 6.5+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, Concurrent, OpenGL, OpenGLWidgets, **WaylandClient**, LinguistTools |
+| Wayland client libraries | `wayland-client` and `xkbcommon` development files (required; there is no X11 backend) |
 | libmpv | `mpv` / `mpv-libs` |
 | TagLib | reading and writing audio tags (`taglib`) |
 | FFmpeg development libraries | `libavformat`, `libavcodec`, `libswscale`, `libavutil` |
@@ -105,12 +114,13 @@ Build a portable AppImage with:
 ```
 
 The script builds a Release AppDir and bundles Qt/QML (including Kirigami and
-`qqc2-desktop-style`), libmpv, FFmpeg, TagLib and both the Wayland and X11 platform
-plugins. The Breeze widget style and the small set of Breeze icons used by the controls
-are included as well, so scrollbars and icons do not depend on the host's KDE setup. On
-first use it downloads `linuxdeploy`, its Qt plugin and `appimagetool` into
-`.appimage-tools/`. Optional tools such as `yt-dlp`, `ffmpeg` and `avahi-browse` are not
-bundled; install them on the system when you need link playback or casting.
+`qqc2-desktop-style`), libmpv, FFmpeg, TagLib and the Wayland platform plugins; the
+resulting image is Wayland-only. The Breeze widget style and the small set of Breeze
+icons used by the controls are included as well, so scrollbars and icons do not depend
+on the host's KDE setup. On first use it downloads `linuxdeploy`, its Qt plugin and
+`appimagetool` into `.appimage-tools/`. Optional tools such as `yt-dlp`, `ffmpeg` and
+`avahi-browse` are not bundled; install them on the system when you need link playback
+or casting.
 
 Build on the oldest glibc-based distribution you intend to support — an AppImage cannot
 bundle glibc. On systems without FUSE, run the image with
@@ -128,7 +138,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 The suite uses Qt Test and covers the core logic: the keyboard shortcut table, the
-playlist model and manager, the configuration file and the yt-dlp config. Tests run with
+playlist model and manager, the configuration file, logging and the yt-dlp config. Tests run with
 `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` pointing at a temporary directory, so your own settings
 are not touched. Qt6::Test is optional — if the module is missing, the tests are skipped
 during configuration.
@@ -147,9 +157,12 @@ network, so it is not part of the default run.
 - **Open a link** — right-click the video → *Open* → *Open link…*; yt-dlp resolves
   the stream and Luma plays it in mpv. Seeking works as usual.
 - **Playlists** — the playlist button in the control bar opens the panel. Tabs at the
-  top switch playlists; right-click a tab for *Add files…*, *Add folder…*,
+  top switch playlists; the playlist-menu button on the left opens a dropdown with every
+  playlist at once. Right-click a tab for *Add files…*, *Add folder…*,
   *Clear playlist*, *Rename*, *Delete*. Right-click a track for playback, shuffle,
   “Add to playlist”, properties, opening the containing folder and removal.
+  Each named playlist keeps its own playback mode (changed in *Playback → Playback
+  mode*); the mode chosen in the settings applies only to the Default playlist.
 - **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.
 - **Casting** — *Playback → Screen output* in the context menu.
 
@@ -190,8 +203,9 @@ All per-user files live in `~/.config/luma/`:
 | `yt-dlp.conf` | Options passed to yt-dlp when opening links |
 | `playlists/*.json` | Saved named playlists |
 
-Logs are written to `~/.cache/luma/luma.log`; set `debug_logging=debug` in
-`[ui]` for verbose output (or `none` to disable logging).
+Logs are written to `~/.cache/luma/`: `luma.log`, `mpv.log` and `yt-dlp.log`.
+Each component can be set to `off`, `error`, `info` or `debug` on the **Debug**
+page in Settings, or under `[debug]` in `luma.conf`.
 
 `luma.conf` sections:
 
@@ -206,10 +220,14 @@ notifications=true
 append_to_playlist=false
 control_bar_mode=float   # hidden, float, pinned
 show_panels_fullscreen=true
-debug_logging=info
 
 [playlist]
-mode=sequential          # sequential, repeat, shuffle, stop
+mode=sequential          # Default playlist only: sequential, repeat, shuffle, stop
+
+[debug]
+luma=info                # off, error, info, debug
+mpv=off
+ytdlp=off
 
 [window]
 width=960
@@ -266,9 +284,10 @@ Translations of this README live in [`docs/readme/`](docs/readme/).
 - **Launching a second copy does nothing.** Single-instance mode forwards arguments to
   the running player and exits. Quit the running instance, or set
   `single_instance=false` in `luma.conf`.
-- **X11.** Luma prefers Wayland when the session provides it and otherwise uses Qt's
-  xcb platform plugin; install the Qt X11/xcb runtime packages if your distribution
-  splits them out.
+- **X11 is not supported.** Luma runs only on Wayland sessions (KWin, GNOME, Sway,
+  Hyprland, …); X11 support is not planned. It checks for a Wayland session at startup
+  and exits with an error if there is none, so run it inside a Wayland session. The
+  AppImage does not include Qt's xcb platform plugin either.
 - **A QML import error on startup.** Install the runtime QML modules: `kirigami` and
   `qqc2-desktop-style`.
 - **Casting finds no devices.** Make sure `avahi` and `ffmpeg` are installed and the TV

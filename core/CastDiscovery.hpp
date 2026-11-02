@@ -25,4 +25,6 @@ private:
     QVariantList m_devices;
     bool m_scanning = false;
     QProcess *m_process = nullptr;
+    // Guards timers from an older scan after a new one has started.
+    quint64 m_scanGeneration = 0;
 };

@@ -1,3 +1,4 @@
+// Luma-specific file: not part of upstream KDE mpvqt (see mpvqt/README.md).
 #pragma once
 #include "mpvabstractitem.h"
 #include <QVariant>
@@ -6,6 +7,7 @@
 #include <QImage>
 #include <QThread>
 #include <QHash>
+#include <QPointer>
 
 class FrameDecoder;
 
@@ -76,6 +78,8 @@ public:
 
     Q_INVOKABLE QString getAudioOutput();
     Q_INVOKABLE QString getAudioDevice();
+    // Enables mpv's own log messages at "off"/"error"/"info"/"debug".
+    void setLogLevel(const QString &mode);
     Q_INVOKABLE QVariant property(const QString &name) { return getProperty(name); }
     // Last value received from mpv's observeProperty; never blocks the UI.
     Q_INVOKABLE QVariant observedProperty(const QString &name) const { return m_observedValues.value(name); }
@@ -97,6 +101,8 @@ signals:
     void deinterlaceChanged();
     void cropEnabledChanged();
     void thumbnailReady(const QString &requestId);
+    // Emitted from the mpv worker thread; connected via a queued connection.
+    void mpvLogMessage(const QString &prefix, const QString &level, const QString &message);
 
     // NEW:
     void isCastingChanged();
@@ -124,7 +130,7 @@ private:
     bool   m_isCasting = false;
 
     QThread *m_thumbThread = nullptr;
-    ThumbnailWorker *m_thumbWorker = nullptr;
+    QPointer<ThumbnailWorker> m_thumbWorker;
     bool m_thumbBusy = false;
     bool m_thumbPending = false;
     double m_thumbPendingTime = 0.0;

@@ -1,9 +1,11 @@
 #include "ConfigManager.hpp"
 #include <QDir>
 #include <QFile>
+#include <QFileSystemWatcher>
 #include <QProcess>
 #include <QTextStream>
 #include <QStandardPaths>
+#include <QTimer>
 
 // Allowed values for playback settings. For hwdec these are the variants
 // that make sense on Linux (see `mpv --hwdec=help`); "auto" is the usual
@@ -50,6 +52,18 @@ static QString normalizedProxyUrl(const QString &proxy) {
     return value;
 }
 
+static QString normalizedLogMode(QString mode) {
+    mode = mode.trimmed().toLower();
+    if (mode == QLatin1String("none") || mode == QLatin1String("off"))
+        return QStringLiteral("off");
+    if (mode == QLatin1String("error") || mode == QLatin1String("warn")
+            || mode == QLatin1String("warning"))
+        return QStringLiteral("error");
+    if (mode == QLatin1String("debug"))
+        return QStringLiteral("debug");
+    return QStringLiteral("info");
+}
+
 ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
     QString configDir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/luma";
     QString path = configDir + "/luma.conf";
@@ -74,6 +88,11 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
 
             out << "[playlist]\n";
             out << "mode=sequential\n\n";
+
+            out << "[debug]\n";
+            out << "luma=info\n";
+            out << "mpv=off\n";
+            out << "ytdlp=off\n\n";
 
             out << "[window]\n";
             out << "width=960\n";
@@ -101,8 +120,123 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
 
     m_settings = new QSettings(path, QSettings::IniFormat, this);
 
+    // The old single switch (ui/debug_logging) now maps to the Luma log mode.
+    const QString legacyLogMode = m_settings->value("ui/debug_logging").toString();
+    if (!m_settings->contains("debug/luma") && !legacyLogMode.isEmpty())
+        m_settings->setValue("debug/luma", normalizedLogMode(legacyLogMode));
+    if (m_settings->contains("ui/debug_logging"))
+        m_settings->remove("ui/debug_logging");
+
     loadPlaybackSettingsFromMpvConf();
     loadYtdlpConfig();
+
+    setupFileWatcher();
+}
+
+void ConfigManager::setupFileWatcher() {
+    m_reloadTimer = new QTimer(this);
+    m_reloadTimer->setSingleShot(true);
+    // QSettings may write the file in several steps; coalesce the events.
+    m_reloadTimer->setInterval(150);
+    connect(m_reloadTimer, &QTimer::timeout, this, &ConfigManager::reloadFromDisk);
+
+    m_watcher = new QFileSystemWatcher(this);
+    const QStringList files = {
+        m_settings->fileName(),
+        m_configDir + QStringLiteral("/mpv.conf"),
+        ytdlpConfigPath()
+    };
+    for (const QString &file : files) {
+        if (QFile::exists(file) && !m_watcher->files().contains(file))
+            m_watcher->addPath(file);
+    }
+
+    connect(m_watcher, &QFileSystemWatcher::fileChanged, this, [this](const QString &) {
+        // The watcher is restarted inside reloadFromDisk: a file replaced with
+        // rename() (as some editors/tools do) is no longer watched afterwards.
+        m_reloadTimer->start();
+    });
+}
+
+void ConfigManager::reloadFromDisk() {
+    if (m_reloading) return;
+    m_reloading = true;
+
+    // Read the current values first: after sync() the getters return the new ones.
+    const bool oldRememberVolume = rememberVolume();
+    const int oldDefaultVolume = defaultVolume();
+    const int oldVolume = volume();
+    const QString oldLanguage = language();
+    const QString oldPlaylistMode = playlistMode();
+    const bool oldAppendToPlaylist = appendToPlaylist();
+    const bool oldSingleInstance = singleInstance();
+    const bool oldNotifications = notifications();
+    const QString oldControlBarMode = controlBarMode();
+    const bool oldShowPanelsFullscreen = showPanelsFullscreen();
+    const QString oldHwdec = m_hwdec;
+    const QString oldAudioOutput = m_audioOutput;
+    const QString oldYtdlpQuality = m_ytdlpQuality;
+    const QString oldYtdlpProxy = m_ytdlpProxy;
+    const QString oldYtdlpProxyType = m_ytdlpProxyType;
+    const QString oldYtdlpProxyAddress = m_ytdlpProxyAddress;
+    const QString oldLumaLogMode = lumaLogMode();
+    const QString oldMpvLogMode = mpvLogMode();
+    const QString oldYtdlpLogMode = ytdlpLogMode();
+    const QString oldSubtitleFont = subtitleFont();
+    const int oldSubtitleFontSize = subtitleFontSize();
+    const bool oldSubtitleBold = subtitleBold();
+    const QString oldSubtitleColor = subtitleColor();
+    const int oldSubtitleBorderSize = subtitleBorderSize();
+    const QString oldSubtitleBorderColor = subtitleBorderColor();
+    const bool oldSubtitleBackground = subtitleBackground();
+    const int oldSubtitlePosition = subtitlePosition();
+    const bool oldSubtitleIgnoreFileStyle = subtitleIgnoreFileStyle();
+
+    // Reloads the values changed by another process.
+    m_settings->sync();
+    loadPlaybackSettingsFromMpvConf();
+    loadYtdlpConfig();
+
+    // Re-add watchers for files that were replaced or recreated.
+    const QStringList files = {
+        m_settings->fileName(),
+        m_configDir + QStringLiteral("/mpv.conf"),
+        ytdlpConfigPath()
+    };
+    for (const QString &file : files) {
+        if (QFile::exists(file) && !m_watcher->files().contains(file))
+            m_watcher->addPath(file);
+    }
+
+    if (oldRememberVolume != rememberVolume()) emit rememberVolumeChanged();
+    if (oldDefaultVolume != defaultVolume()) emit defaultVolumeChanged();
+    if (oldVolume != volume()) emit volumeChanged();
+    if (oldLanguage != language()) emit languageChanged();
+    if (oldPlaylistMode != playlistMode()) emit playlistModeChanged();
+    if (oldAppendToPlaylist != appendToPlaylist()) emit appendToPlaylistChanged();
+    if (oldSingleInstance != singleInstance()) emit singleInstanceChanged();
+    if (oldNotifications != notifications()) emit notificationsChanged();
+    if (oldControlBarMode != controlBarMode()) emit controlBarModeChanged();
+    if (oldShowPanelsFullscreen != showPanelsFullscreen()) emit showPanelsFullscreenChanged();
+    if (oldHwdec != m_hwdec) emit hwdecChanged();
+    if (oldAudioOutput != m_audioOutput) emit audioOutputChanged();
+    if (oldYtdlpQuality != m_ytdlpQuality || oldYtdlpProxy != m_ytdlpProxy
+            || oldYtdlpProxyType != m_ytdlpProxyType
+            || oldYtdlpProxyAddress != m_ytdlpProxyAddress)
+        emit ytdlpSettingsChanged();
+    if (oldSubtitleFont != subtitleFont() || oldSubtitleFontSize != subtitleFontSize()
+            || oldSubtitleBold != subtitleBold() || oldSubtitleColor != subtitleColor()
+            || oldSubtitleBorderSize != subtitleBorderSize()
+            || oldSubtitleBorderColor != subtitleBorderColor()
+            || oldSubtitleBackground != subtitleBackground()
+            || oldSubtitlePosition != subtitlePosition()
+            || oldSubtitleIgnoreFileStyle != subtitleIgnoreFileStyle())
+        emit subtitlesChanged();
+    if (oldLumaLogMode != lumaLogMode() || oldMpvLogMode != mpvLogMode()
+            || oldYtdlpLogMode != ytdlpLogMode())
+        emit loggingChanged();
+
+    m_reloading = false;
 }
 
 bool ConfigManager::rememberVolume() const {
@@ -297,6 +431,39 @@ QStringList ConfigManager::ytdlpConfigArgs() const {
 
 QString ConfigManager::ytdlpConfigPath() const {
     return m_configDir + "/yt-dlp.conf";
+}
+
+QString ConfigManager::lumaLogMode() const {
+    return normalizedLogMode(m_settings->value("debug/luma", "info").toString());
+}
+
+void ConfigManager::setLumaLogMode(const QString &mode) {
+    const QString normalized = normalizedLogMode(mode);
+    if (lumaLogMode() == normalized) return;
+    m_settings->setValue("debug/luma", normalized);
+    emit loggingChanged();
+}
+
+QString ConfigManager::mpvLogMode() const {
+    return normalizedLogMode(m_settings->value("debug/mpv", "off").toString());
+}
+
+void ConfigManager::setMpvLogMode(const QString &mode) {
+    const QString normalized = normalizedLogMode(mode);
+    if (mpvLogMode() == normalized) return;
+    m_settings->setValue("debug/mpv", normalized);
+    emit loggingChanged();
+}
+
+QString ConfigManager::ytdlpLogMode() const {
+    return normalizedLogMode(m_settings->value("debug/ytdlp", "off").toString());
+}
+
+void ConfigManager::setYtdlpLogMode(const QString &mode) {
+    const QString normalized = normalizedLogMode(mode);
+    if (ytdlpLogMode() == normalized) return;
+    m_settings->setValue("debug/ytdlp", normalized);
+    emit loggingChanged();
 }
 
 bool ConfigManager::showPanelsFullscreen() const {

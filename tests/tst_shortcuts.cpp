@@ -52,7 +52,7 @@ void TestShortcuts::noDuplicateBindings()
 void TestShortcuts::keycodesAreSane()
 {
     for (const ShortcutDef &def : defaultShortcuts()) {
-        // X11/Wayland keycode = evdev + 8.
+        // Wayland keycode = evdev + 8.
         QVERIFY(def.keycode > 8);
         QVERIFY(def.keycode < 256);
         QVERIFY(def.action != ShortcutAction::None);

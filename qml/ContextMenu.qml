@@ -305,11 +305,27 @@ Popup {
             width: parent.width
             spacing: 2
 
+            // The mode belongs to the active playlist: Default takes it from
+            // the settings, the named ones store their own.
+            Label {
+                width: parent.width
+                height: 26
+                leftPadding: 12
+                rightPadding: 12
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+                text: qsTranslate("ContextMenu", "playback_mode_for")
+                      .arg(Playlists.playlistName(Playlists.activeId))
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.65)
+                font.pixelSize: 12
+            }
+
             MenuButton {
                 text: (Media.playMode === "sequential" ? "✓ " : "") + qsTr("playback_sequential")
                 onClicked: {
                     Media.playMode = "sequential";
-                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_sequential"));
+                    Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_sequential")));
                     menu.close()
                 }
             }
@@ -317,7 +333,7 @@ Popup {
                 text: (Media.playMode === "repeat" ? "✓ " : "") + qsTr("playback_repeat")
                 onClicked: {
                     Media.playMode = "repeat";
-                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_repeat"));
+                    Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_repeat")));
                     menu.close()
                 }
             }
@@ -325,7 +341,7 @@ Popup {
                 text: (Media.playMode === "shuffle" ? "✓ " : "") + qsTr("playback_shuffle")
                 onClicked: {
                     Media.playMode = "shuffle";
-                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_shuffle"));
+                    Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_shuffle")));
                     menu.close()
                 }
             }
@@ -333,7 +349,7 @@ Popup {
                 text: (Media.playMode === "stop" ? "✓ " : "") + qsTr("playback_stop")
                 onClicked: {
                     Media.playMode = "stop";
-                    Osd.showInfo(qsTr("osd_playback_mode") + ": " + qsTr("playback_stop"));
+                    Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_stop")));
                     menu.close()
                 }
             }

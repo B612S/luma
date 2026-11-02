@@ -28,5 +28,8 @@ private:
     QTemporaryDir *m_tempDir = nullptr;
     QProcess *m_ffmpeg = nullptr;
     QString m_localIP;
+    // Random path prefix: only the Cast device receives this URL, so other
+    // devices on the LAN cannot fetch the transcoded stream blindly.
+    QString m_token;
     quint16 m_port = 0;
 };

@@ -2,6 +2,7 @@
 #include "PlaylistManager.hpp"
 #include "ConfigManager.hpp"
 #include "TagManager.hpp"
+#include "Logger.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -16,6 +17,8 @@
 #include <QElapsedTimer>
 #include <QTimer>
 #include <QDesktopServices>
+#include <QGuiApplication>
+#include <QClipboard>
 #include <QProcess>
 #include <QSettings>
 #include <QLocale>
@@ -24,6 +27,10 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QJsonParseError>
+#include <QFutureWatcher>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QtConcurrent/QtConcurrentRun>
 
 extern "C" {
     #include <libavformat/avformat.h>
@@ -43,10 +50,51 @@ struct TrackTags {
     QString coverPath;
 };
 
+// Result of reading tags in a worker thread.
+struct TrackTagsResult {
+    bool ok = false;
+    TrackTags tags;
+};
+
 QString dictValue(AVDictionary *meta, const char *key) {
     if (!meta) return QString();
     const AVDictionaryEntry *entry = av_dict_get(meta, key, nullptr, 0);
     return entry ? QString::fromUtf8(entry->value).trimmed() : QString();
+}
+
+QMutex &coverMutex()
+{
+    static QMutex mutex;
+    return mutex;
+}
+
+QString coverCacheDir()
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (base.isEmpty()) {
+        base = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
+        if (base.isEmpty()) base = QDir::homePath() + "/.cache";
+        base += "/luma";
+    }
+    return base + "/covers";
+}
+
+// The notification only needs the cover of the file that is playing now.
+// Caller must hold coverMutex().
+void removeOtherCoversLocked(const QString &keep)
+{
+    QDir dir(coverCacheDir());
+    const QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::Hidden | QDir::NoSymLinks);
+    for (const QFileInfo &fi : files) {
+        if (fi.absoluteFilePath() != keep)
+            QFile::remove(fi.absoluteFilePath());
+    }
+}
+
+void clearCoverCache()
+{
+    QMutexLocker locker(&coverMutex());
+    removeOtherCoversLocked(QString());
 }
 
 QString coverCachePath(const QString &sourcePath) {
@@ -55,7 +103,7 @@ QString coverCachePath(const QString &sourcePath) {
         (sourcePath + QString::number(fi.lastModified().toSecsSinceEpoch())).toUtf8(),
         QCryptographicHash::Md5).toHex();
 
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/covers";
+    const QString dir = coverCacheDir();
     QDir().mkpath(dir);
     return dir + "/" + QString::fromLatin1(hash) + ".jpg";
 }
@@ -93,14 +141,23 @@ bool readTrackTags(const QString &path, TrackTags &tags) {
     tags.album = dictValue(ctx->metadata, "album");
 
     const bool hasTags = !tags.title.isEmpty() || !tags.artist.isEmpty() || !tags.album.isEmpty();
-    if (hasTags) {
-        const QString coverPath = coverCachePath(path);
-        if (QFile::exists(coverPath)) {
-            tags.coverPath = coverPath;
-        } else {
-            const QImage cover = decodeAttachedCover(ctx);
-            if (!cover.isNull() && cover.save(coverPath, "JPG", 90))
+    {
+        // Notification tasks can run concurrently for two quick file switches;
+        // serialize the cover-cache check/write. Only the current file keeps
+        // its cover: everything else in the covers directory is removed.
+        QMutexLocker locker(&coverMutex());
+        if (hasTags) {
+            const QString coverPath = coverCachePath(path);
+            if (QFile::exists(coverPath)) {
                 tags.coverPath = coverPath;
+            } else {
+                const QImage cover = decodeAttachedCover(ctx);
+                if (!cover.isNull() && cover.save(coverPath, "JPG", 90))
+                    tags.coverPath = coverPath;
+            }
+            removeOtherCoversLocked(tags.coverPath);
+        } else {
+            removeOtherCoversLocked(QString());
         }
     }
 
@@ -128,6 +185,10 @@ bool isDirectStreamUrl(const QUrl &url) {
     return path.isEmpty() || path == QStringLiteral("/");
 }
 
+// yt-dlp -j output is normally a few hundred KB at most. Cap it so a broken or
+// malicious helper cannot grow Luma's memory without bounds.
+constexpr qsizetype kMaxYtdlpStdout = 8 * 1024 * 1024;
+
 // Title for the notification: don't show "watch" or bare URLs.
 QString urlTitle(const QString &url) {
     const QUrl u(url);
@@ -140,245 +201,9 @@ QString urlTitle(const QString &url) {
     return title;
 }
 
-} // namespace
-
-MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
-: QObject(parent), m_mpv(mpv), m_playlists(nullptr)
-{
-    m_notifyInterface = new QDBusInterface(
-        "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
-        "org.freedesktop.Notifications", QDBusConnection::sessionBus(), this
-    );
-
-    // Resolving a URL via yt-dlp must not hang forever.
-    m_ytdlpTimeout = new QTimer(this);
-    m_ytdlpTimeout->setSingleShot(true);
-    m_ytdlpTimeout->setInterval(30000);
-    connect(m_ytdlpTimeout, &QTimer::timeout, this, [this]() {
-        if (!m_ytdlpProcess || m_ytdlpProcess->state() == QProcess::NotRunning) return;
-        m_ytdlpTimedOut = true;
-        m_ytdlpProcess->kill();
-    });
-}
-
-MediaManager::~MediaManager() {
-    if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
-    if (m_ytdlpProcess) {
-        m_ytdlpProcess->disconnect(this);
-        m_ytdlpProcess->kill();
-        m_ytdlpProcess->waitForFinished(1000);
-    }
-}
-
-void MediaManager::setMpv(MpvItem *mpv) {
-    if (m_mpv == mpv) return;
-    if (m_mpv) disconnect(m_mpv, nullptr, this, nullptr);
-    m_mpv = mpv;
-    if (m_mpv) {
-        connect(m_mpv, &MpvItem::mediaTitleChanged, this, &MediaManager::onMediaTitleChanged);
-        connect(m_mpv, &MpvItem::sourceChanged, this, [this]() { setLoading(true); });
-        connect(m_mpv, &MpvItem::fileLoaded, this, &MediaManager::onMpvFileLoaded);
-        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &) { setLoading(false); });
-    }
-}
-
-void MediaManager::setLiveStream(bool live) {
-    if (m_liveStream == live) return;
-    m_liveStream = live;
-    emit liveStreamChanged();
-}
-
-void MediaManager::setLoading(bool loading) {
-    if (m_loading == loading) return;
-    m_loading = loading;
-    emit loadingChanged();
-}
-
-void MediaManager::onMediaTitleChanged() {
-    if (!m_mpv) return;
-
-    const QString source = m_mpv->source();
-    if (!source.startsWith(QStringLiteral("http://")) && !source.startsWith(QStringLiteral("https://")))
-        return;
-
-    // For URLs resolved by yt-dlp, the notification has already been sent with
-    // the original URL; media-title arrives as a googlevideo fragment and is not needed.
-    if (m_streamFromYtdlp)
-        return;
-
-    const QString title = m_mpv->mediaTitle().trimmed();
-    if (title.isEmpty() || title == m_lastStreamTitle) return;
-    // For direct streams mpv often reports the URL itself as the title —
-    // don't show it in the playlist or notifications.
-    if (title.startsWith(QStringLiteral("http://")) || title.startsWith(QStringLiteral("https://")))
-        return;
-    m_lastStreamTitle = title;
-
-    // In the playlist, show the current tag instead of the URL.
-    if (m_playlists) {
-        PlaylistModel *model = m_playlists->activeModel();
-        if (model) model->setStreamTitle(source, title);
-    }
-
-    if (m_config && m_config->notifications()) {
-        const QUrl url(source);
-        _sendNotification(title, url.host(), QString());
-    }
-}
-
-PlaylistModel* MediaManager::playlist() const {
-    return m_playlists ? m_playlists->activeModel() : nullptr;
-}
-
-void MediaManager::setPlaylistManager(PlaylistManager *pm) {
-    if (m_playlists == pm) return;
-    m_playlists = pm;
-    emit playlistChanged();
-}
-
-void MediaManager::setManualSwitch(bool val) {
-    if (m_isManualSwitch != val) { m_isManualSwitch = val; emit isManualSwitchChanged(); }
-}
-
-void MediaManager::setPlayMode(const QString &mode) {
-    if (m_playMode == mode) return;
-    m_playMode = mode;
-
-    if (m_playlists) {
-        PlaylistModel *model = m_playlists->activeModel();
-        if (model) model->setShuffle(mode == "shuffle");
-    }
-
-    emit playModeChanged();
-}
-
-void MediaManager::setAspectRatio(const QString &mode) {
-    if (!m_mpv) return;
-    if (mode == "original") {
-        m_mpv->setProperty("video-aspect-override", "no");
-    } else {
-        m_mpv->setProperty("video-aspect-override", mode);
-    }
-}
-
-QString MediaManager::getAspectRatio() const {
-    if (!m_mpv) return "original";
-    QVariant val = m_mpv->getProperty("video-aspect-override");
-    if (!val.isValid() || val.isNull()) return "original";
-    if (val.typeId() == QMetaType::QString) {
-        QString str = val.toString().trimmed();
-        if (str == "no" || str.isEmpty()) return "original";
-        return str;
-    }
-    if (val.canConvert<double>()) {
-        double ratio = val.toDouble();
-        if (ratio <= 0.0) return "original";
-        if (qAbs(ratio - 1.777778) < 0.01) return "16:9";
-        if (qAbs(ratio - 1.333333) < 0.01) return "4:3";
-        if (qAbs(ratio - 2.333333) < 0.01) return "21:9";
-        if (qAbs(ratio - 1.0) < 0.01)      return "1:1";
-        if (qAbs(ratio - 0.5625) < 0.01)   return "9:16";
-        return QString::number(ratio, 'f', 2);
-    }
-    return "original";
-}
-
-QString MediaManager::currentFileName() const {
-    if (!m_mpv) return "";
-    QString path = m_mpv->source();
-    if (path.isEmpty()) return "";
-    return QFileInfo(path).fileName();
-}
-
-bool MediaManager::hasVideo() const {
-    if (!m_mpv) return false;
-
-    const QString codec = m_mpv->property("video-codec").toString().trimmed();
-    if (codec.isEmpty() || codec.compare(QStringLiteral("no"), Qt::CaseInsensitive) == 0)
-        return false;
-
-    auto flag = [this](const char *name) {
-        const QVariant value = m_mpv->property(name);
-        if (!value.isValid()) return false;
-        if (value.toBool()) return true;
-        const QString text = value.toString().trimmed().toLower();
-        return text == QLatin1String("yes") || text == QLatin1String("true");
-    };
-
-    // Audio covers are exposed as image/album-art video tracks.
-    return !flag("current-tracks/video/image")
-        && !flag("current-tracks/video/albumart");
-}
-
-void MediaManager::_sendNotification(const QString &body) {
-    _sendNotification(QString(), body, QString());
-}
-
-void MediaManager::_sendNotification(const QString &summary, const QString &body, const QString &coverPath) {
-    if (m_config && !m_config->notifications()) return;
-    if (!m_notifyInterface || !m_notifyInterface->isValid()) return;
-
-    QVariantMap hints { { QStringLiteral("desktop-entry"), QStringLiteral("luma") } };
-    if (!coverPath.isEmpty()) hints.insert(QStringLiteral("image-path"), coverPath);
-
-    m_notifyInterface->asyncCall("Notify", "Luma", (uint)0, "luma", summary, body, QStringList(),
-                                 hints, (int)-1);
-}
-
-void MediaManager::_notifyForFile(const QString &path) {
-    if (m_config && !m_config->notifications()) return;
-    if (!m_notifyInterface || !m_notifyInterface->isValid()) return;
-
-    // For URLs, wait for the ICY tag from onMediaTitleChanged — don't read tags over the network.
-    if (path.startsWith(QStringLiteral("http://")) || path.startsWith(QStringLiteral("https://")))
-        return;
-
-    TrackTags tags;
-    if (!readTrackTags(path, tags)) {
-        // Not audio with tags — as before, but without the file extension.
-        _sendNotification(QFileInfo(path).completeBaseName());
-        return;
-    }
-
-    QString summary = tags.title;
-    if (summary.isEmpty()) summary = QFileInfo(path).completeBaseName();
-
-    // Artist and album go on separate lines.
-    QStringList details;
-    if (!tags.artist.isEmpty()) details << tags.artist;
-    if (!tags.album.isEmpty()) details << tags.album;
-
-    _sendNotification(summary, details.join(QLatin1Char('\n')), tags.coverPath);
-}
-
-QString MediaManager::getDefaultFileManagerName() {
-    QProcess process;
-    process.start("xdg-mime", QStringList() << "query" << "default" << "inode/directory");
-    process.waitForFinished(1000);
-
-    QString desktopFile = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-    if (desktopFile.isEmpty()) return "File Manager";
-
-    QStringList searchPaths = {
-        QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation),
-        "/usr/share/applications",
-        "/usr/local/share/applications"
-    };
-
-    for (const QString &path : searchPaths) {
-        QFileInfo fi(path + "/" + desktopFile);
-        if (fi.exists()) {
-            QSettings desktop(fi.absoluteFilePath(), QSettings::IniFormat);
-            desktop.beginGroup("Desktop Entry");
-            QString name = desktop.value("Name[" + QLocale::system().name() + "]",
-                                         desktop.value("Name")).toString();
-                                         if (!name.isEmpty()) return name;
-        }
-    }
-    return desktopFile.remove(".desktop");
-}
-
-QVariantMap MediaManager::getFileInfo(const QString &path) {
+// Collects format/stream/tag information. This is deliberately a free function:
+// it is called from a worker thread and must not touch MediaManager state.
+QVariantMap buildFileInfo(const QString &path) {
     QVariantMap info;
 
     // Stream URL: don't open the file, show only the address.
@@ -490,6 +315,332 @@ QVariantMap MediaManager::getFileInfo(const QString &path) {
     return info;
 }
 
+} // namespace
+
+MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
+: QObject(parent), m_mpv(mpv), m_playlists(nullptr)
+{
+    // Do not keep cover art from previous sessions; at most the current file's
+    // cover is allowed to stay.
+    clearCoverCache();
+
+    m_notifyInterface = new QDBusInterface(
+        "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+        "org.freedesktop.Notifications", QDBusConnection::sessionBus(), this
+    );
+
+    // Resolving a URL via yt-dlp must not hang forever.
+    m_ytdlpTimeout = new QTimer(this);
+    m_ytdlpTimeout->setSingleShot(true);
+    m_ytdlpTimeout->setInterval(30000);
+    connect(m_ytdlpTimeout, &QTimer::timeout, this, [this]() {
+        if (!m_ytdlpProcess || m_ytdlpProcess->state() == QProcess::NotRunning) return;
+        m_ytdlpTimedOut = true;
+        m_ytdlpProcess->kill();
+    });
+}
+
+MediaManager::~MediaManager() {
+    if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
+    if (m_ytdlpProcess) {
+        m_ytdlpProcess->disconnect(this);
+        m_ytdlpProcess->kill();
+        m_ytdlpProcess->waitForFinished(1000);
+    }
+}
+
+void MediaManager::setMpv(MpvItem *mpv) {
+    if (m_mpv == mpv) return;
+    if (m_mpv) disconnect(m_mpv, nullptr, this, nullptr);
+    m_mpv = mpv;
+    if (m_mpv) {
+        connect(m_mpv, &MpvItem::mediaTitleChanged, this, &MediaManager::onMediaTitleChanged);
+        connect(m_mpv, &MpvItem::sourceChanged, this, [this]() { setLoading(true); });
+        connect(m_mpv, &MpvItem::fileLoaded, this, &MediaManager::onMpvFileLoaded);
+        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &) { setLoading(false); });
+    }
+}
+
+void MediaManager::setLiveStream(bool live) {
+    if (m_liveStream == live) return;
+    m_liveStream = live;
+    emit liveStreamChanged();
+}
+
+void MediaManager::setLoading(bool loading) {
+    if (m_loading == loading) return;
+    m_loading = loading;
+    emit loadingChanged();
+}
+
+void MediaManager::onMediaTitleChanged() {
+    if (!m_mpv) return;
+
+    const QString source = m_mpv->source();
+    if (!source.startsWith(QStringLiteral("http://")) && !source.startsWith(QStringLiteral("https://")))
+        return;
+
+    // For URLs resolved by yt-dlp, the notification has already been sent with
+    // the original URL; media-title arrives as a googlevideo fragment and is not needed.
+    if (m_streamFromYtdlp)
+        return;
+
+    const QString title = m_mpv->mediaTitle().trimmed();
+    if (title.isEmpty() || title == m_lastStreamTitle) return;
+    // For direct streams mpv often reports the URL itself as the title —
+    // don't show it in the playlist or notifications.
+    if (title.startsWith(QStringLiteral("http://")) || title.startsWith(QStringLiteral("https://")))
+        return;
+    m_lastStreamTitle = title;
+
+    // In the playlist, show the current tag instead of the URL.
+    if (m_playlists) {
+        PlaylistModel *model = m_playlists->activeModel();
+        if (model) model->setStreamTitle(source, title);
+    }
+
+    if (m_config && m_config->notifications()) {
+        const QUrl url(source);
+        _sendNotification(title, url.host(), QString());
+    }
+}
+
+PlaylistModel* MediaManager::playlist() const {
+    return m_playlists ? m_playlists->activeModel() : nullptr;
+}
+
+void MediaManager::setPlaylistManager(PlaylistManager *pm) {
+    if (m_playlists == pm) return;
+    if (m_playlists) m_playlists->disconnect(this);
+    m_playlists = pm;
+    if (m_playlists) {
+        // Each playlist has its own playback mode: follow the active one.
+        connect(m_playlists, &PlaylistManager::activeModelChanged, this, [this]() {
+            if (!m_playlists) return;
+            const QString mode = m_playlists->playlistMode(m_playlists->activeId());
+            if (m_playMode == mode) return;
+            m_playMode = mode;
+            emit playModeChanged();
+        });
+    }
+    emit playlistChanged();
+}
+
+void MediaManager::setManualSwitch(bool val) {
+    if (m_isManualSwitch != val) { m_isManualSwitch = val; emit isManualSwitchChanged(); }
+}
+
+void MediaManager::setPlayMode(const QString &mode) {
+    static const QStringList modes = {
+        QStringLiteral("sequential"), QStringLiteral("repeat"),
+        QStringLiteral("shuffle"), QStringLiteral("stop")
+    };
+    const QString normalized = modes.contains(mode) ? mode : QStringLiteral("sequential");
+    if (m_playMode == normalized) return;
+    m_playMode = normalized;
+
+    if (m_playlists) {
+        // The settings only define the Default playlist's mode; every named
+        // playlist stores its own mode in its playlist file.
+        m_playlists->setPlaylistMode(m_playlists->activeId(), normalized);
+
+        // Shuffling reorders the entries, so only do it for the Default
+        // playlist: a named playlist's saved order must not be destroyed just
+        // by selecting a playback mode.
+        if (m_playlists->activeId() == PlaylistManager::DEFAULT_ID) {
+            if (PlaylistModel *def = m_playlists->defaultModel())
+                def->setShuffle(normalized == QLatin1String("shuffle"));
+        }
+    }
+
+    emit playModeChanged();
+}
+
+void MediaManager::setAspectRatio(const QString &mode) {
+    if (!m_mpv) return;
+    if (mode == "original") {
+        m_mpv->setProperty("video-aspect-override", "no");
+    } else {
+        m_mpv->setProperty("video-aspect-override", mode);
+    }
+}
+
+QString MediaManager::getAspectRatio() const {
+    if (!m_mpv) return "original";
+    // Observed by MpvItem: reading it synchronously here could block while mpv
+    // is opening a network stream.
+    QVariant val = m_mpv->observedProperty("video-aspect-override");
+    if (!val.isValid() || val.isNull()) return "original";
+    if (val.typeId() == QMetaType::QString) {
+        QString str = val.toString().trimmed();
+        if (str == "no" || str.isEmpty()) return "original";
+        return str;
+    }
+    if (val.canConvert<double>()) {
+        double ratio = val.toDouble();
+        if (ratio <= 0.0) return "original";
+        if (qAbs(ratio - 1.777778) < 0.01) return "16:9";
+        if (qAbs(ratio - 1.333333) < 0.01) return "4:3";
+        if (qAbs(ratio - 2.333333) < 0.01) return "21:9";
+        if (qAbs(ratio - 1.0) < 0.01)      return "1:1";
+        if (qAbs(ratio - 0.5625) < 0.01)   return "9:16";
+        return QString::number(ratio, 'f', 2);
+    }
+    return "original";
+}
+
+QString MediaManager::currentFileName() const {
+    if (!m_mpv) return "";
+    QString path = m_mpv->source();
+    if (path.isEmpty()) return "";
+    return QFileInfo(path).fileName();
+}
+
+bool MediaManager::hasVideo() const {
+    if (!m_mpv) return false;
+
+    // All three properties are observed by MpvItem. Using the cached values
+    // avoids a blocking round-trip to the mpv thread on every menu/hotkey.
+    const QString codec = m_mpv->observedProperty("video-codec").toString().trimmed();
+    if (codec.isEmpty() || codec.compare(QStringLiteral("no"), Qt::CaseInsensitive) == 0)
+        return false;
+
+    auto flag = [this](const char *name) {
+        const QVariant value = m_mpv->observedProperty(name);
+        if (!value.isValid()) return false;
+        if (value.toBool()) return true;
+        const QString text = value.toString().trimmed().toLower();
+        return text == QLatin1String("yes") || text == QLatin1String("true");
+    };
+
+    // Audio covers are exposed as image/album-art video tracks.
+    return !flag("current-tracks/video/image")
+        && !flag("current-tracks/video/albumart");
+}
+
+void MediaManager::_sendNotification(const QString &body) {
+    _sendNotification(QString(), body, QString());
+}
+
+void MediaManager::_sendNotification(const QString &summary, const QString &body, const QString &coverPath) {
+    if (m_config && !m_config->notifications()) return;
+    if (!m_notifyInterface || !m_notifyInterface->isValid()) return;
+
+    QVariantMap hints { { QStringLiteral("desktop-entry"), QStringLiteral("luma") } };
+    if (!coverPath.isEmpty()) hints.insert(QStringLiteral("image-path"), coverPath);
+
+    m_notifyInterface->asyncCall("Notify", "Luma", (uint)0, "luma", summary, body, QStringList(),
+                                 hints, (int)-1);
+}
+
+void MediaManager::_notifyForFile(const QString &path) {
+    if (m_config && !m_config->notifications()) return;
+    if (!m_notifyInterface || !m_notifyInterface->isValid()) return;
+
+    // A new file invalidates a notification that is still being prepared, and
+    // the previous file's cover is no longer needed.
+    const quint64 generation = ++m_notifyGeneration;
+    clearCoverCache();
+
+    // For URLs, wait for the ICY tag from onMediaTitleChanged — don't read tags over the network.
+    if (path.startsWith(QStringLiteral("http://")) || path.startsWith(QStringLiteral("https://")))
+        return;
+
+    // Reading tags opens the file with FFmpeg (and may decode cover art), so
+    // keep it off the GUI thread. The worker captures only the path, never
+    // `this`.
+    auto *watcher = new QFutureWatcher<TrackTagsResult>(this);
+    connect(watcher, &QFutureWatcher<TrackTagsResult>::finished, this,
+            [this, watcher, path, generation]() {
+        const TrackTagsResult result = watcher->result();
+        watcher->deleteLater();
+
+        if (generation != m_notifyGeneration) return;
+        if (m_config && !m_config->notifications()) return;
+        if (!m_notifyInterface || !m_notifyInterface->isValid()) return;
+
+        if (!result.ok) {
+            // Not audio with tags — as before, but without the file extension.
+            _sendNotification(QFileInfo(path).completeBaseName());
+            return;
+        }
+
+        const TrackTags &tags = result.tags;
+        QString summary = tags.title;
+        if (summary.isEmpty()) summary = QFileInfo(path).completeBaseName();
+
+        // Artist and album go on separate lines.
+        QStringList details;
+        if (!tags.artist.isEmpty()) details << tags.artist;
+        if (!tags.album.isEmpty()) details << tags.album;
+
+        _sendNotification(summary, details.join(QLatin1Char('\n')), tags.coverPath);
+    });
+    watcher->setFuture(QtConcurrent::run([path]() {
+        TrackTagsResult result;
+        result.ok = readTrackTags(path, result.tags);
+        return result;
+    }));
+}
+
+QString MediaManager::getDefaultFileManagerName() {
+    // Called from QML whenever the track menu is built. Cache the result: the
+    // synchronous xdg-mime query used to stall the GUI thread on every menu.
+    if (!m_defaultFileManagerName.isEmpty()) return m_defaultFileManagerName;
+
+    QProcess process;
+    process.start("xdg-mime", QStringList() << "query" << "default" << "inode/directory");
+    process.waitForFinished(1000);
+
+    // Only a desktop-file name is expected; never follow a path from the tool.
+    const QString desktopFile = QFileInfo(
+        QString::fromUtf8(process.readAllStandardOutput()).trimmed()).fileName();
+    QString result;
+    if (desktopFile.isEmpty()) {
+        result = QStringLiteral("File Manager");
+    } else {
+        QStringList searchPaths = {
+            QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation),
+            "/usr/share/applications",
+            "/usr/local/share/applications"
+        };
+
+        for (const QString &path : searchPaths) {
+            QFileInfo fi(path + "/" + desktopFile);
+            if (!fi.exists()) continue;
+            QSettings desktop(fi.absoluteFilePath(), QSettings::IniFormat);
+            desktop.beginGroup("Desktop Entry");
+            const QString name = desktop.value("Name[" + QLocale::system().name() + "]",
+                                               desktop.value("Name")).toString();
+            if (!name.isEmpty()) {
+                result = name;
+                break;
+            }
+        }
+        if (result.isEmpty()) result = QString(desktopFile).remove(".desktop");
+    }
+
+    m_defaultFileManagerName = result;
+    return result;
+}
+
+QVariantMap MediaManager::getFileInfo(const QString &path) {
+    // Kept for callers that explicitly need a blocking result; the UI uses
+    // requestFileInfo() so the FFmpeg work happens on a worker thread.
+    return buildFileInfo(path);
+}
+
+void MediaManager::requestFileInfo(const QString &path) {
+    auto *watcher = new QFutureWatcher<QVariantMap>(this);
+    connect(watcher, &QFutureWatcher<QVariantMap>::finished, this,
+            [this, watcher, path]() {
+        const QVariantMap info = watcher->result();
+        watcher->deleteLater();
+        emit fileInfoReady(path, info);
+    });
+    watcher->setFuture(QtConcurrent::run([path]() { return buildFileInfo(path); }));
+}
+
 QVariantMap MediaManager::readTags(const QString &path) {
     return TagManager::read(path);
 }
@@ -528,6 +679,13 @@ bool MediaManager::updateStreamUrl(const QString &oldUrl, const QString &newUrl)
     model->removeItem(streamIndex);
     model->appendEntry(entry);
 
+    // Fetch the title for the new link: after a broken URL was corrected the
+    // entry used to stay without a title forever (the old title belonged to
+    // the previous URL). This also reports failures instead of silently
+    // keeping a stale/empty title.
+    if (url.startsWith(QStringLiteral("http://")) || url.startsWith(QStringLiteral("https://")))
+        m_playlists->fetchUrlTitle(m_playlists->activeId(), url);
+
     if (wasCurrent && m_mpv) m_mpv->setSource(url);
     return true;
 }
@@ -544,6 +702,11 @@ void MediaManager::openInFileManager(const QString &path) {
     if (!process.startDetached()) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(folderPath));
     }
+}
+
+void MediaManager::copyToClipboard(const QString &text) {
+    if (QClipboard *clipboard = QGuiApplication::clipboard())
+        clipboard->setText(text);
 }
 
 void MediaManager::removeFromPlaylist(int index) {
@@ -703,7 +866,9 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     if (m_ytdlpProcess) {
         m_ytdlpProcess->disconnect(this);
         m_ytdlpProcess->kill();
-        m_ytdlpProcess->waitForFinished(1000);
+        // Opening another link used to block the GUI for up to one second
+        // here. SIGKILL is enough; the process object is deleted afterwards.
+        m_ytdlpProcess->waitForFinished(100);
         m_ytdlpProcess->deleteLater();
         m_ytdlpProcess = nullptr;
     }
@@ -732,7 +897,14 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     m_ytdlpProcess = proc;
     proc->setProcessChannelMode(QProcess::SeparateChannels);
 
+    const QString ytdlpLogMode = Logger::instance().componentMode(QStringLiteral("yt-dlp"));
+    if (ytdlpLogMode == QLatin1String("info") || ytdlpLogMode == QLatin1String("debug"))
+        Logger::instance().writeComponent(QStringLiteral("yt-dlp"),
+                                          QStringLiteral("yt-dlp %1").arg(url));
+
     QStringList args = m_config ? m_config->ytdlpConfigArgs() : QStringList();
+    if (ytdlpLogMode == QLatin1String("debug"))
+        args << QStringLiteral("--verbose");
     args << QStringLiteral("--no-playlist")
          << QStringLiteral("-j")
          << QStringLiteral("-f") << formatExpr
@@ -742,38 +914,66 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     proc->setArguments(args);
 
     connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc]() {
+        if (m_ytdlpProcess != proc) return;
         m_ytdlpStdoutBuffer += proc->readAllStandardOutput();
+        if (m_ytdlpStdoutBuffer.size() > kMaxYtdlpStdout) {
+            m_ytdlpStdoutBuffer.truncate(kMaxYtdlpStdout);
+            if (proc->state() == QProcess::Running) {
+                m_ytdlpStderr += QStringLiteral("yt-dlp output is too large");
+                proc->kill();
+            }
+        }
     });
-    connect(proc, &QProcess::readyReadStandardError, this, [this, proc]() {
-        m_ytdlpStderr += QString::fromUtf8(proc->readAllStandardError());
+    connect(proc, &QProcess::readyReadStandardError, this, [this, proc, ytdlpLogMode]() {
+        const QByteArray chunk = proc->readAllStandardError();
+        m_ytdlpStderr += QString::fromUtf8(chunk);
         if (m_ytdlpStderr.size() > 65536)
             m_ytdlpStderr = m_ytdlpStderr.right(32768);
+        if (ytdlpLogMode == QLatin1String("info") || ytdlpLogMode == QLatin1String("debug"))
+            Logger::instance().writeComponent(QStringLiteral("yt-dlp"),
+                                              QString::fromUtf8(chunk));
     });
-    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError error) {
+    connect(proc, &QProcess::errorOccurred, this,
+            [this, proc, ytdlpLogMode](QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart) return;
         if (m_ytdlpProcess != proc) return;
         if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
         if (m_ytdlpProcess == proc) m_ytdlpProcess = nullptr;
         proc->deleteLater();
+        if (ytdlpLogMode != QLatin1String("off"))
+            Logger::instance().writeComponent(
+                QStringLiteral("yt-dlp"),
+                QStringLiteral("failed to start yt-dlp: %1").arg(proc->errorString()));
         setLoading(false);
         emit downloadStatus(tr("download_failed_start"));
         _sendNotification(tr("download_failed_open"), tr("download_ytdlp_missing"), QString());
     });
-    connect(proc, &QProcess::finished, this, [this, proc, url, keepPlaylist](int code, QProcess::ExitStatus status) {
+    connect(proc, &QProcess::finished, this,
+            [this, proc, url, keepPlaylist, ytdlpLogMode](int code, QProcess::ExitStatus status) {
         // FailedToStart is handled above and clears m_ytdlpProcess.
         if (m_ytdlpProcess != proc) return;
         m_ytdlpStdoutBuffer += proc->readAllStandardOutput();
+        if (m_ytdlpStdoutBuffer.size() > kMaxYtdlpStdout)
+            m_ytdlpStdoutBuffer.truncate(kMaxYtdlpStdout);
         m_ytdlpStderr += QString::fromUtf8(proc->readAllStandardError());
         if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
         if (m_ytdlpProcess == proc) m_ytdlpProcess = nullptr;
         proc->deleteLater();
 
-        finishUrlResolution(url, keepPlaylist,
-                            status == QProcess::NormalExit && code == 0);
+        const bool ok = status == QProcess::NormalExit && code == 0;
+        if (ytdlpLogMode == QLatin1String("error") && !ok) {
+            QString detail = m_ytdlpStderr.trimmed();
+            if (detail.isEmpty())
+                detail = QStringLiteral("yt-dlp exited with code %1").arg(code);
+            Logger::instance().writeComponent(QStringLiteral("yt-dlp"), detail);
+        }
+        finishUrlResolution(url, keepPlaylist, ok);
     });
 
     m_ytdlpTimeout->start();
-    emit downloadStatus(tr("stream_opening"));
+    // Show the link itself (not the video title): while it is being resolved
+    // there is no title yet, and the link makes it obvious which URL is opening.
+    emit downloadStatus(tr("stream_opening").arg(url));
     proc->start();
 }
 
@@ -1092,7 +1292,8 @@ void MediaManager::openAudioDialog() {
 QVariantList MediaManager::getTracks(const QString &type) const {
     if (!m_mpv) return {};
     QVariantList res;
-    for (const QVariant &t : m_mpv->getProperty("track-list").toList()) {
+    // track-list is observed by MpvItem; no blocking call to the mpv thread.
+    for (const QVariant &t : m_mpv->observedProperty("track-list").toList()) {
         QVariantMap map = t.toMap();
         if (map["type"].toString() != type) continue;
         QVariantMap item;
@@ -1112,7 +1313,8 @@ void MediaManager::setTrackOff(const QString &type) { if (m_mpv) m_mpv->setPrope
 
 int MediaManager::currentTrackId(const QString &type) const {
     if (!m_mpv) return 0;
-    QVariant val = m_mpv->getProperty(type);
+    // aid/sid/vid are observed by MpvItem (see its constructor).
+    QVariant val = m_mpv->observedProperty(type);
     if (val.typeId() == QMetaType::QString && val.toString() == "no") return 0;
     return val.toInt();
 }

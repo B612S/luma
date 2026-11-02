@@ -23,6 +23,8 @@ Rectangle {
 
     property int contextMenuIndex: -1
     property var fileInfoData: ({})
+    // Path of the media-information request currently being displayed.
+    property string pendingInfoPath: ""
 
     property bool menuVisible: contextMenu.visible
     property bool hasOpenDialog: dialogs.nameDialog.visible || dialogs.deleteDialog.visible || dialogs.clearDialog.visible || infoDialog.visible || urlDialog.dialog.visible
@@ -49,6 +51,14 @@ Rectangle {
         function onCurrentIndexChanged() { if (model) listView.currentIndex = model.currentIndex; }
     }
 
+    Connections {
+        target: Media
+        function onFileInfoReady(path, info) {
+            if (path === panel.pendingInfoPath)
+                panel.fileInfoData = info;
+        }
+    }
+
     function closeContextMenu() { contextMenu.close(); tabs.closeMenus(); }
     function scrollToCurrent() { if (panel.model) listView.currentIndex = panel.model.currentIndex; scrollTimer.start(); }
 
@@ -69,8 +79,19 @@ Rectangle {
     }
 
     function openInfoDialog(path) {
-        fileInfoData = Media.getFileInfo(path);
+        pendingInfoPath = path;
+        const isStream = path.indexOf("http://") === 0 || path.indexOf("https://") === 0;
+        // Open immediately with a placeholder; MediaInfoDialog fills in the
+        // details when Media.fileInfoReady arrives (FFmpeg runs off the GUI thread).
+        fileInfoData = {
+            path: path,
+            name: isStream ? path : path.split("/").pop(),
+            isStream: isStream,
+            isAudio: isStream,
+            loading: true
+        };
         infoDialog.open();
+        Media.requestFileInfo(path);
     }
 
     function openClearDialog(id, name) {

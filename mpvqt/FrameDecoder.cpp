@@ -1,3 +1,4 @@
+// Luma-specific file: not part of upstream KDE mpvqt (see mpvqt/README.md).
 #include "FrameDecoder.hpp"
 #include <QDebug>
 #include <cstring>
@@ -48,7 +49,14 @@ bool FrameDecoder::openFile(const QString &filePath) {
     }
 
     m_codecCtx = avcodec_alloc_context3(codec);
-    avcodec_parameters_to_context(m_codecCtx, stream->codecpar);
+    if (!m_codecCtx) {
+        cleanup();
+        return false;
+    }
+    if (avcodec_parameters_to_context(m_codecCtx, stream->codecpar) < 0) {
+        cleanup();
+        return false;
+    }
 
     m_codecCtx->thread_count = 1;
     m_codecCtx->flags2 |= AV_CODEC_FLAG2_FAST;
@@ -88,6 +96,11 @@ QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) 
 
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
+    if (!packet || !frame) {
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+        return QImage();
+    }
     QImage result;
 
     int targetWidth = 320;
@@ -110,18 +123,27 @@ QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) 
 
                     if (m_swsCtx) {
                         result = QImage(targetWidth, targetHeight, QImage::Format_RGB32);
-                        int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB32, targetWidth, targetHeight, 1);
-                        uint8_t *buffer = (uint8_t *)av_malloc(numBytes * sizeof(uint8_t));
+                        const int numBytes = av_image_get_buffer_size(
+                            AV_PIX_FMT_RGB32, targetWidth, targetHeight, 1);
+                        uint8_t *buffer = nullptr;
+                        if (!result.isNull() && numBytes > 0)
+                            buffer = static_cast<uint8_t *>(av_malloc(size_t(numBytes)));
 
-                        uint8_t *destData[4] = { buffer, nullptr, nullptr, nullptr };
-                        int destLinesize[4] = { targetWidth * 4, 0, 0, 0 };
+                        if (buffer) {
+                            uint8_t *destData[4] = { buffer, nullptr, nullptr, nullptr };
+                            int destLinesize[4] = { targetWidth * 4, 0, 0, 0 };
 
-                        sws_scale(m_swsCtx, frame->data, frame->linesize, 0, frame->height, destData, destLinesize);
+                            sws_scale(m_swsCtx, frame->data, frame->linesize, 0, frame->height,
+                                      destData, destLinesize);
 
-                        for (int y = 0; y < targetHeight; ++y) {
-                            memcpy(result.scanLine(y), buffer + y * destLinesize[0], targetWidth * 4);
+                            for (int y = 0; y < targetHeight; ++y) {
+                                memcpy(result.scanLine(y), buffer + y * destLinesize[0],
+                                       size_t(targetWidth) * 4);
+                            }
+                            av_free(buffer);
+                        } else {
+                            result = QImage();
                         }
-                        av_free(buffer);
                     }
 
                     av_packet_unref(packet);

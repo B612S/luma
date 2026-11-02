@@ -21,7 +21,8 @@ private slots:
     void removeItemAdjustsCurrent();
     void clearRemovesEverything();
     void appendEntryRejectsDuplicates();
-    void urlEntryShowsHost();
+    void removeAllowsReappend();
+    void urlEntryShowsLink();
     void streamTitleReplacesUrl();
     void streamTitleIsNotSaved();
     void videoTitlePersists();
@@ -205,18 +206,43 @@ void TestPlaylistModel::appendEntryRejectsDuplicates()
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("Track"));
 }
 
-void TestPlaylistModel::urlEntryShowsHost()
+void TestPlaylistModel::removeAllowsReappend()
 {
     PlaylistModel model;
     QVariantMap entry;
-    entry["path"] = "http://kathy.torontocast.com:3060/";
+    entry["path"] = "/tmp/track.mp3";
+    entry["kind"] = "audio";
+
+    model.appendEntry(entry);
+    model.removeItem(0);
+    QVERIFY(!model.contains("/tmp/track.mp3"));
+
+    // The fast duplicate index must be updated on removal too.
+    model.appendEntry(entry);
+    QCOMPARE(model.count(), 1);
+    QVERIFY(model.contains("/tmp/track.mp3"));
+}
+
+void TestPlaylistModel::urlEntryShowsLink()
+{
+    // Until a title is fetched, the entry shows the actual link — including
+    // the query. Otherwise a broken YouTube URL looks like a valid
+    // "youtube.com/watch" and the mistake is invisible.
+    PlaylistModel model;
+    QVariantMap entry;
+    const QString url = QStringLiteral("https://www.youtube.com/watch?v=abc");
+    entry["path"] = url;
 
     model.appendEntry(entry);
 
     QCOMPARE(model.count(), 1);
-    const QString display = model.data(model.index(0), Qt::DisplayRole).toString();
-    QVERIFY(display.contains(QStringLiteral("kathy.torontocast.com")));
-    QVERIFY(!display.contains(QStringLiteral("http://")));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), url);
+
+    QVariantMap radio;
+    radio["path"] = QStringLiteral("http://kathy.torontocast.com:3060/");
+    model.appendEntry(radio);
+    QCOMPARE(model.data(model.index(1), Qt::DisplayRole).toString(),
+             QStringLiteral("http://kathy.torontocast.com:3060/"));
 }
 
 void TestPlaylistModel::streamTitleReplacesUrl()

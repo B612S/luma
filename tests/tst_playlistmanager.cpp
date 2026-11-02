@@ -22,8 +22,9 @@ private slots:
     void movePlaylistKeepsDefaultFirst();
     void emptyNameRejected();
     void addUrlAndPersist();
-    void urlEntryShowsHostInPlaylist();
+    void urlEntryShowsLinkInPlaylist();
     void urlTitleIsFetched();
+    void playlistModesPersist();
     void onlyPlayingPlaylistIsMarked();
     void addAudioAndVideoFiles();
 
@@ -164,19 +165,37 @@ void TestPlaylistManager::addUrlAndPersist()
     QVERIFY(found);
 }
 
-void TestPlaylistManager::urlEntryShowsHostInPlaylist()
+void TestPlaylistManager::urlEntryShowsLinkInPlaylist()
 {
+    // No yt-dlp in PATH: no title can arrive while the test runs, so the
+    // displayed name is the fallback.
+    QTemporaryDir emptyBin;
+    QVERIFY(emptyBin.isValid());
+    const QByteArray oldPath = qgetenv("PATH");
+    struct PathRestore {
+        QByteArray old;
+        ~PathRestore() { qputenv("PATH", old); }
+    } pathRestore{oldPath};
+    qputenv("PATH", emptyBin.path().toUtf8());
+
     ConfigManager config;
     PlaylistManager manager(&config);
 
-    const QString id = manager.createPlaylist("Radio");
+    const QString id = manager.createPlaylist("Links");
     QVERIFY(!id.isEmpty());
-    manager.addUrlToPlaylist(id, "http://kathy.torontocast.com:3060/");
+
+    // A broken YouTube link must show the whole link (including the query),
+    // not a generic "youtube.com/watch" that hides what is wrong with it.
+    const QString broken = QStringLiteral("https://www.youtube.com/watch?");
+    manager.addUrlToPlaylist(id, broken);
 
     PlaylistModel *model = manager.modelById(id);
     QVERIFY(model != nullptr);
-    QVERIFY(model->data(model->index(0), Qt::DisplayRole).toString()
-                .contains(QStringLiteral("kathy.torontocast.com")));
+    QCOMPARE(model->data(model->index(0), Qt::DisplayRole).toString(), broken);
+
+    const QString radio = QStringLiteral("http://kathy.torontocast.com:3060/");
+    manager.addUrlToPlaylist(id, radio);
+    QCOMPARE(model->data(model->index(1), Qt::DisplayRole).toString(), radio);
 }
 
 void TestPlaylistManager::onlyPlayingPlaylistIsMarked()
@@ -263,6 +282,42 @@ void TestPlaylistManager::urlTitleIsFetched()
     QTRY_COMPARE_WITH_TIMEOUT(
         model->data(model->index(0), Qt::UserRole + 6).toString(),
         QStringLiteral("Fake YouTube title"), 5000);
+}
+
+void TestPlaylistManager::playlistModesPersist()
+{
+    QString id;
+    {
+        ConfigManager config;
+        PlaylistManager manager(&config);
+
+        id = manager.createPlaylist("Modes");
+        QVERIFY(!id.isEmpty());
+        QCOMPARE(manager.playlistMode(id), QStringLiteral("sequential"));
+        QCOMPARE(manager.playlistMode(PlaylistManager::DEFAULT_ID),
+                 QStringLiteral("sequential"));
+
+        manager.setPlaylistMode(id, QStringLiteral("repeat"));
+        QCOMPARE(manager.playlistMode(id), QStringLiteral("repeat"));
+
+        // The Default playlist's mode is the settings value, not a per-file one.
+        manager.setPlaylistMode(PlaylistManager::DEFAULT_ID, QStringLiteral("stop"));
+        QCOMPARE(config.playlistMode(), QStringLiteral("stop"));
+        QCOMPARE(manager.playlistMode(PlaylistManager::DEFAULT_ID), QStringLiteral("stop"));
+
+        // Unknown modes fall back to sequential instead of being saved.
+        manager.setPlaylistMode(id, QStringLiteral("bogus"));
+        QCOMPARE(manager.playlistMode(id), QStringLiteral("sequential"));
+        manager.setPlaylistMode(id, QStringLiteral("repeat"));
+    }
+
+    // The named playlist's mode survives a restart; the Default one comes
+    // from luma.conf.
+    ConfigManager config2;
+    config2.setPlaylistMode(QStringLiteral("shuffle"));
+    PlaylistManager manager2(&config2);
+    QCOMPARE(manager2.playlistMode(id), QStringLiteral("repeat"));
+    QCOMPARE(manager2.playlistMode(PlaylistManager::DEFAULT_ID), QStringLiteral("shuffle"));
 }
 
 int main(int argc, char *argv[])

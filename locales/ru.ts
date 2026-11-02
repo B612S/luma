@@ -25,6 +25,7 @@
 <message><source>playback_repeat</source><translation>Повторять файл</translation></message>
 <message><source>playback_shuffle</source><translation>Вперемешку</translation></message>
 <message><source>playback_stop</source><translation>Остановить после файла</translation></message>
+<message><source>playback_mode_for</source><translation>Плейлист: %1</translation></message>
 <message><source>aspect_original</source><translation>Исходное</translation></message>
 <message><source>osd_aspect</source><translation>Соотношение сторон: %1</translation></message>
 <message><source>menu_playlist</source><translation>Плейлист</translation></message>
@@ -58,7 +59,8 @@
 <message><source>settings_default_volume</source><translation>Громкость при запуске</translation></message>
 <message><source>settings_notifications</source><translation>Показывать уведомления</translation></message>
 <message><source>settings_single_instance</source><translation>Один экземпляр</translation></message>
-<message><source>settings_play_mode</source><translation>Режим по умолчанию</translation></message>
+<message><source>settings_play_mode</source><translation>Режим воспроизведения плейлиста «По умолчанию»</translation></message>
+<message><source>settings_play_mode_hint</source><translation>Действует только для плейлиста «По умолчанию». У остальных плейлистов свой режим — его можно изменить в «Воспроизведение» → «Режим воспроизведения».</translation></message>
 <message><source>settings_append_playlist</source><translation>Добавлять файлы в плейлист</translation></message>
 <message><source>settings_close</source><translation>Закрыть</translation></message>
 <message><source>about_close</source><translation>Закрыть</translation></message>
@@ -81,6 +83,16 @@
 <message><source>settings_sub_ignore_file_style</source><translation>Игнорировать оформление из файла субтитров</translation></message>
 <message><source>settings_show_panels_fullscreen</source><translation>Показывать панель управления в полноэкранном режиме</translation></message>
 <message><source>settings_playback</source><translation>Воспроизведение</translation></message>
+<message><source>settings_debug</source><translation>Отладка</translation></message>
+<message><source>settings_debug_hint</source><translation>Каждый компонент пишет свой файл в ~/.cache/luma/: luma.log, mpv.log и yt-dlp.log.</translation></message>
+<message><source>settings_log_luma</source><translation>Журнал Luma</translation></message>
+<message><source>settings_log_mpv</source><translation>Журнал mpv</translation></message>
+<message><source>settings_log_ytdlp</source><translation>Журнал yt-dlp</translation></message>
+<message><source>settings_log_off</source><translation>Выкл.</translation></message>
+<message><source>settings_log_error</source><translation>Ошибки</translation></message>
+<message><source>settings_log_info</source><translation>Информация</translation></message>
+<message><source>settings_log_debug</source><translation>Отладка</translation></message>
+
 <message><source>settings_audio</source><translation>Звук</translation></message>
 <message><source>settings_audio_output</source><translation>Аудиовыход</translation></message>
 <message><source>settings_audio_auto</source><translation>Автоматически</translation></message>
@@ -148,6 +160,7 @@
 <message><source>tabs_rename</source><translation>Переименовать</translation></message>
 <message><source>tabs_delete</source><translation>Удалить</translation></message>
 <message><source>tabs_new</source><translation>Новый плейлист</translation></message>
+<message><source>tabs_all</source><translation>Все плейлисты</translation></message>
 </context>
 
 <context>
@@ -180,6 +193,57 @@
 <message><source>stats_avsync</source><translation>Синхронизация A/V</translation></message>
 <message><source>stats_cache</source><translation>Буфер</translation></message>
 <message><source>stats_path</source><translation>Путь к файлу</translation></message>
+<message><source>stats_tags</source><translation>Теги</translation></message>
+<message><source>stats_copy</source><translation>Копировать</translation></message>
+<message><source>stats_tag_title</source><translation>Название</translation></message>
+<message><source>stats_tag_artist</source><translation>Исполнитель</translation></message>
+<message><source>stats_tag_album</source><translation>Альбом</translation></message>
+<message><source>stats_tag_album_artist</source><translation>Исполнитель альбома</translation></message>
+<message><source>stats_tag_genre</source><translation>Жанр</translation></message>
+<message><source>stats_tag_year</source><translation>Год</translation></message>
+<message><source>stats_tag_track</source><translation>Трек</translation></message>
+<message><source>stats_tag_disc</source><translation>Диск</translation></message>
+<message><source>stats_tag_comment</source><translation>Комментарий</translation></message>
+<message><source>stats_tag_composer</source><translation>Композитор</translation></message>
+<message><source>stats_tag_encoder</source><translation>Кодировщик</translation></message>
+<message><source>stats_tag_encoded_by</source><translation>Кодировал</translation></message>
+<message><source>stats_tag_track_total</source><translation>Всего треков</translation></message>
+<message><source>stats_tag_disc_total</source><translation>Всего дисков</translation></message>
+<message><source>stats_tag_copyright</source><translation>Авторские права</translation></message>
+<message><source>stats_tag_publisher</source><translation>Издатель</translation></message>
+<message><source>stats_tag_language</source><translation>Язык</translation></message>
+<message><source>stats_tag_bpm</source><translation>BPM</translation></message>
+<message><source>stats_tag_isrc</source><translation>ISRC</translation></message>
+<message><source>stats_tag_lyrics</source><translation>Текст песни</translation></message>
+<message><source>stats_tag_lyricist</source><translation>Автор текста</translation></message>
+<message><source>stats_tag_conductor</source><translation>Дирижёр</translation></message>
+<message><source>stats_tag_performer</source><translation>Исполнитель</translation></message>
+<message><source>stats_tag_producer</source><translation>Продюсер</translation></message>
+<message><source>stats_tag_engineer</source><translation>Звукорежиссёр</translation></message>
+<message><source>stats_tag_mixer</source><translation>Микширование</translation></message>
+<message><source>stats_tag_arranger</source><translation>Аранжировщик</translation></message>
+<message><source>stats_tag_grouping</source><translation>Группировка</translation></message>
+<message><source>stats_tag_compilation</source><translation>Сборник</translation></message>
+<message><source>stats_tag_original_artist</source><translation>Оригинальный исполнитель</translation></message>
+<message><source>stats_tag_original_album</source><translation>Оригинальный альбом</translation></message>
+<message><source>stats_tag_original_year</source><translation>Оригинальный год</translation></message>
+<message><source>stats_tag_description</source><translation>Описание</translation></message>
+<message><source>stats_tag_creation_time</source><translation>Время создания</translation></message>
+<message><source>stats_tag_icy_samplerate</source><translation>Частота потока</translation></message>
+<message><source>stats_tag_icy_channels</source><translation>Каналы потока</translation></message>
+<message><source>stats_tag_icy_pub</source><translation>Публичный поток</translation></message>
+<message><source>stats_tag_icy_notice1</source><translation>Уведомление потока 1</translation></message>
+<message><source>stats_tag_icy_notice2</source><translation>Уведомление потока 2</translation></message>
+
+
+
+<message><source>stats_tag_icy_title</source><translation>Название потока</translation></message>
+<message><source>stats_tag_icy_name</source><translation>Станция</translation></message>
+<message><source>stats_tag_icy_genre</source><translation>Жанр станции</translation></message>
+<message><source>stats_tag_icy_url</source><translation>URL станции</translation></message>
+<message><source>stats_tag_icy_description</source><translation>Описание</translation></message>
+<message><source>stats_tag_icy_br</source><translation>Битрейт потока</translation></message>
+
 </context>
 
 <context>
@@ -195,7 +259,7 @@
 <message><source>dialog_audio_filter</source><translation>Аудиофайлы (*.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
 <message><source>track_default_name</source><translation>Дорожка %1</translation></message>
 <message><source>dialog_media_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
-<message><source>stream_opening</source><translation>Открытие ссылки…</translation></message>
+<message><source>stream_opening</source><translation>Открытие %1</translation></message>
 <message><source>download_failed_open</source><translation>Не удалось открыть ссылку</translation></message>
 <message><source>download_failed_start</source><translation>Не удалось запустить yt-dlp</translation></message>
 <message><source>download_ytdlp_missing</source><translation>yt-dlp не найден или не запускается</translation></message>
@@ -256,6 +320,7 @@
 <context>
 <name>MediaInfoDialog</name>
 <message><source>info_title</source><translation>Информация</translation></message>
+<message><source>info_loading</source><translation>Загрузка…</translation></message>
 <message><source>field_path</source><translation>Путь</translation></message>
 <message><source>tags_title</source><translation>Теги</translation></message>
 <message><source>tag_title</source><translation>Название</translation></message>

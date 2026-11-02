@@ -2,6 +2,10 @@
  * SPDX-FileCopyrightText: 2023 George Florea Bănuș <georgefb899@gmail.com>
  *
  * SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
+ *
+ * Modified for Luma, relative to upstream mpvqt v1.2.1:
+ *   - Use an explicit `mpv_render_context *` instead of `auto` for the empty
+ *     render context.
  */
 
 #include "mpvabstractitem.h"

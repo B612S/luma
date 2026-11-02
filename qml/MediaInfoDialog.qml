@@ -23,6 +23,7 @@ Dialog {
 
     readonly property bool isAudio: dialog.fileInfo.isAudio === true
     readonly property bool isStream: dialog.fileInfo.isStream === true
+    readonly property bool loading: dialog.fileInfo.loading === true
 
     property string urlValue: ""
     property string originalUrl: ""
@@ -53,6 +54,9 @@ Dialog {
 
     onOpened: dialog.reloadTags()
     onClosed: { dialog.tagsDirty = false; dialog.urlDirty = false; dialog.saveMessage = ""; }
+    // The information is collected asynchronously; refresh the fields when it
+    // arrives instead of leaving the dialog empty.
+    onFileInfoChanged: if (dialog.visible) dialog.reloadTags()
 
     function reloadTags() {
         const tags = dialog.fileInfo.tags || ({});
@@ -114,6 +118,7 @@ Dialog {
             anchors.fill: parent
             anchors.margins: 20
             clip: true
+            enabled: !dialog.loading
             contentWidth: width
             contentHeight: column.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
@@ -132,6 +137,15 @@ Dialog {
                     font.weight: Font.Bold
                     color: Kirigami.Theme.textColor
                     wrapMode: Text.Wrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: dialog.loading
+                    text: qsTranslate("MediaInfoDialog", "info_loading")
+                    color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                   Kirigami.Theme.textColor.b, 0.7)
+                    font.pixelSize: 13
                 }
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: dialog.lineColor }

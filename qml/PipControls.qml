@@ -264,7 +264,21 @@ Item {
             padding: 0
             from: 0
             to: Math.max(1, pip.duration)
-            onMoved: if (pip.mpv) pip.mpv.position = value
+            enabled: pip.duration > 0
+
+            // Same seeking as the main control bar: the slider follows the
+            // cursor while dragging, then an exact seek is issued on release.
+            property bool seeking: false
+            value: seeking ? value : pip.position
+
+            onPressedChanged: {
+                if (pressed) {
+                    seeking = true
+                } else if (pip.mpv) {
+                    pip.mpv.seekExact(value)
+                    seekGrace.restart()
+                }
+            }
 
             background: Item {
                 x: 0
@@ -294,19 +308,13 @@ Item {
                 border.color: Qt.rgba(0, 0, 0, 0.25)
             }
 
-            // While dragging, the slider follows the cursor; after release
-            // don't let it snap back until mpv reports the new position.
-            Binding {
-                target: seekSlider
-                property: "value"
-                value: pip.position
-                when: !seekSlider.pressed && !seekGrace.running
-            }
-
-            Timer { id: seekGrace; interval: 400; repeat: false }
-
-            onPressedChanged: {
-                if (!pressed) seekGrace.restart();
+            // The seek target is kept until mpv reports the new position, so
+            // the handle does not snap back to the old time for a moment.
+            Timer {
+                id: seekGrace
+                interval: 400
+                repeat: false
+                onTriggered: seekSlider.seeking = false
             }
         }
 

@@ -1,4 +1,5 @@
 #include <QTest>
+#include <QSignalSpy>
 #include <QDir>
 #include <QFile>
 #include <QSettings>
@@ -17,12 +18,15 @@ class TestConfigManager : public QObject
 private slots:
     void init();
     void defaults();
+    void loggingModes();
+    void legacyDebugLoggingMigrates();
     void playbackSettings();
     void playbackSettingsPersist();
     void playbackMigratesToMpvConf();
     void controlBarModePersists();
     void legacyPinControlsMigrates();
     void unsupportedLanguageFallsBack();
+    void reloadsExternalChanges();
     void ytdlpQualityAndProxy();
     void ytdlpProxyTypeAndAddress();
     void ytdlpSocksSchemeMigrates();
@@ -72,6 +76,61 @@ void TestConfigManager::defaults()
     const QString lumaContent = QString::fromUtf8(luma.readAll());
     luma.close();
     QVERIFY(!lumaContent.contains(QStringLiteral("[playback]")));
+}
+
+void TestConfigManager::loggingModes()
+{
+    {
+        ConfigManager config;
+        QCOMPARE(config.lumaLogMode(), QStringLiteral("info"));
+        QCOMPARE(config.mpvLogMode(), QStringLiteral("off"));
+        QCOMPARE(config.ytdlpLogMode(), QStringLiteral("off"));
+
+        QSignalSpy changed(&config, &ConfigManager::loggingChanged);
+        config.setLumaLogMode("debug");
+        config.setMpvLogMode("error");
+        config.setYtdlpLogMode("info");
+        QCOMPARE(changed.count(), 3);
+
+        // Setting the same value must not emit another change.
+        config.setMpvLogMode("error");
+        QCOMPARE(changed.count(), 3);
+    }
+
+    {
+        QSettings settings(lumaDir() + "/luma.conf", QSettings::IniFormat);
+        QCOMPARE(settings.value("debug/luma").toString(), QStringLiteral("debug"));
+        QCOMPARE(settings.value("debug/mpv").toString(), QStringLiteral("error"));
+        QCOMPARE(settings.value("debug/ytdlp").toString(), QStringLiteral("info"));
+    }
+
+    ConfigManager config2;
+    QCOMPARE(config2.lumaLogMode(), QStringLiteral("debug"));
+    QCOMPARE(config2.mpvLogMode(), QStringLiteral("error"));
+    QCOMPARE(config2.ytdlpLogMode(), QStringLiteral("info"));
+
+    // "none" is the legacy spelling of "off".
+    config2.setLumaLogMode("none");
+    QCOMPARE(config2.lumaLogMode(), QStringLiteral("off"));
+}
+
+void TestConfigManager::legacyDebugLoggingMigrates()
+{
+    QDir().mkpath(lumaDir());
+    {
+        QFile luma(lumaDir() + "/luma.conf");
+        QVERIFY(luma.open(QIODevice::WriteOnly | QIODevice::Text));
+        luma.write("[ui]\ndebug_logging=debug\n");
+    }
+
+    {
+        ConfigManager config;
+        QCOMPARE(config.lumaLogMode(), QStringLiteral("debug"));
+    }
+
+    QSettings settings(lumaDir() + "/luma.conf", QSettings::IniFormat);
+    QVERIFY(!settings.contains(QStringLiteral("ui/debug_logging")));
+    QCOMPARE(settings.value("debug/luma").toString(), QStringLiteral("debug"));
 }
 
 void TestConfigManager::playbackSettings()
@@ -241,6 +300,45 @@ void TestConfigManager::unsupportedLanguageFallsBack()
 
     config.setLanguage("ru");
     QCOMPARE(config.language(), QStringLiteral("ru"));
+}
+
+void TestConfigManager::reloadsExternalChanges()
+{
+    ConfigManager config;
+    QVERIFY(config.singleInstance());
+    QVERIFY(config.notifications());
+    QCOMPARE(config.playlistMode(), QStringLiteral("sequential"));
+    QCOMPARE(config.controlBarMode(), QStringLiteral("float"));
+    QCOMPARE(config.hwdec(), QStringLiteral("auto"));
+
+    // Another instance (single instance mode off there) rewrites luma.conf
+    // while this one is running.
+    {
+        QSettings other(lumaDir() + "/luma.conf", QSettings::IniFormat);
+        other.setValue("ui/single_instance", false);
+        other.setValue("ui/notifications", false);
+        other.setValue("playlist/mode", "repeat");
+        other.setValue("ui/control_bar_mode", "hidden");
+        other.sync();
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT(!config.singleInstance(), 5000);
+    QVERIFY(!config.notifications());
+    QCOMPARE(config.playlistMode(), QStringLiteral("repeat"));
+    QCOMPARE(config.controlBarMode(), QStringLiteral("hidden"));
+
+    // Playback settings live in mpv.conf and must be picked up as well.
+    {
+        QFile mpv(lumaDir() + "/mpv.conf");
+        QVERIFY(mpv.open(QIODevice::ReadOnly | QIODevice::Text));
+        QString content = QString::fromUtf8(mpv.readAll());
+        mpv.close();
+        content.replace(QStringLiteral("hwdec=auto"), QStringLiteral("hwdec=vaapi"));
+        QVERIFY(mpv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text));
+        mpv.write(content.toUtf8());
+        mpv.close();
+    }
+    QTRY_COMPARE_WITH_TIMEOUT(config.hwdec(), QStringLiteral("vaapi"), 5000);
 }
 
 void TestConfigManager::ytdlpQualityAndProxy()

@@ -54,9 +54,12 @@ public:
     Q_INVOKABLE void playIndex(int index);
 
     Q_INVOKABLE void openInFileManager(const QString &path);
+    Q_INVOKABLE void copyToClipboard(const QString &text);
     Q_INVOKABLE void removeFromPlaylist(int index);
     Q_INVOKABLE QString getDefaultFileManagerName();
+    // Blocking variant (kept for API compatibility); the UI uses the async one.
     Q_INVOKABLE QVariantMap getFileInfo(const QString &path);
+    Q_INVOKABLE void requestFileInfo(const QString &path);
     // Audio file tags: read and written in the file itself (via TagLib).
     Q_INVOKABLE QVariantMap readTags(const QString &path);
     Q_INVOKABLE bool saveTags(const QString &path, const QVariantMap &tags);
@@ -85,6 +88,8 @@ signals:
     void loadingChanged();
     // Text for the OSD while a URL is being opened via yt-dlp.
     void downloadStatus(const QString &message);
+    // Result of the asynchronous file-properties request.
+    void fileInfoReady(const QString &path, const QVariantMap &info);
 
 private:
     void _sendNotification(const QString &body);
@@ -122,6 +127,9 @@ private:
     QTimer *m_ytdlpTimeout = nullptr;
     QByteArray m_ytdlpStdoutBuffer;
     QString m_ytdlpStderr;
+    QString m_defaultFileManagerName;
+    // Discards notifications from a file that was already replaced.
+    quint64 m_notifyGeneration = 0;
     QString m_resolvedTitle;
     QString m_resolvedVideoUrl;
     QString m_resolvedAudioUrl;

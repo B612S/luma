@@ -41,12 +41,14 @@ When `pkgver` changes, reset `pkgrel` to `1`.
 ## Releasing
 
 1. Choose the bump using the table above.
-2. Edit [`VERSION`](VERSION) only (strictly `MAJOR.MINOR.PATCH`; CMake rejects
+2. Move the entries under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) to a new
+   `## [X.Y.Z] - YYYY-MM-DD` section.
+3. Edit [`VERSION`](VERSION) only (strictly `MAJOR.MINOR.PATCH`; CMake rejects
    anything else).
-3. Reconfigure and build; run the tests.
-4. Reset `pkgrel=1` in `PKGBUILD` for a new `pkgver`, or increment it for a
+4. Reconfigure and build; run the tests.
+5. Reset `pkgrel=1` in `PKGBUILD` for a new `pkgver`, or increment it for a
    packaging-only rebuild.
-5. Rebuild the AppImage if it is part of the release.
-6. Tag the release as `vX.Y.Z`.
+6. Rebuild the AppImage if it is part of the release.
+7. Tag the release as `vX.Y.Z`.
 
 The current baseline is `1.0.0`.

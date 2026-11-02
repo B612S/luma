@@ -224,7 +224,12 @@ KeyboardLayoutWatcher::KeyboardLayoutWatcher(QObject *parent) : QObject(parent) 
 KeyboardLayoutWatcher::~KeyboardLayoutWatcher() {
     if (!m_worker) return;
     m_worker->stop();
-    m_worker->wait(2000);
+    // A blocked compositor must not crash the shutdown: QThread cannot be
+    // destroyed while it is still running.
+    if (!m_worker->wait(2000)) {
+        m_worker->terminate();
+        m_worker->wait(1000);
+    }
 }
 
 QString KeyboardLayoutWatcher::keyName(const QString &key) const {

@@ -20,7 +20,9 @@
 #include <QUrl>
 #include <thread>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
+#include <memory>
 
 #include "core/ConfigManager.hpp"
 #include "core/PlaylistManager.hpp"
@@ -39,6 +41,11 @@
 #define LUMA_VERSION "dev"
 #endif
 
+namespace {
+// A command line with a few paths is tiny; cap the single-instance handshake.
+constexpr qsizetype kMaxInstanceArgs = 64 * 1024;
+}
+
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
     if (args.size() > 1) {
         QString filePath = args.at(1);
@@ -52,15 +59,32 @@ void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow 
 }
 
 int main(int argc, char *argv[]) {
-    // Prefer Wayland when the session provides it; otherwise let Qt select the
-    // platform plugin (xcb on X11), so portable builds work on more systems.
-    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")
-            && !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")) {
-        qputenv("QT_QPA_PLATFORM", QByteArray("wayland"));
+    // Luma is Wayland-only. Without a Wayland session there is no supported
+    // platform, so stop with an explanation instead of letting Qt fall back to
+    // X11 (or any other platform plugin).
+    if (qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+            && qEnvironmentVariableIsEmpty("WAYLAND_SOCKET")) {
+        // Use stdio here: no Qt application exists yet, and Qt may suppress its
+        // message handler when stderr is not a terminal (e.g. launched from a
+        // desktop environment or a launcher).
+        std::fprintf(stderr,
+                     "Luma requires a Wayland session (WAYLAND_DISPLAY is not set). "
+                     "X11 is not supported and support for it is not planned.\n");
+        return 1;
     }
+    // Ignore whatever QT_QPA_PLATFORM contains (xcb, offscreen, …): only the
+    // Wayland platform plugin is supported.
+    qputenv("QT_QPA_PLATFORM", QByteArray("wayland"));
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
     QApplication app(argc, argv);
+
+    if (!QGuiApplication::platformName().startsWith(QStringLiteral("wayland"))) {
+        std::fprintf(stderr,
+                     "Luma requires the Wayland platform plugin, but Qt initialized \"%s\" instead.\n",
+                     qPrintable(QGuiApplication::platformName()));
+        return 1;
+    }
     // Use the KDE widget style for native dialogs and for qqc2-desktop-style's
     // style items. QT_STYLE_OVERRIDE would also change the QML controls style,
     // which must remain org.kde.desktop.
@@ -81,7 +105,9 @@ int main(int argc, char *argv[]) {
     app.setWindowIcon(QIcon(":/assets/luma.png"));
 
     ConfigManager config;
-    Logger::instance().setMode(config.value("ui/debug_logging", "info").toString());
+    Logger::instance().setMode(config.lumaLogMode());
+    Logger::instance().setComponentMode(QStringLiteral("mpv"), config.mpvLogMode());
+    Logger::instance().setComponentMode(QStringLiteral("yt-dlp"), config.ytdlpLogMode());
     Logger::installMessageHandler();
 
     // ---- Single instance ----
@@ -106,6 +132,8 @@ int main(int argc, char *argv[]) {
 
         QLocalServer::removeServer(serverName);
         server = new QLocalServer(&app);
+        // Only the current user may forward arguments to this instance.
+        server->setSocketOptions(QLocalServer::UserAccessOption);
         if (!server->listen(serverName)) {
             qWarning() << "Failed to start local server:" << server->errorString();
         }
@@ -141,6 +169,13 @@ int main(int argc, char *argv[]) {
     media.setPlaylistManager(&playlists);
     media.setPlayMode(config.playlistMode());
 
+    // The settings define the Default playlist's mode only. Changing it (also
+    // from another instance) must not override a named playlist's own mode.
+    QObject::connect(&config, &ConfigManager::playlistModeChanged, &media, [&]() {
+        if (playlists.activeId() == PlaylistManager::DEFAULT_ID)
+            media.setPlayMode(config.playlistMode());
+    });
+
     OsdManager osd(nullptr, &app);
 
     CastManager castManager;
@@ -170,6 +205,9 @@ int main(int argc, char *argv[]) {
     QObject::connect(&config, &ConfigManager::languageChanged, [&]() {
         loadLanguage(config.language());
         engine.retranslate();
+        // The playlist names (including "Default") are translated on the C++
+        // side, so the tab bar and the menus need a refresh as well.
+        playlists.retranslate();
     });
 
     // ---- Window size ----
@@ -183,6 +221,22 @@ int main(int argc, char *argv[]) {
     if (mpv) {
         media.setMpv(mpv);
         osd.setMpv(mpv);
+
+        // ---- Logging (each component writes its own file) ----
+        QObject::connect(mpv, &MpvItem::mpvLogMessage, &app,
+                         [](const QString &prefix, const QString &level, const QString &message) {
+            Logger::instance().writeComponent(
+                QStringLiteral("mpv"),
+                QStringLiteral("[%1] [%2] %3").arg(prefix, level, message));
+        });
+        auto applyLogSettings = [&config, mpv]() {
+            Logger::instance().setMode(config.lumaLogMode());
+            Logger::instance().setComponentMode(QStringLiteral("mpv"), config.mpvLogMode());
+            Logger::instance().setComponentMode(QStringLiteral("yt-dlp"), config.ytdlpLogMode());
+            mpv->setLogLevel(config.mpvLogMode());
+        };
+        applyLogSettings();
+        QObject::connect(&config, &ConfigManager::loggingChanged, mpv, applyLogSettings);
 
         // Show the yt-dlp link opening status on top of the video.
         QObject::connect(&media, &MediaManager::downloadStatus, &osd,
@@ -307,17 +361,44 @@ int main(int argc, char *argv[]) {
     // ---- Single instance: accepting new arguments ----
     if (config.singleInstance() && server) {
         QObject::connect(server, &QLocalServer::newConnection, [server, &media, root]() {
-            QLocalSocket *clientSocket = server->nextPendingConnection();
-            if (!clientSocket) return;
-            clientSocket->waitForReadyRead(1000);
-            QTextStream in(clientSocket);
-            QStringList args;
-            while (!in.atEnd()) {
-                QString line = in.readLine();
-                if (!line.isEmpty()) args << line;
+            while (QLocalSocket *clientSocket = server->nextPendingConnection()) {
+                auto buffer = std::make_shared<QByteArray>();
+                auto done = std::make_shared<bool>(false);
+
+                // Read asynchronously: waiting on the socket blocked the GUI
+                // thread for up to a second if a client sent data late.
+                auto finish = [clientSocket, buffer, done, &media, root]() {
+                    if (*done) return;
+                    *done = true;
+                    const qsizetype room = kMaxInstanceArgs - buffer->size();
+                    if (room > 0)
+                        buffer->append(clientSocket->read(room));
+
+                    QStringList args;
+                    const QList<QByteArray> lines = buffer->split('\n');
+                    for (QByteArray line : lines) {
+                        if (line.endsWith('\r')) line.chop(1);
+                        if (!line.isEmpty() && args.size() < 64)
+                            args << QString::fromUtf8(line);
+                    }
+                    clientSocket->deleteLater();
+                    handleArguments(args, media, root);
+                };
+
+                QObject::connect(clientSocket, &QLocalSocket::readyRead, clientSocket,
+                                 [clientSocket, buffer]() {
+                    const qsizetype room = kMaxInstanceArgs - buffer->size();
+                    if (room > 0) {
+                        buffer->append(clientSocket->read(room));
+                    } else {
+                        // Discard, but do not allocate an unbounded buffer.
+                        clientSocket->read(8192);
+                    }
+                });
+                QObject::connect(clientSocket, &QLocalSocket::disconnected, clientSocket, finish);
+                // Also handle a client that keeps the connection open.
+                QTimer::singleShot(1000, clientSocket, finish);
             }
-            clientSocket->deleteLater();
-            handleArguments(args, media, root);
         });
     }
 
@@ -333,7 +414,10 @@ int main(int argc, char *argv[]) {
         if (windowSize.width() < 400 || windowSize.height() < 300)
             windowSize = QSize(960, 640);
         config.saveWindowSize(windowSize.width(), windowSize.height());
-        config.setPlaylistMode(media.playMode());
+        // Only the Default playlist's mode belongs in the settings — named
+        // playlists saved theirs when the mode was changed.
+        if (playlists.activeId() == PlaylistManager::DEFAULT_ID)
+            config.setPlaylistMode(media.playMode());
         if (mpv && config.rememberVolume())
             config.setVolume(static_cast<int>(mpv->volume()));
 

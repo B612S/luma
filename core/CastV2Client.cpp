@@ -5,6 +5,12 @@
 #include <QDebug>
 #include <QTimer>
 
+namespace {
+// Cast messages are tiny (a few KB at most). A rogue device on the LAN must
+// not be able to make us allocate an arbitrary amount of memory.
+constexpr quint32 kMaxCastMessageSize = 16 * 1024 * 1024;
+}
+
 CastV2Client::CastV2Client(QObject *parent) : QObject(parent) {
     m_heartbeatTimer = new QTimer(this);
     m_heartbeatTimer->setInterval(5000);
@@ -30,15 +36,18 @@ void CastV2Client::connectToDevice(const QString &address, quint16 port) {
     m_launchRequested = false;
 
     m_socket = new QSslSocket(this);
-    connect(m_socket, &QSslSocket::sslErrors, m_socket, [this](const QList<QSslError> &) {
-        m_socket->ignoreSslErrors();
+    QSslSocket *socket = m_socket;
+    // Capture the socket itself: an old socket's signal must never operate on
+    // the newly created one after a reconnect.
+    connect(socket, &QSslSocket::sslErrors, socket, [socket](const QList<QSslError> &) {
+        socket->ignoreSslErrors();
     });
-    connect(m_socket, &QSslSocket::readyRead, this, &CastV2Client::onReadyRead);
-    connect(m_socket, &QSslSocket::encrypted, this, &CastV2Client::onEncrypted);
-    connect(m_socket, &QSslSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-        emit errorOccurred(m_socket->errorString());
+    connect(socket, &QSslSocket::readyRead, this, &CastV2Client::onReadyRead);
+    connect(socket, &QSslSocket::encrypted, this, &CastV2Client::onEncrypted);
+    connect(socket, &QSslSocket::errorOccurred, this, [this, socket](QAbstractSocket::SocketError) {
+        emit errorOccurred(socket->errorString());
     });
-    connect(m_socket, &QSslSocket::disconnected, this, [this]() {
+    connect(socket, &QSslSocket::disconnected, this, [this]() {
         m_heartbeatTimer->stop();
         m_statusPollTimer->stop();
         m_transportId.clear();
@@ -171,12 +180,15 @@ void CastV2Client::stop() {
     m_heartbeatTimer->stop();
     m_statusPollTimer->stop();
     if (m_socket) {
-        m_socket->disconnectFromHost();
+        // Detach so late socket signals cannot re-enter stopCast().
+        m_socket->disconnect(this);
+        m_socket->abort();
     }
     m_transportId.clear();
     m_sessionId.clear();
     m_mediaSessionId = -1;
     m_pendingMediaUrl.clear();
+    m_pendingMediaTitle.clear();
     m_loadSent = false;
     m_launchRequested = false;
     m_isPlaying = false;
@@ -191,38 +203,72 @@ void CastV2Client::sendHeartbeat() {
 
 void CastV2Client::onReadyRead() {
     QByteArray data = m_socket->readAll();
+    if (data.size() > int(kMaxCastMessageSize) + 4) {
+        qWarning() << "CastV2Client: oversized data from device, closing connection";
+        m_socket->abort();
+        return;
+    }
 
     while (data.size() >= 4) {
-        quint32 len = (quint8(data[0]) << 24) | (quint8(data[1]) << 16) | (quint8(data[2]) << 8) | quint8(data[3]);
-        if (data.size() < 4 + int(len)) break;
+        const quint32 len = (quint8(data[0]) << 24) | (quint8(data[1]) << 16)
+                          | (quint8(data[2]) << 8) | quint8(data[3]);
+        if (len > kMaxCastMessageSize) {
+            qWarning() << "CastV2Client: oversized message from device, closing connection";
+            m_socket->abort();
+            return;
+        }
+        if (static_cast<quint64>(data.size()) < 4 + static_cast<quint64>(len)) break;
 
-        QByteArray proto = data.mid(4, len);
-        data.remove(0, 4 + len);
+        QByteArray proto = data.mid(4, int(len));
+        data.remove(0, 4 + int(len));
 
         QString jsonPayload;
         int pos = 0;
+        bool malformed = false;
         while (pos < proto.size()) {
-            quint8 tag = quint8(proto[pos++]);
-            int field = tag >> 3;
-            int wire = tag & 0x07;
+            const quint8 tag = quint8(proto[pos++]);
+            const int field = tag >> 3;
+            const int wire = tag & 0x07;
 
             if (wire == 2) {
                 quint64 strLen = 0;
                 int shift = 0;
                 while (pos < proto.size()) {
-                    quint8 b = quint8(proto[pos++]);
+                    if (shift > 63) {
+                        malformed = true;
+                        break;
+                    }
+                    const quint8 b = quint8(proto[pos++]);
                     strLen |= quint64(b & 0x7F) << shift;
                     if (!(b & 0x80)) break;
                     shift += 7;
                 }
-                QByteArray val = proto.mid(pos, int(strLen));
+                if (malformed) break;
+                if (strLen > quint64(proto.size() - pos)) {
+                    malformed = true;
+                    break;
+                }
+                const QByteArray val = proto.mid(pos, int(strLen));
                 pos += int(strLen);
                 if (field == 6) jsonPayload = QString::fromUtf8(val);
             } else if (wire == 0) {
                 while (pos < proto.size()) { if (!(quint8(proto[pos++]) & 0x80)) break; }
-            } else if (wire == 5) { pos += 4; }
-            else if (wire == 1) { pos += 8; }
-            else { break; }
+            } else if (wire == 5) {
+                if (pos + 4 > proto.size()) { malformed = true; break; }
+                pos += 4;
+            } else if (wire == 1) {
+                if (pos + 8 > proto.size()) { malformed = true; break; }
+                pos += 8;
+            } else {
+                malformed = true;
+                break;
+            }
+        }
+
+        if (malformed) {
+            qWarning() << "CastV2Client: malformed message from device, closing connection";
+            m_socket->abort();
+            return;
         }
 
         if (jsonPayload.isEmpty()) continue;

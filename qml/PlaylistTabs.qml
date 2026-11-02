@@ -10,7 +10,7 @@ Item {
     // Main menu (ContextMenu from Main.qml), so it can be closed from the tab menu.
     property var rootContextMenu: null
 
-    function closeMenus() { tabContextMenu.close(); }
+    function closeMenus() { tabContextMenu.close(); tabListMenu.close(); }
 
     property int draggedIndex: -1
     property int dragTargetIndex: -1
@@ -101,6 +101,45 @@ Item {
 
     RowLayout {
         anchors.fill: parent; spacing: 4
+
+        // Dropdown with every playlist. It sits on the left so the tabs start
+        // after it; the "+" button stays on the right.
+        Item {
+            id: allTabsBtn
+            Layout.preferredWidth: 32; Layout.preferredHeight: 32; Layout.alignment: Qt.AlignVCenter
+
+            Rectangle {
+                anchors.fill: parent; radius: 6
+                color: (allTabsHover.containsMouse || tabListMenu.visible)
+                       ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1)
+                       : "transparent"
+            }
+
+            // Monochrome playlist icon provided by the active icon theme.
+            Kirigami.Icon {
+                anchors.centerIn: parent
+                width: 18; height: 18
+                source: "view-media-playlist-symbolic"
+                color: Kirigami.Theme.textColor
+                // Force the themed icon to be drawn as a monochrome mask.
+                isMask: true
+            }
+
+            MouseArea {
+                id: allTabsHover
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                    if (tabListMenu.visible) tabListMenu.close();
+                    else tabListMenu.open();
+                }
+            }
+
+            ToolTip.visible: allTabsHover.containsMouse
+            ToolTip.text: qsTranslate("PlaylistTabs", "tabs_all")
+            ToolTip.delay: 500
+        }
+
         Flickable {
             id: flickable
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true
@@ -161,7 +200,9 @@ Item {
                         }
 
                         Text {
-                            id: tabLabel; anchors.centerIn: parent; anchors.verticalCenterOffset: -2
+                            // Keep the tab names on the same optical line as the
+                            // icon buttons (they used to sit 2 px too high).
+                            id: tabLabel; anchors.centerIn: parent; anchors.verticalCenterOffset: 0
                             text: tabBtn.info.name; width: Math.min(implicitWidth, 180 - 24)
                             color: Kirigami.Theme.textColor; font.pixelSize: 13; font.weight: Font.Normal
                             elide: Text.ElideRight
@@ -268,6 +309,37 @@ Item {
                 flickable.contentX = Math.max(0, Math.min(maxX, flickable.contentX + delta));
                 root.updateTabDrag(root.dragGlobalX);
             }
+        }
+    }
+
+    // List of all playlists (the tab row can be scrolled away).
+    Menu {
+        id: tabListMenu
+        width: 220
+        modal: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        x: Math.max(8, Math.min(root.width - width - 8,
+                                allTabsBtn.mapToItem(root, 0, 0).x))
+        y: allTabsBtn.mapToItem(root, 0, allTabsBtn.height).y + 4
+
+        onOpened: {
+            if (root.rootContextMenu) root.rootContextMenu.close();
+            tabContextMenu.close();
+        }
+
+        background: Rectangle {
+            color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.95)
+            radius: 8; border.color: "transparent"
+        }
+
+        Instantiator {
+            model: Playlists.playlists
+            delegate: MenuItem {
+                text: (modelData.id === Playlists.activeId ? "✓ " : "") + modelData.name
+                onTriggered: Playlists.activeId = modelData.id
+            }
+            onObjectAdded: (index, object) => tabListMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => tabListMenu.removeItem(object)
         }
     }
 

@@ -2,8 +2,8 @@
 #include <QKeyEvent>
 
 ShortcutAction actionForEvent(QKeyEvent *event) {
-    // Under X11 and Wayland, Qt's nativeScanCode() returns the same value
-    // (X11 keycode = evdev + 8), so no normalization is needed.
+    // On Wayland, Qt's nativeScanCode() returns the evdev keycode + 8, which is
+    // exactly the value stored in the shortcut table — no normalization needed.
     const quint32 keycode = static_cast<quint32>(event->nativeScanCode());
     const Qt::KeyboardModifiers mods = event->modifiers()
     & ~Qt::GroupSwitchModifier

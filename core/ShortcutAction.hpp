@@ -37,7 +37,7 @@ enum class ShortcutAction {
 struct ShortcutDef {
     ShortcutAction action;
     const char *keyName;
-    quint32 keycode; // X11/Wayland keycode (evdev + 8)
+    quint32 keycode; // Wayland keycode (evdev + 8)
     Qt::KeyboardModifiers modifiers;
 };
 
