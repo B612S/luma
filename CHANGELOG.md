@@ -89,6 +89,10 @@ All notable changes to Luma are documented here. The format is based on
   “Mode: %1: Repeat current file”); the mode name is now substituted correctly.
 - Playlist tab names are vertically centred with the icon buttons instead of sitting a
   couple of pixels too high.
+- Playlist tabs scroll smoothly on mouse-wheel/touchpad input; horizontal drag/swipe
+  scrolling remains available on the tab bar.
+- A horizontal two-finger/mouse-wheel swipe over the track list switches to the previous
+  or next playlist; the tab bar highlights the new playlist and scrolls its tab into view.
 - The Settings dialog now closes on Escape, including while one of its controls has
   keyboard focus.
 - The keyboard-shortcut help is now a regular dialog styled like Settings and the media

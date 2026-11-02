@@ -22,6 +22,8 @@ Rectangle {
     property real dragZoneHeight: 40
 
     property int contextMenuIndex: -1
+    property real swipeAccumX: 0
+    property bool swipeTriggered: false
     property var fileInfoData: ({})
     // Path of the media-information request currently being displayed.
     property string pendingInfoPath: ""
@@ -61,6 +63,40 @@ Rectangle {
 
     function closeContextMenu() { contextMenu.close(); tabs.closeMenus(); }
     function scrollToCurrent() { if (panel.model) listView.currentIndex = panel.model.currentIndex; scrollTimer.start(); }
+
+    function switchPlaylist(direction) {
+        const list = Playlists.playlists;
+        let current = -1;
+        for (let i = 0; i < list.length; ++i) {
+            if (list[i].id === Playlists.activeId) { current = i; break; }
+        }
+        if (current < 0) return;
+        const target = Math.max(0, Math.min(list.length - 1, current + direction));
+        if (target === current) return;
+        Playlists.activeId = list[target].id;
+    }
+
+    function handleHorizontalSwipe(delta) {
+        if (panel.isDragging || contextMenu.visible || panel.hasOpenDialog)
+            return;
+        if (panel.swipeTriggered) return;
+        panel.swipeAccumX += delta;
+        if (Math.abs(panel.swipeAccumX) < 120) return;
+
+        panel.swipeTriggered = true;
+        // Positive horizontal scroll means moving towards the next playlist.
+        panel.switchPlaylist(panel.swipeAccumX > 0 ? 1 : -1);
+        swipeResetTimer.restart();
+    }
+
+    Timer {
+        id: swipeResetTimer
+        interval: 350
+        onTriggered: {
+            panel.swipeAccumX = 0;
+            panel.swipeTriggered = false;
+        }
+    }
 
     // The track menu lives in this file: from outside (the delegate) we call it by
     // function name, not via `panel.contextMenu` — an id is not an object property.
@@ -196,11 +232,20 @@ Rectangle {
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (event) => {
+                    // Horizontal two-finger swipe / tilt switches playlists;
+                    // vertical wheel keeps scrolling the tracks.
+                    if (Math.abs(event.angleDelta.x) > Math.abs(event.angleDelta.y)) {
+                        panel.handleHorizontalSwipe(event.angleDelta.x);
+                        event.accepted = true;
+                        return;
+                    }
+
                     var maxY = Math.max(0, listView.contentHeight - listView.height);
                     var baseY = wheelAnim.running ? wheelAnim.to : listView.contentY;
                     wheelAnim.stop(); wheelAnim.from = listView.contentY;
                     wheelAnim.to = Math.max(0, Math.min(maxY, baseY - event.angleDelta.y));
                     wheelAnim.start();
+                    event.accepted = true;
                 }
             }
 

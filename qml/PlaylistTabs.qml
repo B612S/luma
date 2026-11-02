@@ -37,6 +37,8 @@ Item {
         const kids = tabChildren();
         if (index >= kids.length) return;
         tabDragging = true;
+        wheelAnimation.stop();
+        tabScrollAnimation.stop();
         draggedIndex = index;
         dragTargetIndex = index;
         dragSourceX = kids[index].x;
@@ -89,6 +91,47 @@ Item {
         dragTranslateX = 0;
         if (commit && from > 0 && to > 0 && from !== to)
             Playlists.movePlaylist(from, to);
+    }
+
+    onActiveIdChanged: Qt.callLater(scrollToActive)
+    Component.onCompleted: Qt.callLater(scrollToActive)
+
+    function scrollToActive() {
+        if (!flickable || flickable.width <= 0) return;
+        const kids = tabChildren();
+        for (let i = 0; i < kids.length; ++i) {
+            const child = kids[i];
+            if (!child.info || child.info.id !== root.activeId) continue;
+
+            const maxX = Math.max(0, flickable.contentWidth - flickable.width);
+            const left = child.x;
+            const right = child.x + child.width;
+            // Already fully visible: don't move the tab strip unnecessarily.
+            if (left >= flickable.contentX && right <= flickable.contentX + flickable.width)
+                return;
+
+            const target = Math.max(0, Math.min(maxX,
+                child.x + child.width / 2 - flickable.width / 2));
+            wheelAnimation.stop();
+            tabScrollAnimation.stop();
+            tabScrollAnimation.from = flickable.contentX;
+            tabScrollAnimation.to = target;
+            tabScrollAnimation.start();
+            return;
+        }
+    }
+
+    NumberAnimation {
+        id: tabScrollAnimation
+        target: flickable
+        property: "contentX"
+        duration: 220
+        easing.type: Easing.OutCubic
+    }
+
+    Connections {
+        target: Playlists
+        function onPlaylistsChanged() { Qt.callLater(root.scrollToActive); }
     }
 
     signal createRequested()
@@ -147,12 +190,38 @@ Item {
             boundsBehavior: Flickable.StopAtBounds; flickableDirection: Flickable.HorizontalFlick
             maximumFlickVelocity: 2000
 
+            onWidthChanged: Qt.callLater(root.scrollToActive)
+            property real wheelTargetX: contentX
+
+            function scrollByWheel(delta) {
+                const maxX = Math.max(0, contentWidth - width);
+                // Accumulate wheel notches while the smooth animation is still
+                // running, otherwise quick wheel input would be lost.
+                const base = wheelAnimation.running ? wheelTargetX : contentX;
+                wheelTargetX = Math.max(0, Math.min(maxX, base + delta));
+                tabScrollAnimation.stop();
+                wheelAnimation.stop();
+                wheelAnimation.to = wheelTargetX;
+                wheelAnimation.start();
+            }
+
+            onMovementStarted: { wheelAnimation.stop(); root.tabScrollAnimation.stop(); }
+
+            NumberAnimation {
+                id: wheelAnimation
+                target: flickable
+                property: "contentX"
+                duration: 180
+                easing.type: Easing.OutCubic
+            }
+
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: (event) => {
-                    let maxX = Math.max(0, flickable.contentWidth - flickable.width);
-                    let newX = flickable.contentX - (event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x);
-                    flickable.contentX = Math.max(0, Math.min(maxX, newX));
+                    const delta = event.angleDelta.y !== 0
+                        ? event.angleDelta.y : event.angleDelta.x;
+                    if (delta !== 0)
+                        flickable.scrollByWheel(-delta);
                     event.accepted = true;
                 }
             }
