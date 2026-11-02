@@ -45,6 +45,24 @@
 - **MPRIS2** — управление из виджета рабочего стола и мультимедийными клавишами.
 - **Интерфейс на английском и русском** — переключается на лету.
 
+## Скриншоты
+
+<p align="center">
+  <a href="../../assets/screenshots/luma_screenshot_1.png">
+    <img src="../../assets/screenshots/luma_screenshot_1.png" width="800"
+         alt="Luma воспроизводит видео с открытой панелью плейлиста">
+  </a>
+</p>
+<p align="center"><em>Воспроизведение с панелью плейлиста и вкладками плейлистов.</em></p>
+
+<p align="center">
+  <a href="../../assets/screenshots/luma_screenshot_2.png">
+    <img src="../../assets/screenshots/luma_screenshot_2.png" width="520"
+         alt="Настройки клавиш Luma с локальными и глобальными комбинациями">
+  </a>
+</p>
+<p align="center"><em>Настраиваемые локальные и глобальные клавиши.</em></p>
+
 ## Зависимости
 
 Требуется сессия **Wayland**. X11 не поддерживается, и поддержка не планируется.

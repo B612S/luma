@@ -89,6 +89,7 @@ All notable changes to Luma are documented here. The format is based on
   “Mode: %1: Repeat current file”); the mode name is now substituted correctly.
 - Playlist tab names are vertically centred with the icon buttons instead of sitting a
   couple of pixels too high.
+- The English and Russian READMEs now show the new playback and shortcuts screenshots.
 - Playlist tabs scroll smoothly on mouse-wheel/touchpad input; horizontal drag/swipe
   scrolling remains available on the tab bar.
 - A horizontal two-finger/mouse-wheel swipe over the track list switches to the previous

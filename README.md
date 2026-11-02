@@ -46,6 +46,24 @@
 - **MPRIS2** — control from the desktop's media widget and media keys.
 - **English and Russian UI** — switchable at runtime.
 
+## Screenshots
+
+<p align="center">
+  <a href="assets/screenshots/luma_screenshot_1.png">
+    <img src="assets/screenshots/luma_screenshot_1.png" width="800"
+         alt="Luma playing a video with the playlist panel open">
+  </a>
+</p>
+<p align="center"><em>Playback with the playlist panel and per-playlist tabs.</em></p>
+
+<p align="center">
+  <a href="assets/screenshots/luma_screenshot_2.png">
+    <img src="assets/screenshots/luma_screenshot_2.png" width="520"
+         alt="Luma Shortcuts settings with local and global key bindings">
+  </a>
+</p>
+<p align="center"><em>Configurable local and global shortcuts.</em></p>
+
 ## Requirements
 
 A **Wayland session** is required. X11 is not supported and support is not planned.
