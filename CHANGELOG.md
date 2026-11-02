@@ -101,6 +101,10 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Re-entering picture-in-picture no longer shows a black border around the video: the
+  window is always translucent, with an opaque backdrop behind the normal and fullscreen
+  window, so KWin keeps compositing the PiP margin with its alpha.
+
 - The statistics panel no longer shows “N/A” for the audio bitrate of high-bitrate audio
   (for example multichannel FLAC, whose bitrate can legitimately exceed 1500 kbps); the
   value is formatted like the video bitrate and switches to Mbps when it is that high.

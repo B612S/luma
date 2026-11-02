@@ -23,7 +23,7 @@ ApplicationWindow {
     // margin only holds the shadow and keeps the window edge transparent.
     readonly property int pipCardMargin: root.pipCard ? 10 : 0
     readonly property int pipContentMargin: root.pipCardMargin
-    color: root.pipCard ? "transparent" : "black"
+    color: "transparent"
 
     property bool controlsVisible: true
     signal toggleCropRequested()
@@ -107,21 +107,16 @@ ApplicationWindow {
         const h = contentH + margin;
 
         // On Wayland window flags only apply to a hidden window. The size is
-        // also set before show(): otherwise the window appears for a frame at the old
-        // large size, and KWin/NVIDIA sometimes leaves the old plane behind —
-        // a flickering strip far from the PiP window.
+        // set before show() as well: the window's first buffer is then created
+        // at the PiP size, and KWin's open animation runs for that geometry.
         root.hide();
         root.flags = root.flags | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint;
         root.width = w;
         root.height = h;
 
-        // Wayland cannot raise the window itself: KWin keeps the "Luma PiP"
-        // window above the others with a small helper script. Set this up while
-        // the window is hidden, so the large window is not restacked before it
-        // is resized (KWin can leave a stale plane behind on NVIDIA).
+        // Wayland cannot raise the window itself: KWin keeps the PiP window
+        // above the others with a small helper script.
         KWinBridge.setPipActive(true);
-        // Show on the next tick: by then the flags and size are already
-        // applied, and the window's first buffer is created at PiP size right away.
         Qt.callLater(function() {
             if (!root.pipMode) return;
             root.show();
@@ -140,17 +135,17 @@ ApplicationWindow {
         pipMode = false;
         if (root.visibility === Window.FullScreen) root.showNormal();
 
+        // Hiding the window for the flag change keeps KWin's close/open
+        // animation and re-runs the placement, so the restored window does not
+        // stay in the corner where the PiP was.
         root.hide();
         root.flags = root.flags & ~Qt.WindowStaysOnTopHint & ~Qt.FramelessWindowHint;
-        // As when entering PiP, restore the size before show() so the window
-        // isn't shown for a frame at PiP size.
         if (pipSavedGeometry.width > 0) {
             root.width = pipSavedGeometry.width;
             root.height = pipSavedGeometry.height;
         }
         root.show();
         KWinBridge.setPipActive(false);
-
         if (pipSavedGeometry.width > 0) {
             root.x = pipSavedGeometry.x;
             root.y = pipSavedGeometry.y;
@@ -244,6 +239,15 @@ ApplicationWindow {
             if (controlBar.hovered) { idleTimer.stop(); root.controlsVisible = true; root.cursorVisible = true; }
             else if (root.controlsVisible) idleTimer.restart();
         }
+    }
+
+    // Opaque backdrop for the normal window and for fullscreen PiP: the window
+    // itself stays translucent, so KWin always composites it with its alpha.
+    Rectangle {
+        anchors.fill: parent
+        z: -2
+        visible: !root.pipCard
+        color: "black"
     }
 
     // The card behind the PiP content (windowed PiP only). Its shadow is drawn
