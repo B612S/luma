@@ -1,15 +1,18 @@
 #pragma once
 #include <QObject>
+#include <QMap>
 #include <QTimer>
 #include <QQuickWindow>
 #include <QCursor>
 #include <QPointer>
+#include <QVariantList>
 #include "mpvqt/MpvItem.hpp"
 #include "OsdManager.hpp"
 #include "MediaManager.hpp"
 #include "ShortcutAction.hpp"
 
 class CastManager;
+class GlobalShortcuts;
 
 class ShortcutHandler : public QObject {
     Q_OBJECT
@@ -18,10 +21,14 @@ public:
                              OsdManager *osd = nullptr,
                              MediaManager *media = nullptr,
                              QQuickWindow *window = nullptr,
-                             QObject *parent = nullptr);
+                             QObject *parent = nullptr,
+                             bool globalShortcutsAllowed = true);
     ~ShortcutHandler() override;
 
     void setWindow(QQuickWindow *window);
+    void setMpv(MpvItem *mpv);
+    void setOsd(OsdManager *osd) { m_osd = osd; }
+    void setMedia(MediaManager *media) { m_media = media; }
     void setCastManager(CastManager *cast) { m_castManager = cast; }
     // Called from QML while the user drags the seek slider.
     Q_INVOKABLE void setSliderSeeking(bool seeking);
@@ -32,18 +39,44 @@ public:
     // Called from QML when dialogs open: disables hotkeys
     // and wheel scrolling as volume control.
     Q_INVOKABLE void setShortcutsEnabled(bool enabled) { m_enabled = enabled; }
+    // The help dialog sets this so its wheel events scroll the list instead of
+    // changing the volume.
+    Q_INVOKABLE void setHelpVisible(bool visible) { m_helpVisible = visible; }
+
+    // Configurable bindings. Each action can have one local and one global
+    // shortcut; the help window itself stays on "?" and is not in this list.
+    Q_PROPERTY(QVariantList bindings READ bindings NOTIFY bindingsChanged)
+    Q_PROPERTY(bool globalShortcutsAvailable READ globalShortcutsAvailable NOTIFY bindingsChanged)
+    Q_PROPERTY(bool globalShortcutsAllowed READ globalShortcutsAllowed NOTIFY bindingsChanged)
+    Q_PROPERTY(QString shortcutsPath READ shortcutsPath CONSTANT)
+    Q_INVOKABLE void setShortcut(const QString &id, int keycode, int modifiers,
+                                 const QString &text, bool global);
+    Q_INVOKABLE void clearShortcut(const QString &id, bool global);
+    Q_INVOKABLE QString keyText(int keycode, int key, int modifiers) const;
+    // Global bindings are disabled in multi-instance mode.
+    void setGlobalShortcutsAllowed(bool allowed);
 
 public slots:
     void toggleCrop();
+    void executeActionById(const QString &id);
 
 signals:
     void togglePlaylist();
     void toggleStats();
     void togglePip();
     void shortcutsHelpVisibleChanged(bool visible);
+    void bindingsChanged();
 
 private:
     void executeAction(ShortcutAction action, bool autoRepeat);
+    ShortcutAction matchAction(QKeyEvent *event) const;
+    void loadShortcuts();
+    void saveShortcuts();
+    void updateGlobalShortcuts();
+    QVariantList bindings() const;
+    bool globalShortcutsAvailable() const;
+    bool globalShortcutsAllowed() const { return m_globalShortcutsAllowed; }
+    QString shortcutsPath() const;
     void startSeek(double step);
     void startVolume(double step);
     void updateSeekOsd();
@@ -56,6 +89,7 @@ private:
     void onPositionChanged();
     void onVolumeChanged();
     bool m_enabled = true;
+    bool m_helpVisible = false;
 
     MpvItem *m_mpv = nullptr;
     OsdManager *m_osd = nullptr;
@@ -86,5 +120,11 @@ private:
     QPointer<QQuickItem> m_playlistItem;
     QPointer<QQuickItem> m_statsItem;
 
+    QMap<ShortcutAction, ShortcutBinding> m_localBindings;
+    QMap<ShortcutAction, ShortcutBinding> m_globalBindings;
+    GlobalShortcuts *m_globalShortcuts = nullptr;
+    QString m_shortcutsPath;
+
     double m_wheelVolumeDelta = 0.0;
+    bool m_globalShortcutsAllowed = true;
 };

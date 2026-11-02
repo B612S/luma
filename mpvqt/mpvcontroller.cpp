@@ -358,7 +358,8 @@ void MpvController::eventHandler()
                 const mpv_event_property *prop = static_cast<mpv_event_property *>(event->data);
                 if (prop == nullptr || prop->data == nullptr) {
                     // The property became unavailable; keep the last value.
-                    qCDebug(MpvQt_MpvController) << "eventHandler MPV_EVENT_PROPERTY_CHANGE: prop/data is nullptr";
+                    // This is normal (for example when metadata is cleared at
+                    // the end of a file), so don't spam the debug log.
                     continue;
                 }
                 QVariant data;

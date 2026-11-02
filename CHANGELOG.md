@@ -12,6 +12,28 @@ All notable changes to Luma are documented here. The format is based on
   monochrome playlist icon (also bundled in the AppImage fallback theme).
 - Per-playlist playback modes. Each named playlist stores its own
   sequential/repeat/shuffle/stop mode in its JSON file.
+- Configurable shortcuts: **Settings → Shortcuts** lists every action (except the fixed
+  `?` help key), captures local key combinations and stores them in
+  `~/.config/luma/shortcuts.conf`.
+- Global shortcut bindings through the XDG Desktop Portal
+  `org.freedesktop.portal.GlobalShortcuts`; local and global combinations are configured
+  independently and applied when the portal is available.
+- Global shortcuts register the application id with the portal before creating a session,
+  use one `BindShortcuts` call per session, and start a fresh session when the bindings
+  change.
+- Global shortcuts are disabled when Luma is configured for multiple instances
+  (`single_instance=false`); local bindings keep working and the settings explain why.
+- Fixed the GlobalShortcuts request: `BindShortcuts` was sent without its shortcuts
+  array because the D-Bus argument had no signature; the registered `a(sa{sv})` argument
+  now carries every shortcut ID and preferred trigger.
+- Global shortcuts now repair KDE's stale “current shortcut = none” entries through
+  KGlobalAccel and actually send `BindShortcuts`; the `Activated` path was verified end
+  to end.
+- Shortcut labels are derived from the physical keycode using a fixed US display map,
+  so switching to a Russian layout no longer turns `M` into `b` (matching stays
+  keycode-based). Existing configs are normalized when loaded.
+- A “Show / hide window” action, available in the shortcuts settings and global portal
+  bindings, with no default key.
 - A Debug page in Settings: Luma, mpv and yt-dlp logging can be set to
   off/error/info/debug independently, with each component writing its own file in
   `~/.cache/luma/` (`luma.log`, `mpv.log`, `yt-dlp.log`).
@@ -69,8 +91,17 @@ All notable changes to Luma are documented here. The format is based on
   couple of pixels too high.
 - The Settings dialog now closes on Escape, including while one of its controls has
   keyboard focus.
+- The keyboard-shortcut help is now a regular dialog styled like Settings and the media
+  information dialog, and its key rows are generated from the current bindings.
+- The shortcut help has a single title, scrolls with the mouse wheel, and no longer lets
+  the volume-wheel handler consume its scrolling.
+- Keyboard layout auto-detection for the shortcut help was removed; the help overlay is
+  styled as a normal dialog and no longer depends on a Wayland keymap watcher.
 - Fixed a memory leak in the vendored mpvqt layer: the caller-created `mpv_node` trees used
   by `setProperty` and `command` were never freed (every seek/loadfile/string property leaked).
+- The debug log no longer records every expected null mpv property-change event.
+- The harmless duplicate “Connection already associated with an application ID”
+  warning from Qt's portal registration is no longer written to the log.
 - Fixed a crash when an observed mpv property became unavailable (null event data) and read
   `MPV_FORMAT_FLAG` as the C `int` used by mpv.
 - Fixed a data race between thumbnail decoding and the QML image provider.

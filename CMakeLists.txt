@@ -47,13 +47,13 @@ qt_standard_project_setup()
 qt_add_executable(luma
     main.cpp
     core/ConfigManager.cpp
+    core/GlobalShortcuts.cpp
     core/MprisManager.cpp
     core/Logger.cpp
     core/PlaylistModel.cpp
     core/PlaylistManager.cpp
     core/MediaManager.cpp
     core/OsdManager.cpp
-    core/KeyboardLayoutWatcher.cpp
     core/TagManager.cpp
     core/TagScanner.cpp
     core/ShortcutAction.cpp
@@ -87,6 +87,7 @@ qt_add_qml_module(luma
         qml/OsdToast.qml
         qml/PipControls.qml
         qml/ShortcutsHelp.qml
+        qml/ShortcutField.qml
         qml/AddUrlDialog.qml
         qml/ContextMenu.qml
         qml/StatsPanel.qml
@@ -96,6 +97,7 @@ qt_add_qml_module(luma
         mpvqt/MpvItem.hpp
         mpvqt/FrameDecoder.hpp
         core/ConfigManager.hpp
+        core/GlobalShortcuts.hpp
         core/MprisManager.hpp
         core/ShortcutAction.hpp
         core/ShortcutHandler.hpp
@@ -103,7 +105,6 @@ qt_add_qml_module(luma
         core/PlaylistManager.hpp
         core/MediaManager.hpp
         core/OsdManager.hpp
-        core/KeyboardLayoutWatcher.hpp
         core/TagManager.hpp
         core/Logger.hpp
         core/ThumbnailProvider.hpp

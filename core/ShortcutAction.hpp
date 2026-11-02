@@ -2,6 +2,7 @@
 #include <QList>
 #include <Qt>
 #include <QKeyEvent>
+#include <QString>
 
 enum class ShortcutAction {
     // Playback
@@ -23,6 +24,7 @@ enum class ShortcutAction {
     ToggleFullscreen,
     ToggleTimeOsd,
     TogglePip,
+    ToggleWindow,
     ShowShortcutsHelp,
     // Tracks
     CycleSubtitles,
@@ -39,6 +41,83 @@ struct ShortcutDef {
     const char *keyName;
     quint32 keycode; // Wayland keycode (evdev + 8)
     Qt::KeyboardModifiers modifiers;
+};
+
+struct ShortcutActionInfo {
+    ShortcutAction action;
+    const char *id;
+    const char *category; // playback, interface, tracks
+    const char *name;     // English name for desktop-portal descriptions
+};
+
+inline const QList<ShortcutActionInfo>& shortcutActions() {
+    static const QList<ShortcutActionInfo> list = {
+        { ShortcutAction::TogglePause,       "toggle_pause",       "playback",  "Play / pause" },
+        { ShortcutAction::SeekBackward,      "seek_backward",      "playback",  "Seek backward" },
+        { ShortcutAction::SeekForward,       "seek_forward",       "playback",  "Seek forward" },
+        { ShortcutAction::SeekBackwardLong,  "seek_backward_long", "playback",  "Seek backward 60 s" },
+        { ShortcutAction::SeekForwardLong,   "seek_forward_long",  "playback",  "Seek forward 60 s" },
+        { ShortcutAction::FrameBackward,     "frame_backward",     "playback",  "Previous frame" },
+        { ShortcutAction::FrameForward,      "frame_forward",      "playback",  "Next frame" },
+        { ShortcutAction::VolumeUp,          "volume_up",          "playback",  "Volume up" },
+        { ShortcutAction::VolumeDown,        "volume_down",        "playback",  "Volume down" },
+        { ShortcutAction::ToggleMute,        "toggle_mute",        "playback",  "Mute" },
+        { ShortcutAction::PreviousFile,      "previous_file",      "playback",  "Previous file" },
+        { ShortcutAction::NextFile,          "next_file",          "playback",  "Next file" },
+        { ShortcutAction::TogglePlaylist,    "toggle_playlist",    "interface", "Playlist panel" },
+        { ShortcutAction::ToggleStats,       "toggle_stats",       "interface", "Statistics panel" },
+        { ShortcutAction::ToggleFullscreen,  "toggle_fullscreen",  "interface", "Fullscreen" },
+        { ShortcutAction::ToggleTimeOsd,     "toggle_time",        "interface", "Pin the time counter" },
+        { ShortcutAction::TogglePip,         "toggle_pip",         "interface", "Picture in picture" },
+        { ShortcutAction::ToggleWindow,      "toggle_window",      "interface", "Show / hide window" },
+        { ShortcutAction::CycleSubtitles,    "cycle_subtitles",    "tracks",    "Next subtitles track" },
+        { ShortcutAction::CycleAudio,        "cycle_audio",        "tracks",    "Next audio track" },
+        { ShortcutAction::CycleDeinterlace,  "cycle_deinterlace",  "tracks",    "Switch deinterlacing" },
+        { ShortcutAction::CycleAspectRatio,  "cycle_aspect",       "tracks",    "Switch aspect ratio" },
+        { ShortcutAction::ToggleCrop,        "toggle_crop",        "tracks",    "Detect and crop black bars" },
+    };
+    return list;
+}
+
+inline const ShortcutActionInfo* shortcutActionInfo(ShortcutAction action) {
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        if (info.action == action) return &info;
+    }
+    return nullptr;
+}
+
+inline QString shortcutActionId(ShortcutAction action) {
+    if (const ShortcutActionInfo *info = shortcutActionInfo(action))
+        return QString::fromLatin1(info->id);
+    return QString();
+}
+
+inline ShortcutAction shortcutActionFromId(const QString &id) {
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        if (id == QLatin1String(info.id)) return info.action;
+    }
+    return ShortcutAction::None;
+}
+
+// Converts a QKeySequence-style trigger to the XDG shortcuts specification
+// spelling used by the GlobalShortcuts portal.
+inline QString shortcutPortalTrigger(const QString &text) {
+    QString trigger = text.trimmed();
+    trigger.replace(QStringLiteral("Ctrl"), QStringLiteral("CTRL"), Qt::CaseInsensitive);
+    trigger.replace(QStringLiteral("Alt"), QStringLiteral("ALT"), Qt::CaseInsensitive);
+    trigger.replace(QStringLiteral("Shift"), QStringLiteral("SHIFT"), Qt::CaseInsensitive);
+    trigger.replace(QStringLiteral("Meta"), QStringLiteral("LOGO"), Qt::CaseInsensitive);
+    trigger.remove(QLatin1Char(' '));
+    return trigger;
+}
+
+struct ShortcutBinding {
+    ShortcutAction action = ShortcutAction::None;
+    quint32 keycode = 0;
+    Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+    QString text;
+
+    bool isValid() const { return action != ShortcutAction::None && keycode > 0 && !text.isEmpty(); }
 };
 
 inline const QList<ShortcutDef>& defaultShortcuts() {

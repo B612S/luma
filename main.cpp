@@ -29,7 +29,6 @@
 #include "core/MprisManager.hpp"
 #include "core/MediaManager.hpp"
 #include "core/OsdManager.hpp"
-#include "core/KeyboardLayoutWatcher.hpp"
 #include "core/ShortcutHandler.hpp"
 #include "core/Logger.hpp"
 #include "core/ThumbnailProvider.hpp"
@@ -102,6 +101,7 @@ int main(int argc, char *argv[]) {
         QIcon::setThemeName(QStringLiteral("hicolor"));
     app.setApplicationName("luma");
     app.setApplicationVersion(QString::fromLatin1(LUMA_VERSION));
+    QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
     app.setWindowIcon(QIcon(":/assets/luma.png"));
 
     ConfigManager config;
@@ -183,7 +183,6 @@ int main(int argc, char *argv[]) {
     // Local HTTP bridge for SOCKS proxies: mpv/FFmpeg cannot do SOCKS themselves.
     SocksHttpProxy streamProxy(&app);
 
-    KeyboardLayoutWatcher keyboardLayout;
 
     QQmlApplicationEngine engine;
 
@@ -194,7 +193,15 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("Playlists", &playlists);
     engine.rootContext()->setContextProperty("Osd", &osd);
     engine.rootContext()->setContextProperty("CastManager", &castManager);
-    engine.rootContext()->setContextProperty("Keyboard", &keyboardLayout);
+
+    auto *shortcuts = new ShortcutHandler(nullptr, nullptr, nullptr, nullptr, &app,
+                                          config.singleInstance());
+    engine.rootContext()->setContextProperty("shortcuts", shortcuts);
+
+    QObject::connect(&config, &ConfigManager::singleInstanceChanged, shortcuts,
+                     [shortcuts, &config]() {
+        shortcuts->setGlobalShortcutsAllowed(config.singleInstance());
+    });
 
     engine.load(QUrl(QStringLiteral("qrc:/luma/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) return -1;
@@ -307,10 +314,11 @@ int main(int argc, char *argv[]) {
         applySubtitleSettings();
         QObject::connect(&config, &ConfigManager::subtitlesChanged, mpv, applySubtitleSettings);
 
-        auto *shortcuts = new ShortcutHandler(mpv, &osd, &media, root, &app);
+        shortcuts->setMpv(mpv);
+        shortcuts->setOsd(&osd);
+        shortcuts->setMedia(&media);
+        shortcuts->setWindow(root);
         shortcuts->setCastManager(&castManager);
-
-        engine.rootContext()->setContextProperty("shortcuts", shortcuts);
 
         QObject::connect(root, SIGNAL(toggleCropRequested()), shortcuts, SLOT(toggleCrop()));
         QObject::connect(shortcuts, &ShortcutHandler::togglePlaylist, root, [root]() {

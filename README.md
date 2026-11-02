@@ -40,7 +40,7 @@
   HLS re-encode via `ffmpeg`).
 - **Picture in picture** — `P` or the context menu turns the window into a small
   frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
-- **Shortcut cheat sheet** — hold `?` (`Shift+/`, or `.` on the Russian layout) to see
+- **Shortcut cheat sheet** — hold `?` (`Shift+/`) to see
   all hotkeys while the key is held.
 - **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.
 - **MPRIS2** — control from the desktop's media widget and media keys.
@@ -168,6 +168,14 @@ network, so it is not part of the default run.
 
 ## Keyboard shortcuts
 
+The keys below are defaults. Reassign them in **Settings → Shortcuts**; the
+bindings are saved in `~/.config/luma/shortcuts.conf`. Each action can have a
+local key and, when the desktop provides
+`org.freedesktop.portal.GlobalShortcuts`, a global key. Global shortcuts are
+available only in single-instance mode (`single_instance=true`); with multiple
+instances they are disabled to avoid ambiguous routing. The `?` help key is
+intentionally fixed.
+
 | Key | Action |
 | --- | --- |
 | `Space` | Play / pause |
@@ -192,6 +200,9 @@ network, so it is not part of the default run.
 | Double click | Toggle fullscreen |
 | `Esc` | Exit fullscreen / close a menu |
 
+“Show / hide window” is available in the Shortcuts settings but has no default
+key.
+
 ## Configuration
 
 All per-user files live in `~/.config/luma/`:
@@ -201,6 +212,7 @@ All per-user files live in `~/.config/luma/`:
 | `luma.conf` | Application settings (INI) |
 | `mpv.conf` | Extra mpv options, included at startup |
 | `yt-dlp.conf` | Options passed to yt-dlp when opening links |
+| `shortcuts.conf` | Local and global key bindings |
 | `playlists/*.json` | Saved named playlists |
 
 Logs are written to `~/.cache/luma/`: `luma.log`, `mpv.log` and `yt-dlp.log`.

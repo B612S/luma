@@ -356,8 +356,8 @@ ApplicationWindow {
     }
 
     ShortcutsHelp {
-        anchors.fill: parent
-        opened: root.shortcutsHelpVisible && !root.pipMode
+        helpVisible: root.shortcutsHelpVisible && !root.pipMode
+        onCloseRequested: root.shortcutsHelpVisible = false
     }
 
     ControlBar {

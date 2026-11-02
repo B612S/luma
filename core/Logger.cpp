@@ -76,6 +76,14 @@ void Logger::installMessageHandler() {
             case QtFatalMsg:    level = Critical; break;
         }
 
+        // Qt's platform services may try to register the app with the portal
+        // after Luma has already used a portal call. The app id is associated;
+        // this duplicate registration is harmless and only creates log noise.
+        if (context.category
+                && qstrcmp(context.category, "qt.qpa.services") == 0
+                && message.contains(QStringLiteral("Connection already associated with an application ID")))
+            return;
+
         QString text = message;
         if (context.category && *context.category)
             text = QStringLiteral("[%1] %2").arg(QString::fromUtf8(context.category), message);

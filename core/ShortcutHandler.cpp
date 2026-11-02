@@ -1,6 +1,13 @@
 #include "ShortcutHandler.hpp"
 #include "CastManager.hpp"
+#include "GlobalShortcuts.hpp"
 #include <QKeyEvent>
+#include <QKeySequence>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
+#include <xkbcommon/xkbcommon.h>
 #include <QWheelEvent>
 #include <QDebug>
 #include <QGuiApplication>
@@ -9,9 +16,137 @@
 #include <QQuickItem>
 #include <QVariantMap>
 
+namespace {
+
+constexpr int kModifierMask = Qt::ShiftModifier | Qt::ControlModifier
+                            | Qt::AltModifier | Qt::MetaModifier;
+
+Qt::KeyboardModifiers parseModifiers(const QString &text)
+{
+    Qt::KeyboardModifiers mods = Qt::NoModifier;
+    if (text.contains(QStringLiteral("Ctrl"), Qt::CaseInsensitive)
+            || text.contains(QStringLiteral("Control"), Qt::CaseInsensitive))
+        mods |= Qt::ControlModifier;
+    if (text.contains(QStringLiteral("Alt"), Qt::CaseInsensitive))
+        mods |= Qt::AltModifier;
+    if (text.contains(QStringLiteral("Shift"), Qt::CaseInsensitive))
+        mods |= Qt::ShiftModifier;
+    if (text.contains(QStringLiteral("Meta"), Qt::CaseInsensitive)
+            || text.contains(QStringLiteral("Super"), Qt::CaseInsensitive))
+        mods |= Qt::MetaModifier;
+    return mods;
+}
+
+QString modifiersPrefix(Qt::KeyboardModifiers mods)
+{
+    QString prefix;
+    if (mods & Qt::ControlModifier) prefix += QStringLiteral("Ctrl+");
+    if (mods & Qt::AltModifier) prefix += QStringLiteral("Alt+");
+    if (mods & Qt::ShiftModifier) prefix += QStringLiteral("Shift+");
+    if (mods & Qt::MetaModifier) prefix += QStringLiteral("Meta+");
+    return prefix;
+}
+
+xkb_keymap *physicalKeymap()
+{
+    static xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    static xkb_keymap *keymap = []() {
+        xkb_rule_names names{};
+        names.layout = "us";
+        names.model = "pc105";
+        return xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    }();
+    return keymap;
+}
+
+// Layout-independent label for a Wayland/evdev keycode. The US keymap is used
+// only for display, so physical M stays "M" even if the user typed it on a
+// Russian layout. Matching itself remains keycode-based.
+QString physicalKeyName(quint32 nativeScanCode)
+{
+    if (nativeScanCode < 8) return QString();
+    xkb_keymap *keymap = physicalKeymap();
+    if (!keymap) return QString();
+
+    // Wayland's native scan code is already the xkbcommon keycode
+    // (evdev + 8), so do not subtract the offset here.
+    const xkb_keycode_t code = nativeScanCode;
+    const xkb_keysym_t *syms = nullptr;
+    const int count = xkb_keymap_key_get_syms_by_level(keymap, code, 0, 0, &syms);
+    if (count <= 0 || !syms || syms[0] == XKB_KEY_NoSymbol) return QString();
+
+    const xkb_keysym_t sym = syms[0];
+    char utf8[16] = {};
+    const int length = xkb_keysym_to_utf8(sym, utf8, sizeof(utf8));
+    QString text;
+    // xkb_keysym_to_utf8 returns the byte count including the terminating NUL.
+    if (length > 1)
+        text = QString::fromUtf8(utf8, length - 1);
+    if (text == QLatin1String(" "))
+        return QStringLiteral("Space");
+    if (text.size() == 1 && !text.at(0).isPrint())
+        text.clear();
+    if (text.isEmpty()) {
+        char name[64] = {};
+        xkb_keysym_get_name(sym, name, sizeof(name));
+        text = QString::fromLatin1(name);
+    }
+    if (text == QLatin1String("space")) text = QStringLiteral("Space");
+    if (text == QLatin1String("Return")) text = QStringLiteral("Enter");
+    if (text == QLatin1String("Escape")) text = QStringLiteral("Esc");
+    if (text.startsWith(QLatin1String("XF86"))) text.remove(0, 4);
+    if (text.size() == 1 && text.at(0).isLetter())
+        text = text.toUpper();
+    return text;
+}
+
+ShortcutBinding defaultBindingFor(ShortcutAction action)
+{
+    for (const ShortcutDef &def : defaultShortcuts()) {
+        if (def.action != action || action == ShortcutAction::ShowShortcutsHelp)
+            continue;
+        ShortcutBinding binding;
+        binding.action = action;
+        binding.keycode = def.keycode;
+        binding.modifiers = def.modifiers;
+        binding.text = modifiersPrefix(def.modifiers) + QString::fromLatin1(def.keyName);
+        return binding;
+    }
+    return {};
+}
+
+ShortcutBinding parseBinding(const QString &value, ShortcutAction action)
+{
+    const int separator = value.lastIndexOf(QLatin1Char('|'));
+    if (separator <= 0) return {};
+
+    const QString text = value.left(separator).trimmed();
+    bool ok = false;
+    const uint code = value.mid(separator + 1).toUInt(&ok);
+    if (!ok || code == 0 || text.isEmpty()) return {};
+
+    ShortcutBinding binding;
+    binding.action = action;
+    binding.keycode = code;
+    binding.modifiers = parseModifiers(text);
+    const QString physical = physicalKeyName(code);
+    binding.text = physical.isEmpty() ? text : modifiersPrefix(binding.modifiers) + physical;
+    return binding;
+}
+
+QString serializeBinding(const ShortcutBinding &binding)
+{
+    if (!binding.isValid()) return QString();
+    return binding.text + QLatin1Char('|') + QString::number(binding.keycode);
+}
+
+} // namespace
+
 ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *media,
-                                 QQuickWindow *window, QObject *parent)
-: QObject(parent), m_mpv(mpv), m_osd(osd), m_media(media)
+                                 QQuickWindow *window, QObject *parent,
+                                 bool globalShortcutsAllowed)
+: QObject(parent), m_mpv(mpv), m_osd(osd), m_media(media),
+  m_globalShortcutsAllowed(globalShortcutsAllowed)
 {
     m_seekTimer = new QTimer(this);
     m_seekTimer->setInterval(300);
@@ -48,22 +183,15 @@ ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *me
         }
     });
 
-    if (m_mpv) {
-        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &reason) {
-            if (reason != "eof") return;
-            if (m_ignoreEndFile) return;
-            if (m_castManager && m_castManager->casting()) return;
-
-            QTimer::singleShot(100, this, [this]() {
-                if (m_media) m_media->playNext();
-            });
-        });
-        connect(m_mpv, &MpvItem::sourceChanged, this, &ShortcutHandler::onFileChanged);
-        connect(m_mpv, &MpvItem::positionChanged, this, &ShortcutHandler::onPositionChanged);
-        connect(m_mpv, &MpvItem::volumeChanged, this, &ShortcutHandler::onVolumeChanged);
-    }
-
     QTimer::singleShot(1000, this, [this]() { m_isInternalVolume = false; });
+
+    loadShortcuts();
+    m_globalShortcuts = new GlobalShortcuts(this);
+    connect(m_globalShortcuts, &GlobalShortcuts::activated,
+            this, &ShortcutHandler::executeActionById);
+    connect(m_globalShortcuts, &GlobalShortcuts::availabilityChanged,
+            this, &ShortcutHandler::bindingsChanged);
+    if (m_globalShortcutsAllowed) updateGlobalShortcuts();
 
     if (window) setWindow(window);
 }
@@ -81,8 +209,223 @@ void ShortcutHandler::setWindow(QQuickWindow *window) {
     if (m_window) m_window->installEventFilter(this);
 }
 
+void ShortcutHandler::setMpv(MpvItem *mpv) {
+    if (m_mpv == mpv) return;
+    m_mpv = mpv;
+    if (!m_mpv) return;
+
+    connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &reason) {
+        if (reason != "eof") return;
+        if (m_ignoreEndFile) return;
+        if (m_castManager && m_castManager->casting()) return;
+
+        QTimer::singleShot(100, this, [this]() {
+            if (m_media) m_media->playNext();
+        });
+    });
+    connect(m_mpv, &MpvItem::sourceChanged, this, &ShortcutHandler::onFileChanged);
+    connect(m_mpv, &MpvItem::positionChanged, this, &ShortcutHandler::onPositionChanged);
+    connect(m_mpv, &MpvItem::volumeChanged, this, &ShortcutHandler::onVolumeChanged);
+}
+
 void ShortcutHandler::setSliderSeeking(bool seeking) {
     m_isSliderSeeking = seeking;
+}
+
+QString ShortcutHandler::shortcutsPath() const
+{
+    return m_shortcutsPath;
+}
+
+QVariantList ShortcutHandler::bindings() const
+{
+    QVariantList result;
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        const ShortcutBinding local = m_localBindings.value(info.action);
+        const ShortcutBinding global = m_globalBindings.value(info.action);
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), QString::fromLatin1(info.id));
+        entry.insert(QStringLiteral("category"), QString::fromLatin1(info.category));
+        entry.insert(QStringLiteral("localText"), local.text);
+        entry.insert(QStringLiteral("globalText"), global.text);
+        entry.insert(QStringLiteral("hasLocal"), local.isValid());
+        entry.insert(QStringLiteral("hasGlobal"), global.isValid());
+        result.append(entry);
+    }
+    return result;
+}
+
+bool ShortcutHandler::globalShortcutsAvailable() const
+{
+    return m_globalShortcuts && m_globalShortcuts->available();
+}
+
+QString ShortcutHandler::keyText(int keycode, int key, int modifiers) const
+{
+    const Qt::KeyboardModifiers mods =
+        static_cast<Qt::KeyboardModifiers>(modifiers) & kModifierMask;
+    const QString physical = physicalKeyName(static_cast<quint32>(keycode));
+    if (!physical.isEmpty())
+        return modifiersPrefix(mods) + physical;
+
+    // Fallback for unusual keys without a usable keysym in the display map.
+    return QKeySequence(key | static_cast<int>(mods)).toString(QKeySequence::PortableText);
+}
+
+void ShortcutHandler::setShortcut(const QString &id, int keycode, int modifiers,
+                                  const QString &text, bool global)
+{
+    const ShortcutAction action = shortcutActionFromId(id);
+    if (action == ShortcutAction::None || keycode <= 0 || text.trimmed().isEmpty())
+        return;
+
+    ShortcutBinding binding;
+    binding.action = action;
+    binding.keycode = static_cast<quint32>(keycode);
+    binding.modifiers = static_cast<Qt::KeyboardModifiers>(modifiers) & kModifierMask;
+    binding.text = text.trimmed();
+
+    QMap<ShortcutAction, ShortcutBinding> &target = global ? m_globalBindings : m_localBindings;
+    target.insert(action, binding);
+
+    if (!global) {
+        // Keep local bindings unambiguous: assigning a key to one action
+        // removes it from the action that previously owned it.
+        QList<ShortcutAction> conflicts;
+        for (auto it = m_localBindings.cbegin(); it != m_localBindings.cend(); ++it) {
+            if (it.key() == action) continue;
+            if (it.value().keycode == binding.keycode
+                    && it.value().modifiers == binding.modifiers)
+                conflicts.append(it.key());
+        }
+        for (ShortcutAction conflict : conflicts) m_localBindings.remove(conflict);
+    }
+
+    saveShortcuts();
+    emit bindingsChanged();
+    if (global) updateGlobalShortcuts();
+}
+
+void ShortcutHandler::setGlobalShortcutsAllowed(bool allowed)
+{
+    if (m_globalShortcutsAllowed == allowed) return;
+    m_globalShortcutsAllowed = allowed;
+
+    if (m_globalShortcuts) {
+        if (!allowed)
+            m_globalShortcuts->setShortcuts({});
+        else
+            updateGlobalShortcuts();
+    }
+    emit bindingsChanged();
+}
+
+void ShortcutHandler::clearShortcut(const QString &id, bool global)
+{
+    const ShortcutAction action = shortcutActionFromId(id);
+    if (action == ShortcutAction::None) return;
+
+    QMap<ShortcutAction, ShortcutBinding> &target = global ? m_globalBindings : m_localBindings;
+    if (!target.contains(action)) return;
+
+    target.remove(action);
+    saveShortcuts();
+    emit bindingsChanged();
+    if (global) updateGlobalShortcuts();
+}
+
+void ShortcutHandler::loadShortcuts()
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    if (base.isEmpty()) base = QDir::homePath() + "/.config";
+    const QString dir = base + "/luma";
+    QDir().mkpath(dir);
+    m_shortcutsPath = dir + "/shortcuts.conf";
+
+    const bool existed = QFile::exists(m_shortcutsPath);
+    QSettings settings(m_shortcutsPath, QSettings::IniFormat);
+
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        const QString id = QString::fromLatin1(info.id);
+        const QString localKey = QStringLiteral("local/") + id;
+        if (settings.contains(localKey)) {
+            const ShortcutBinding binding = parseBinding(settings.value(localKey).toString(), info.action);
+            if (binding.isValid()) m_localBindings.insert(info.action, binding);
+        } else {
+            const ShortcutBinding binding = defaultBindingFor(info.action);
+            if (binding.isValid()) m_localBindings.insert(info.action, binding);
+        }
+
+        const QString globalKey = QStringLiteral("global/") + id;
+        if (settings.contains(globalKey)) {
+            const ShortcutBinding binding = parseBinding(settings.value(globalKey).toString(), info.action);
+            if (binding.isValid()) m_globalBindings.insert(info.action, binding);
+        }
+    }
+
+    if (!existed) saveShortcuts();
+}
+
+void ShortcutHandler::saveShortcuts()
+{
+    if (m_shortcutsPath.isEmpty()) return;
+
+    QSettings settings(m_shortcutsPath, QSettings::IniFormat);
+    settings.clear();
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        const QString id = QString::fromLatin1(info.id);
+        settings.setValue(QStringLiteral("local/") + id,
+                          serializeBinding(m_localBindings.value(info.action)));
+        settings.setValue(QStringLiteral("global/") + id,
+                          serializeBinding(m_globalBindings.value(info.action)));
+    }
+    settings.sync();
+}
+
+ShortcutAction ShortcutHandler::matchAction(QKeyEvent *event) const
+{
+    const quint32 keycode = static_cast<quint32>(event->nativeScanCode());
+    const Qt::KeyboardModifiers mods = event->modifiers()
+        & ~Qt::GroupSwitchModifier
+        & ~Qt::KeypadModifier;
+
+    // The help overlay is intentionally not configurable: "?" always works.
+    if (keycode == 61 && (mods == Qt::NoModifier || mods == Qt::ShiftModifier))
+        return ShortcutAction::ShowShortcutsHelp;
+
+    for (auto it = m_localBindings.cbegin(); it != m_localBindings.cend(); ++it) {
+        if (it.value().keycode == keycode && it.value().modifiers == mods)
+            return it.key();
+    }
+    return ShortcutAction::None;
+}
+
+void ShortcutHandler::updateGlobalShortcuts()
+{
+    if (!m_globalShortcuts) return;
+    if (!m_globalShortcutsAllowed) {
+        m_globalShortcuts->setShortcuts({});
+        return;
+    }
+
+    QList<GlobalShortcut> list;
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        const ShortcutBinding binding = m_globalBindings.value(info.action);
+        if (!binding.isValid()) continue;
+        GlobalShortcut shortcut;
+        shortcut.id = QString::fromLatin1(info.id);
+        shortcut.description = QString::fromLatin1(info.name);
+        shortcut.trigger = binding.text;
+        list.append(shortcut);
+    }
+    m_globalShortcuts->setShortcuts(list);
+}
+
+void ShortcutHandler::executeActionById(const QString &id)
+{
+    const ShortcutAction action = shortcutActionFromId(id);
+    if (action != ShortcutAction::None)
+        executeAction(action, false);
 }
 
 void ShortcutHandler::onFileChanged() {
@@ -384,6 +727,21 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
         case ShortcutAction::TogglePip:
             if (!autoRepeat) emit togglePip();
             break;
+        case ShortcutAction::ToggleWindow:
+            if (!autoRepeat && m_window) {
+                if (m_window->visibility() == QWindow::Minimized) {
+                    m_window->showNormal();
+                    m_window->raise();
+                    m_window->requestActivate();
+                } else if (m_window->isVisible()) {
+                    m_window->hide();
+                } else {
+                    m_window->show();
+                    m_window->raise();
+                    m_window->requestActivate();
+                }
+            }
+            break;
         case ShortcutAction::ShowShortcutsHelp:
             if (!autoRepeat) emit shortcutsHelpVisibleChanged(true);
             break;
@@ -427,7 +785,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
             }
         }
 
-        ShortcutAction action = actionForEvent(key);
+        ShortcutAction action = matchAction(key);
         if (action == ShortcutAction::None) return false;
 
         executeAction(action, key->isAutoRepeat());
@@ -436,7 +794,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
     else if (event->type() == QEvent::KeyRelease) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
         if (!key->isAutoRepeat()) {
-            ShortcutAction action = actionForEvent(key);
+            ShortcutAction action = matchAction(key);
             switch (action) {
                 case ShortcutAction::SeekBackward:
                 case ShortcutAction::SeekForward:
@@ -474,6 +832,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
             }
         }
 
+        if (m_helpVisible) return false;
         if (isCursorOverQmlPanel()) return false;
         QWheelEvent *wheel = static_cast<QWheelEvent*>(event);
         if (!m_mpv) return false;

@@ -23,6 +23,9 @@ private slots:
     void removedCoversKeyDoesNothing();
     void unknownKeyGivesNone();
     void helpKeyWorksWithAndWithoutShift();
+    void actionIdsAreUnique();
+    void toggleWindowHasNoDefault();
+    void globalPortalTriggerIsNormalized();
 
 private:
     static ShortcutAction actionFor(quint32 keycode, Qt::KeyboardModifiers mods)
@@ -111,6 +114,46 @@ void TestShortcuts::helpKeyWorksWithAndWithoutShift()
              static_cast<int>(ShortcutAction::ShowShortcutsHelp));
     QCOMPARE(static_cast<int>(actionFor(61, Qt::ShiftModifier)),
              static_cast<int>(ShortcutAction::ShowShortcutsHelp));
+}
+
+void TestShortcuts::actionIdsAreUnique()
+{
+    QSet<QString> ids;
+    for (const ShortcutActionInfo &info : shortcutActions()) {
+        const QString id = QString::fromLatin1(info.id);
+        QVERIFY(!id.isEmpty());
+        QVERIFY(!ids.contains(id));
+        ids.insert(id);
+        QCOMPARE(shortcutActionFromId(id), info.action);
+        QCOMPARE(shortcutActionId(info.action), id);
+        QVERIFY(info.name != nullptr && *info.name != '\0');
+        QVERIFY(info.category != nullptr && *info.category != '\0');
+    }
+    QVERIFY(!ids.contains(QStringLiteral("toggle_help")));
+}
+
+void TestShortcuts::toggleWindowHasNoDefault()
+{
+    QCOMPARE(shortcutActionFromId(QStringLiteral("toggle_window")),
+             ShortcutAction::ToggleWindow);
+
+    // The new action is assignable, but intentionally has no default key.
+    for (const ShortcutDef &def : defaultShortcuts())
+        QVERIFY(def.action != ShortcutAction::ToggleWindow);
+}
+
+void TestShortcuts::globalPortalTriggerIsNormalized()
+{
+    // GlobalShortcuts must send triggers in the XDG shortcuts syntax.
+    QCOMPARE(shortcutPortalTrigger(QStringLiteral("Ctrl+Shift+W")),
+             QStringLiteral("CTRL+SHIFT+W"));
+    QCOMPARE(shortcutPortalTrigger(QStringLiteral("Alt+F4")),
+             QStringLiteral("ALT+F4"));
+    QCOMPARE(shortcutPortalTrigger(QStringLiteral("Meta+Space")),
+             QStringLiteral("LOGO+Space"));
+    QCOMPARE(shortcutPortalTrigger(QStringLiteral("  Ctrl + Alt + L  ")),
+             QStringLiteral("CTRL+ALT+L"));
+    QCOMPARE(shortcutPortalTrigger(QString()), QString());
 }
 
 int main(int argc, char *argv[])

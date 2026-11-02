@@ -85,6 +85,17 @@
 <message><source>settings_playback</source><translation>Playback</translation></message>
 <message><source>settings_debug</source><translation>Debug</translation></message>
 <message><source>settings_debug_hint</source><translation>Each component writes its own file to ~/.cache/luma/: luma.log, mpv.log and yt-dlp.log.</translation></message>
+<message><source>settings_shortcuts</source><translation>Shortcuts</translation></message>
+<message><source>shortcuts_hint</source><translation>Click a field and press the key combination. Esc cancels, Backspace or Delete clears.</translation></message>
+<message><source>shortcuts_global_unavailable</source><translation>Global shortcuts require xdg-desktop-portal with the GlobalShortcuts interface.</translation></message>
+<message><source>shortcuts_global_multi_instance</source><translation>Global shortcuts are disabled while Luma runs in multi-instance mode (ui/single_instance=false).</translation></message>
+<message><source>shortcuts_action</source><translation>Action</translation></message>
+<message><source>shortcuts_local</source><translation>Local</translation></message>
+<message><source>shortcuts_global</source><translation>Global</translation></message>
+<message><source>shortcuts_unassigned</source><translation>Not assigned</translation></message>
+<message><source>shortcuts_press</source><translation>Press a key…</translation></message>
+<message><source>shortcuts_config_hint</source><translation>Saved to ~/.config/luma/shortcuts.conf.</translation></message>
+
 <message><source>settings_log_luma</source><translation>Luma log</translation></message>
 <message><source>settings_log_mpv</source><translation>mpv log</translation></message>
 <message><source>settings_log_ytdlp</source><translation>yt-dlp log</translation></message>
@@ -304,6 +315,7 @@
 <message><source>sc_crop</source><translation>Detect and crop black bars</translation></message>
 <message><source>sc_help</source><translation>Hold to show this help</translation></message>
 <message><source>sc_space_key</source><translation>Space</translation></message>
+<message><source>shortcuts_global</source><translation>global</translation></message>
 </context>
 
 <context>
@@ -341,4 +353,32 @@
 <name>ControlBar</name>
 <message><source>live_now</source><translation>LIVE</translation></message>
 </context>
+
+<context>
+<name>Shortcuts</name>
+<message><source>shortcut_toggle_pause</source><translation>Play / pause</translation></message>
+<message><source>shortcut_seek_backward</source><translation>Seek backward</translation></message>
+<message><source>shortcut_seek_forward</source><translation>Seek forward</translation></message>
+<message><source>shortcut_seek_backward_long</source><translation>Seek backward 60 s</translation></message>
+<message><source>shortcut_seek_forward_long</source><translation>Seek forward 60 s</translation></message>
+<message><source>shortcut_frame_backward</source><translation>Previous frame</translation></message>
+<message><source>shortcut_frame_forward</source><translation>Next frame</translation></message>
+<message><source>shortcut_volume_up</source><translation>Volume up</translation></message>
+<message><source>shortcut_volume_down</source><translation>Volume down</translation></message>
+<message><source>shortcut_toggle_mute</source><translation>Mute</translation></message>
+<message><source>shortcut_previous_file</source><translation>Previous file</translation></message>
+<message><source>shortcut_next_file</source><translation>Next file</translation></message>
+<message><source>shortcut_toggle_playlist</source><translation>Playlist panel</translation></message>
+<message><source>shortcut_toggle_stats</source><translation>Statistics panel</translation></message>
+<message><source>shortcut_toggle_fullscreen</source><translation>Fullscreen</translation></message>
+<message><source>shortcut_toggle_time</source><translation>Pin the time counter</translation></message>
+<message><source>shortcut_toggle_pip</source><translation>Picture in picture</translation></message>
+<message><source>shortcut_toggle_window</source><translation>Show / hide window</translation></message>
+<message><source>shortcut_cycle_subtitles</source><translation>Next subtitles track</translation></message>
+<message><source>shortcut_cycle_audio</source><translation>Next audio track</translation></message>
+<message><source>shortcut_cycle_deinterlace</source><translation>Switch deinterlacing</translation></message>
+<message><source>shortcut_cycle_aspect</source><translation>Switch aspect ratio</translation></message>
+<message><source>shortcut_toggle_crop</source><translation>Detect and crop black bars</translation></message>
+</context>
+
 </TS>

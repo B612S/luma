@@ -85,6 +85,17 @@
 <message><source>settings_playback</source><translation>Воспроизведение</translation></message>
 <message><source>settings_debug</source><translation>Отладка</translation></message>
 <message><source>settings_debug_hint</source><translation>Каждый компонент пишет свой файл в ~/.cache/luma/: luma.log, mpv.log и yt-dlp.log.</translation></message>
+<message><source>settings_shortcuts</source><translation>Клавиши</translation></message>
+<message><source>shortcuts_hint</source><translation>Нажмите на поле и введите комбинацию. Esc отменяет, Backspace или Delete очищает.</translation></message>
+<message><source>shortcuts_global_unavailable</source><translation>Глобальные клавиши требуют xdg-desktop-portal с интерфейсом GlobalShortcuts.</translation></message>
+<message><source>shortcuts_global_multi_instance</source><translation>Глобальные клавиши отключены в режиме нескольких экземпляров (ui/single_instance=false).</translation></message>
+<message><source>shortcuts_action</source><translation>Действие</translation></message>
+<message><source>shortcuts_local</source><translation>Локальная</translation></message>
+<message><source>shortcuts_global</source><translation>Глобальная</translation></message>
+<message><source>shortcuts_unassigned</source><translation>Не назначено</translation></message>
+<message><source>shortcuts_press</source><translation>Нажмите клавишу…</translation></message>
+<message><source>shortcuts_config_hint</source><translation>Сохраняется в ~/.config/luma/shortcuts.conf.</translation></message>
+
 <message><source>settings_log_luma</source><translation>Журнал Luma</translation></message>
 <message><source>settings_log_mpv</source><translation>Журнал mpv</translation></message>
 <message><source>settings_log_ytdlp</source><translation>Журнал yt-dlp</translation></message>
@@ -304,6 +315,7 @@
 <message><source>sc_crop</source><translation>Определить и обрезать чёрные поля</translation></message>
 <message><source>sc_help</source><translation>Удерживайте для этой подсказки</translation></message>
 <message><source>sc_space_key</source><translation>Пробел</translation></message>
+<message><source>shortcuts_global</source><translation>глобальная</translation></message>
 </context>
 
 <context>
@@ -341,4 +353,32 @@
 <name>ControlBar</name>
 <message><source>live_now</source><translation>ЭФИР</translation></message>
 </context>
+
+<context>
+<name>Shortcuts</name>
+<message><source>shortcut_toggle_pause</source><translation>Воспроизведение / пауза</translation></message>
+<message><source>shortcut_seek_backward</source><translation>Перемотка назад</translation></message>
+<message><source>shortcut_seek_forward</source><translation>Перемотка вперёд</translation></message>
+<message><source>shortcut_seek_backward_long</source><translation>Перемотка назад на 60 с</translation></message>
+<message><source>shortcut_seek_forward_long</source><translation>Перемотка вперёд на 60 с</translation></message>
+<message><source>shortcut_frame_backward</source><translation>Предыдущий кадр</translation></message>
+<message><source>shortcut_frame_forward</source><translation>Следующий кадр</translation></message>
+<message><source>shortcut_volume_up</source><translation>Громче</translation></message>
+<message><source>shortcut_volume_down</source><translation>Тише</translation></message>
+<message><source>shortcut_toggle_mute</source><translation>Без звука</translation></message>
+<message><source>shortcut_previous_file</source><translation>Предыдущий файл</translation></message>
+<message><source>shortcut_next_file</source><translation>Следующий файл</translation></message>
+<message><source>shortcut_toggle_playlist</source><translation>Панель плейлиста</translation></message>
+<message><source>shortcut_toggle_stats</source><translation>Панель статистики</translation></message>
+<message><source>shortcut_toggle_fullscreen</source><translation>Полный экран</translation></message>
+<message><source>shortcut_toggle_time</source><translation>Закрепить счётчик времени</translation></message>
+<message><source>shortcut_toggle_pip</source><translation>Картинка в картинке</translation></message>
+<message><source>shortcut_toggle_window</source><translation>Показать / скрыть окно</translation></message>
+<message><source>shortcut_cycle_subtitles</source><translation>Следующие субтитры</translation></message>
+<message><source>shortcut_cycle_audio</source><translation>Следующая аудиодорожка</translation></message>
+<message><source>shortcut_cycle_deinterlace</source><translation>Переключить деинтерлейсинг</translation></message>
+<message><source>shortcut_cycle_aspect</source><translation>Переключить соотношение сторон</translation></message>
+<message><source>shortcut_toggle_crop</source><translation>Обрезать чёрные полосы</translation></message>
+</context>
+
 </TS>

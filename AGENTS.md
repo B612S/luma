@@ -20,8 +20,9 @@ cmake --build build -j$(nproc)          # single-target: --target luma
 - Tests live in `tests/` and are **opt-in** (`-DLUMA_BUILD_TESTS=ON`, off by default so they
   never end up in a package): `cmake -B build -S . -DLUMA_BUILD_TESTS=ON`, then
   `ctest --test-dir build --output-on-failure`. They cover core logic only (shortcuts table,
-  playlist model/manager, config, logging and the yt-dlp config file), need neither
-  mpv nor a display, and redirect `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` to a temp dir.
+  playlist model/manager, config, logging, shortcut metadata and the yt-dlp config
+  file), need neither mpv nor a display, and redirect
+  `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` to a temp dir.
   `wayland_only` runs the
   built binary with no Wayland environment and asserts the startup refusal (exit 1 plus the
   expected message). There is no lint/format config at the repo root.
@@ -33,7 +34,9 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   `README.md` is the English user documentation; other languages live in `docs/readme/`.
 - Dependencies come from `find_package(Qt6 ...)` plus `pkg_check_modules` for `mpv`,
   `libavformat`, `libavcodec`, `libswscale`, `libavutil`, `wayland-client` and
-  `xkbcommon`. `Qt6::Concurrent` is used for background file/tag reads.
+  `xkbcommon`. `Qt6::Concurrent` is used for background file/tag reads. Global
+  shortcuts use the optional XDG Desktop Portal `GlobalShortcuts` interface
+  (runtime only; no extra link dependency).
   `Qt6::WaylandClient` is a REQUIRED component (no X11 backend). Kirigami and
   `qqc2-desktop-style` are imported by QML at runtime only — CMake will not catch
   them missing; failure appears as a QML import error on launch.
@@ -56,7 +59,8 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   instance and exits 0. During manual testing this looks like "nothing happened"; kill
   the running player or set `ui/single_instance=false` in the config file.
 - Per-user state (all under `~/.config/luma/`): `luma.conf` (QSettings INI),
-  `mpv.conf`, `playlists/*.json`. Logs go to `~/.cache/luma/{luma,mpv,yt-dlp}.log`;
+  `mpv.conf`, `shortcuts.conf`, `playlists/*.json`. Logs go to
+  `~/.cache/luma/{luma,mpv,yt-dlp}.log`;
   the Debug page writes `debug/luma`, `debug/mpv` and `debug/ytdlp`
   (`off`/`error`/`info`/`debug`). Cover art for notifications is cached in
   `~/.cache/luma/covers/`; only the current file's cover is kept.
@@ -89,9 +93,13 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   prefer subclassing `MpvItem` over editing vendored code where practical. `MpvItem.*`,
   `FrameDecoder.*` and `mpvqt_export.h` are Luma additions, not upstream mpvqt.
 - `qml/` — flat directory of QML components; no Qt Quick Designer or compiled UI forms.
-- Keyboard handling is `ShortcutHandler::eventFilter` driven by the table in
-  `core/ShortcutAction.hpp`, which hardcodes evdev keycodes (`+8`) alongside key names.
-  The README has the full hotkey table.
+- Keyboard handling is `ShortcutHandler::eventFilter`. Bindings are loaded from
+  `~/.config/luma/shortcuts.conf` (local and global) and matched by evdev keycode
+  (Wayland native scan code); `core/ShortcutAction.hpp` holds the action metadata
+  and default table. Global shortcuts use `org.freedesktop.portal.GlobalShortcuts`
+  through `core/GlobalShortcuts.*`; the portal is optional and global bindings are
+  disabled when `ui/single_instance=false`. The `?` help key is deliberately hardcoded.
+  The README has the default hotkey table.
 
 ## Conventions
 

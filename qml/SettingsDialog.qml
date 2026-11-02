@@ -106,6 +106,7 @@ Dialog {
                 CategoryButton { text: qsTr("settings_interface"); isActive: settingsDialog.currentCategory === "interface"; onClicked: settingsDialog.currentCategory = "interface" }
                 CategoryButton { text: qsTr("settings_subtitles"); isActive: settingsDialog.currentCategory === "subtitles"; onClicked: settingsDialog.currentCategory = "subtitles" }
                 CategoryButton { text: qsTr("settings_playback"); isActive: settingsDialog.currentCategory === "playback"; onClicked: settingsDialog.currentCategory = "playback" }
+                CategoryButton { text: qsTr("settings_shortcuts"); isActive: settingsDialog.currentCategory === "shortcuts"; onClicked: settingsDialog.currentCategory = "shortcuts" }
                 CategoryButton { text: qsTr("settings_debug"); isActive: settingsDialog.currentCategory === "debug"; onClicked: settingsDialog.currentCategory = "debug" }
                 CategoryButton { text: qsTr("settings_about"); isActive: settingsDialog.currentCategory === "about"; onClicked: settingsDialog.currentCategory = "about" }
 
@@ -692,6 +693,117 @@ Dialog {
                                 Layout.preferredHeight: 40
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.subtitleIgnoreFileStyle; onToggled: Config.subtitleIgnoreFileStyle = checked }
                             }
+                        }
+                    }
+
+                    ColumnLayout {
+                        visible: settingsDialog.currentCategory === "shortcuts"
+                        Layout.fillWidth: true
+                        spacing: 22
+
+                        Label {
+                            text: qsTr("settings_shortcuts")
+                            font.pixelSize: 20; font.weight: Font.Bold
+                            color: Kirigami.Theme.textColor
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; height: 1
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2)
+                        }
+
+                        Label {
+                            text: qsTr("shortcuts_hint")
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.7)
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        Label {
+                            visible: !shortcuts.globalShortcutsAllowed
+                            text: qsTr("shortcuts_global_multi_instance")
+                            color: Kirigami.Theme.neutralTextColor
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        Label {
+                            visible: shortcuts.globalShortcutsAllowed
+                                     && !shortcuts.globalShortcutsAvailable
+                            text: qsTr("shortcuts_global_unavailable")
+                            color: Kirigami.Theme.neutralTextColor
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                Layout.fillWidth: true
+                                text: qsTr("shortcuts_action")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                               Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 13
+                            }
+                            Label {
+                                Layout.preferredWidth: 160
+                                text: qsTr("shortcuts_local")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                               Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 13
+                            }
+                            Label {
+                                Layout.preferredWidth: 160
+                                text: qsTr("shortcuts_global")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                               Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 13
+                            }
+                        }
+
+                        Repeater {
+                            model: shortcuts.bindings
+                            delegate: RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: qsTranslate("Shortcuts", "shortcut_" + modelData.id)
+                                    color: Kirigami.Theme.textColor
+                                    font.pixelSize: 14
+                                    wrapMode: Text.WordWrap
+                                    elide: Text.ElideRight
+                                }
+                                ShortcutField {
+                                    Layout.preferredWidth: 160
+                                    text: modelData.localText
+                                    onCaptured: (keycode, key, modifiers, text) =>
+                                        shortcuts.setShortcut(modelData.id, keycode, modifiers, text, false)
+                                    onCleared: shortcuts.clearShortcut(modelData.id, false)
+                                }
+                                ShortcutField {
+                                    Layout.preferredWidth: 160
+                                    text: modelData.globalText
+                                    enabled: shortcuts.globalShortcutsAllowed
+                                    isGlobal: true
+                                    onCaptured: (keycode, key, modifiers, text) =>
+                                        shortcuts.setShortcut(modelData.id, keycode, modifiers, text, true)
+                                    onCleared: shortcuts.clearShortcut(modelData.id, true)
+                                }
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("shortcuts_config_hint")
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                           Kirigami.Theme.textColor.b, 0.55)
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
                         }
                     }
 
