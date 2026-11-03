@@ -25,6 +25,7 @@ enum class ShortcutAction {
     ToggleTimeOsd,
     TogglePip,
     ToggleWindow,
+    FitWindowToVideo,
     ShowShortcutsHelp,
     // Tracks
     CycleSubtitles,
@@ -70,6 +71,7 @@ inline const QList<ShortcutActionInfo>& shortcutActions() {
         { ShortcutAction::ToggleTimeOsd,     "toggle_time",        "interface", "Pin the time counter" },
         { ShortcutAction::TogglePip,         "toggle_pip",         "interface", "Picture in picture" },
         { ShortcutAction::ToggleWindow,      "toggle_window",      "interface", "Show / hide window" },
+        { ShortcutAction::FitWindowToVideo,  "fit_window",         "interface", "Fit window to video" },
         { ShortcutAction::CycleSubtitles,    "cycle_subtitles",    "tracks",    "Next subtitles track" },
         { ShortcutAction::CycleAudio,        "cycle_audio",        "tracks",    "Next audio track" },
         { ShortcutAction::CycleDeinterlace,  "cycle_deinterlace",  "tracks",    "Switch deinterlacing" },
@@ -145,6 +147,7 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::ToggleFullscreen,  "F",      41,  Qt::NoModifier },
         { ShortcutAction::ToggleTimeOsd,     "T",      28,  Qt::NoModifier },
         { ShortcutAction::TogglePip,         "P",      33,  Qt::NoModifier },
+        { ShortcutAction::FitWindowToVideo,  "W",      25,  Qt::NoModifier },
 
         // Holding "?" (Shift+/) or "." on the Russian layout shows the help.
         { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::NoModifier },

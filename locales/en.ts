@@ -20,6 +20,7 @@
 <message><source>menu_playback_mode</source><translation>Playback mode</translation></message>
 <message><source>osd_playback_mode</source><translation>Mode: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Aspect ratio</translation></message>
+<message><source>menu_fit_window</source><translation>Fit window to video</translation></message>
 <message><source>menu_crop</source><translation>Remove black bars</translation></message>
 <message><source>playback_sequential</source><translation>Play in order</translation></message>
 <message><source>playback_repeat</source><translation>Repeat current file</translation></message>
@@ -389,6 +390,7 @@
 <message><source>shortcut_toggle_time</source><translation>Pin the time counter</translation></message>
 <message><source>shortcut_toggle_pip</source><translation>Picture in picture</translation></message>
 <message><source>shortcut_toggle_window</source><translation>Show / hide window</translation></message>
+<message><source>shortcut_fit_window</source><translation>Fit window to video</translation></message>
 <message><source>shortcut_cycle_subtitles</source><translation>Next subtitles track</translation></message>
 <message><source>shortcut_cycle_audio</source><translation>Next audio track</translation></message>
 <message><source>shortcut_cycle_deinterlace</source><translation>Switch deinterlacing</translation></message>

@@ -20,6 +20,7 @@
 <message><source>menu_playback_mode</source><translation>Режим воспроизведения</translation></message>
 <message><source>osd_playback_mode</source><translation>Режим: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Соотношение сторон</translation></message>
+<message><source>menu_fit_window</source><translation>Подогнать окно под видео</translation></message>
 <message><source>menu_crop</source><translation>Убрать чёрные поля</translation></message>
 <message><source>playback_sequential</source><translation>По порядку</translation></message>
 <message><source>playback_repeat</source><translation>Повторять файл</translation></message>
@@ -389,6 +390,7 @@
 <message><source>shortcut_toggle_time</source><translation>Закрепить счётчик времени</translation></message>
 <message><source>shortcut_toggle_pip</source><translation>Картинка в картинке</translation></message>
 <message><source>shortcut_toggle_window</source><translation>Показать / скрыть окно</translation></message>
+<message><source>shortcut_fit_window</source><translation>Подогнать окно под видео</translation></message>
 <message><source>shortcut_cycle_subtitles</source><translation>Следующие субтитры</translation></message>
 <message><source>shortcut_cycle_audio</source><translation>Следующая аудиодорожка</translation></message>
 <message><source>shortcut_cycle_deinterlace</source><translation>Переключить деинтерлейсинг</translation></message>

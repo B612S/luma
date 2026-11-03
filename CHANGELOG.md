@@ -8,6 +8,11 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- “Fit window to video”: `W` or **Playback → Fit window to video** in the context
+  menu fits the current window to the video's aspect ratio without exceeding its
+  current size, so a 4:3 film in a wide window becomes narrower instead of stretching
+  to the screen height. The pinned control bar is taken into account. The aspect is not
+  locked, so the window can be resized freely afterwards.
 - A search bar at the bottom of the playlist filters the current playlist by title,
   artist or path. It is styled like the panel, has a clear button, shows “Nothing
   found” for an empty result and does not affect drag & drop reordering (disabled
@@ -154,6 +159,18 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Videos no longer lose one or two frames at the very start. On `fileLoaded` Luma read
+  several mpv properties synchronously from the GUI thread, but mpv's core was waiting
+  for the first rendered frame, so the reads blocked it for ~200 ms, the first frame
+  arrived too late and mpv counted it as dropped (display-resample then dropped another
+  frame while catching up). The handler now takes the values from the observed-property
+  cache, so the first frame is rendered in time and the statistics counter stays at 0 —
+  without resetting it.
+- Opening Settings no longer freezes the playing video. The yt-dlp runtime check ran
+  `yt-dlp --version` and a Python import probe synchronously on the GUI thread and
+  blocked it for up to ~200 ms (longer on a cold start); the version string was not
+  used anywhere. The check is now cheap and the remaining Python probe runs in the
+  background, delivering its result to the settings page through a signal.
 - Radio streams show the current song again. mpv exposes only the static station
   name in its metadata for these Icecast/Shoutcast streams, so Luma now reads the
   per-track ICY `StreamTitle` over a separate metadata connection and updates the

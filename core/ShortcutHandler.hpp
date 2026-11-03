@@ -64,6 +64,7 @@ signals:
     void togglePlaylist();
     void toggleStats();
     void togglePip();
+    void fitWindowToVideo();
     void shortcutsHelpVisibleChanged(bool visible);
     void bindingsChanged();
 

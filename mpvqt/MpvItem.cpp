@@ -44,13 +44,25 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
             Qt::QueuedConnection);
 
     connect(mpvController(), &MpvController::fileLoaded, this, [this]() {
-        m_source = getProperty("path").toString();
-        m_mediaTitle = getProperty("media-title").toString();
-        m_duration = getProperty("duration").toDouble();
-        m_volume = getProperty("volume").toDouble();
-        m_muted = getProperty("mute").toBool();
-        m_paused = getProperty("pause").toBool();
-        m_deinterlaceEnabled = (getProperty("deinterlace").toString() != "no");
+        // Take the values from the observed-property cache instead of reading
+        // them with getProperty(): a synchronous read right after loading blocks
+        // until mpv's core answers, and the core is waiting for the first
+        // rendered frame. That delay made mpv drop the first frame.
+        const QVariant mediaTitle = m_observedValues.value(QStringLiteral("media-title"));
+        const QVariant duration = m_observedValues.value(QStringLiteral("duration"));
+        const QVariant volume = m_observedValues.value(QStringLiteral("volume"));
+        const QVariant mute = m_observedValues.value(QStringLiteral("mute"));
+        const QVariant pause = m_observedValues.value(QStringLiteral("pause"));
+        const QVariant deinterlace = m_observedValues.value(QStringLiteral("deinterlace"));
+
+        if (mediaTitle.isValid()) m_mediaTitle = mediaTitle.toString();
+        if (duration.isValid()) m_duration = duration.toDouble();
+        if (volume.isValid()) m_volume = volume.toDouble();
+        if (mute.isValid()) m_muted = mute.toBool();
+        if (pause.isValid()) m_paused = pause.toBool();
+        m_deinterlaceEnabled = deinterlace.isValid()
+                               ? deinterlace.toString() != QLatin1String("no")
+                               : m_deinterlaceEnabled;
 
         emit sourceChanged();
         emit mediaTitleChanged();
@@ -86,6 +98,9 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     observeProperty("deinterlace", MPV_FORMAT_STRING);
     observeProperty("media-title", MPV_FORMAT_STRING);
     observeProperty("metadata", MPV_FORMAT_NODE);
+    // Display aspect ratio of the video: includes the pixel aspect ratio and the
+    // Playback → Aspect ratio override. Used to fit the window to the picture.
+    observeProperty("video-params/aspect", MPV_FORMAT_DOUBLE);
 
     // Used by the statistics panel. Reading these through getProperty() from
     // QML would block the GUI thread while mpv is opening or buffering a file.

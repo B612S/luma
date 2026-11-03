@@ -344,6 +344,9 @@ int main(int argc, char *argv[]) {
                 QObject::connect(shortcuts, &ShortcutHandler::togglePip, root, [root]() {
                     QMetaObject::invokeMethod(root, "togglePip");
                 });
+                QObject::connect(shortcuts, &ShortcutHandler::fitWindowToVideo, root, [root]() {
+                    QMetaObject::invokeMethod(root, "fitWindowToVideo");
+                });
                 QObject::connect(shortcuts, &ShortcutHandler::shortcutsHelpVisibleChanged, root,
                                  [root](bool visible) { root->setProperty("shortcutsHelpVisible", visible); });
 

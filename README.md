@@ -42,6 +42,10 @@
 - **Picture in picture** — `P` or the context menu turns the window into a small
   frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
   On KDE Plasma the PiP window stays above the other windows.
+- **Window fit** — `W` or **Playback → Fit window to video** in the context menu
+  fits the window to the video's aspect ratio once, within the size the window already
+  has: it becomes narrower or shorter to remove the black bars instead of growing to the
+  screen. The aspect is not locked, so the window can be resized freely afterwards.
 - **Shortcut cheat sheet** — hold `?` (`Shift+/`) to see
   all hotkeys while the key is held.
 - **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.
@@ -215,6 +219,7 @@ intentionally fixed.
 | `F` | Toggle fullscreen |
 | `T` | Pin the time counter on screen |
 | `P` | Picture in picture |
+| `W` | Fit the window to the video (one-shot, no aspect lock) |
 | `?` (hold) | Show the keyboard shortcuts |
 | `C` | Cycle subtitles |
 | `A` | Cycle audio tracks |

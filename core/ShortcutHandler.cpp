@@ -625,7 +625,8 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
                         || action == ShortcutAction::CycleAudio
                         || action == ShortcutAction::CycleDeinterlace
                         || action == ShortcutAction::CycleAspectRatio
-                        || action == ShortcutAction::ToggleCrop;
+                        || action == ShortcutAction::ToggleCrop
+                        || action == ShortcutAction::FitWindowToVideo;
     if (videoOnly && (!m_media || !m_media->hasVideo()))
         return;
 
@@ -732,6 +733,9 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             break;
         case ShortcutAction::TogglePip:
             if (!autoRepeat) emit togglePip();
+            break;
+        case ShortcutAction::FitWindowToVideo:
+            if (!autoRepeat) emit fitWindowToVideo();
             break;
         case ShortcutAction::ToggleWindow:
             if (!autoRepeat && m_window) {

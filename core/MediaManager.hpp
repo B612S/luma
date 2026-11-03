@@ -51,8 +51,9 @@ public:
 
     // Runtime requirements for YouTube's JavaScript challenge. The ejs
     // package can be installed into ~/.local/share/luma without touching the
-    // system Python installation.
-    Q_INVOKABLE QVariantMap ytdlpRuntimeInfo() const;
+    // system Python installation. The Python probe runs in the background:
+    // opening the settings dialog must not block playback.
+    Q_INVOKABLE void refreshYtdlpRuntime();
     Q_INVOKABLE void installYtdlp();
     Q_INVOKABLE void installYtdlpEjs();
     Q_INVOKABLE void openFile(const QString &path);
@@ -103,6 +104,8 @@ signals:
     void liveStreamChanged();
     void ytdlpInstallFinished(bool success, const QString &message);
     void ytdlpEjsInstallFinished(bool success, const QString &message);
+    // Result of refreshYtdlpRuntime(), including the asynchronous ejs probe.
+    void ytdlpRuntimeReady(const QVariantMap &info);
     void loadingChanged();
     // Text for the OSD while a URL is being opened via yt-dlp.
     void downloadStatus(const QString &message);
@@ -163,6 +166,9 @@ private:
     QByteArray m_ytdlpStdoutBuffer;
     QString m_ytdlpStderr;
     QString m_defaultFileManagerName;
+    // Last result of refreshYtdlpRuntime(); keeps the settings page stable
+    // while the background ejs probe runs.
+    QVariantMap m_ytdlpRuntime;
     // Discards notifications from a file that was already replaced.
     quint64 m_notifyGeneration = 0;
     QString m_resolvedTitle;

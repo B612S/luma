@@ -31,11 +31,16 @@ Dialog {
 
     function refreshYtdlpRuntime() {
         if (typeof Media !== "undefined" && Media !== null)
-            ytdlpRuntime = Media.ytdlpRuntimeInfo();
+            Media.refreshYtdlpRuntime();
     }
 
     Connections {
         target: typeof Media !== "undefined" ? Media : null
+        // The runtime probe runs in the background so opening the dialog does
+        // not freeze the video; the result arrives through this signal.
+        function onYtdlpRuntimeReady(info) {
+            settingsDialog.ytdlpRuntime = info;
+        }
         function onYtdlpInstallFinished(success, message) {
             settingsDialog.ytdlpInstalling = false;
             settingsDialog.ytdlpInstallMessage = success ? "" : message;

@@ -159,6 +159,64 @@ ApplicationWindow {
         idleTimer.restart();
     }
 
+    // ---- Fit the current window to the video ----
+    // One-shot: the window takes the picture's aspect ratio once. The aspect is
+    // not locked, so the window can be resized freely afterwards.
+    function fitWindowToVideo() {
+        // In fullscreen the size is owned by the compositor.
+        if (root.visibility === Window.FullScreen) return;
+        // While casting the window shows the cast overlay, not the local video.
+        if (CastManager.casting) return;
+
+        // Display aspect: mpv has already applied the pixel aspect ratio and
+        // the Playback → Aspect ratio override to this value.
+        let aspect = Number(mpv ? mpv.observedProperty("video-params/aspect") : 0);
+        if (!(aspect > 0)) {
+            const videoW = Number(mpv ? mpv.observedProperty("width") : 0);
+            const videoH = Number(mpv ? mpv.observedProperty("height") : 0);
+            if (!(videoW > 0) || !(videoH > 0)) return;
+            aspect = videoW / videoH;
+        }
+
+        // Only the pinned control bar takes height away from the picture; the
+        // floating bar is drawn on top of it.
+        const barHeight = (root.controlBarPinned && typeof controlBar !== "undefined" && controlBar)
+                          ? Math.round(controlBar.height) : 0;
+        const screenW = root.screen ? root.screen.width : root.width;
+        const screenH = root.screen ? root.screen.height : root.height;
+
+        // Use the window as it is now as the limit: the picture is fitted into
+        // the current window, so a 4:3 film in a wide window makes the window
+        // narrower instead of stretching it to the screen.
+        const pictureHeight = Math.max(1, root.height - barHeight);
+        const scale = Math.min(root.width / aspect, pictureHeight);
+        let videoW = scale * aspect;
+        let videoH = scale;
+
+        // The window minimums are hard limits. Grow the other dimension only as
+        // far as they require, so the picture keeps its aspect ratio.
+        if (videoH < root.minimumHeight) {
+            videoH = root.minimumHeight;
+            videoW = videoH * aspect;
+        }
+        if (videoW < root.minimumWidth) {
+            videoW = root.minimumWidth;
+            videoH = videoW / aspect;
+        }
+        // Never place the window off-screen.
+        if (videoW > screenW) {
+            videoW = screenW;
+            videoH = videoW / aspect;
+        }
+        if (videoH + barHeight > screenH) {
+            videoH = screenH - barHeight;
+            videoW = videoH * aspect;
+        }
+
+        root.width = Math.round(videoW);
+        root.height = Math.round(videoH) + barHeight;
+    }
+
     property bool isDialogOpen: settingsDialog.visible ||
     playlistPanel.hasOpenDialog ||
     infoDialog.visible ||
@@ -422,6 +480,7 @@ ApplicationWindow {
         mpv: mpv; z: 1000; parent: Overlay.overlay
         onToggleCropRequested: root.toggleCropRequested()
         onTogglePipRequested: root.togglePip()
+        onFitWindowRequested: root.fitWindowToVideo()
         onOpenUrlRequested: root.openUrlDialog()
         onTogglePlaylistRequested: { playlistPanel.isOpen = !playlistPanel.isOpen; idleTimer.restart(); }
         property bool cursorWasVisible: true

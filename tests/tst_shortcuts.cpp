@@ -20,6 +20,7 @@ private slots:
     void mapsSeekAndLongSeek();
     void mapsFrameStepping();
     void mapsPip();
+    void mapsFitWindowToVideo();
     void removedCoversKeyDoesNothing();
     void unknownKeyGivesNone();
     void helpKeyWorksWithAndWithoutShift();
@@ -92,6 +93,15 @@ void TestShortcuts::mapsPip()
 {
     QCOMPARE(static_cast<int>(actionFor(33, Qt::NoModifier)),
              static_cast<int>(ShortcutAction::TogglePip));
+}
+
+void TestShortcuts::mapsFitWindowToVideo()
+{
+    // W is the default: evdev KEY_W (17) + 8.
+    QCOMPARE(static_cast<int>(actionFor(25, Qt::NoModifier)),
+             static_cast<int>(ShortcutAction::FitWindowToVideo));
+    QCOMPARE(shortcutActionFromId(QStringLiteral("fit_window")),
+             ShortcutAction::FitWindowToVideo);
 }
 
 void TestShortcuts::removedCoversKeyDoesNothing()

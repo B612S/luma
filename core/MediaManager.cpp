@@ -661,60 +661,54 @@ QString MediaManager::ytdlpEjsLocalDir() const
     return base + QStringLiteral("/luma/yt-dlp-ejs");
 }
 
-QVariantMap MediaManager::ytdlpRuntimeInfo() const
+void MediaManager::refreshYtdlpRuntime()
 {
-    QVariantMap info;
     const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
     const QString systemYtdlp = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
     const QString ytdlpDir = ytdlpLocalDir();
     const QString ejsDir = ytdlpEjsLocalDir();
     const bool localYtdlp = QFileInfo(ytdlpDir + QStringLiteral("/yt_dlp/__init__.py")).exists();
     const bool localEjs = QFileInfo(ejsDir + QStringLiteral("/yt_dlp_ejs/__init__.py")).exists();
-
-    QString ytdlpVersion;
-    if (localYtdlp && !python.isEmpty()) {
-        QProcess versionProbe;
-        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        QString pyPath = ytdlpDir + QLatin1Char(':') + ejsDir;
-        const QString oldPyPath = env.value(QStringLiteral("PYTHONPATH"));
-        if (!oldPyPath.isEmpty()) pyPath += QLatin1Char(':') + oldPyPath;
-        env.insert(QStringLiteral("PYTHONPATH"), pyPath);
-        versionProbe.setProcessEnvironment(env);
-        versionProbe.start(python, {QStringLiteral("-m"), QStringLiteral("yt_dlp"), QStringLiteral("--version")});
-        if (versionProbe.waitForFinished(1000)
-                && versionProbe.exitStatus() == QProcess::NormalExit
-                && versionProbe.exitCode() == 0)
-            ytdlpVersion = QString::fromUtf8(versionProbe.readAllStandardOutput()).trimmed();
-    } else if (!systemYtdlp.isEmpty()) {
-        QProcess versionProbe;
-        versionProbe.start(systemYtdlp, {QStringLiteral("--version")});
-        if (versionProbe.waitForFinished(1000)
-                && versionProbe.exitStatus() == QProcess::NormalExit
-                && versionProbe.exitCode() == 0)
-            ytdlpVersion = QString::fromUtf8(versionProbe.readAllStandardOutput()).trimmed();
-    }
-
     const QString deno = QStandardPaths::findExecutable(QStringLiteral("deno"));
-    bool systemEjs = false;
-    if (!python.isEmpty()) {
-        QProcess probe;
-        probe.start(python, {QStringLiteral("-c"), QStringLiteral("import yt_dlp_ejs")});
-        if (probe.waitForFinished(1000))
-            systemEjs = probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
-    }
+    // Keep the previous probe result until the new one arrives, so the status
+    // in the dialog does not flicker while the probe runs.
+    const bool systemEjs = m_ytdlpRuntime.value(QStringLiteral("ejsSystem")).toBool();
 
-    info.insert(QStringLiteral("ytdlp"), localYtdlp || !systemYtdlp.isEmpty());
-    info.insert(QStringLiteral("ytdlpLocal"), localYtdlp);
-    info.insert(QStringLiteral("ytdlpSystem"), !systemYtdlp.isEmpty());
-    info.insert(QStringLiteral("ytdlpPath"), localYtdlp ? ytdlpDir : systemYtdlp);
-    info.insert(QStringLiteral("ytdlpVersion"), ytdlpVersion);
-    info.insert(QStringLiteral("deno"), !deno.isEmpty());
-    info.insert(QStringLiteral("denoPath"), deno);
-    info.insert(QStringLiteral("ejsLocal"), localEjs);
-    info.insert(QStringLiteral("ejsSystem"), systemEjs);
-    info.insert(QStringLiteral("ejsAvailable"), localEjs || systemEjs);
-    info.insert(QStringLiteral("ejsLocalDir"), ejsDir);
-    return info;
+    m_ytdlpRuntime.clear();
+    m_ytdlpRuntime.insert(QStringLiteral("ytdlp"), localYtdlp || !systemYtdlp.isEmpty());
+    m_ytdlpRuntime.insert(QStringLiteral("ytdlpLocal"), localYtdlp);
+    m_ytdlpRuntime.insert(QStringLiteral("ytdlpSystem"), !systemYtdlp.isEmpty());
+    m_ytdlpRuntime.insert(QStringLiteral("ytdlpPath"), localYtdlp ? ytdlpDir : systemYtdlp);
+    m_ytdlpRuntime.insert(QStringLiteral("deno"), !deno.isEmpty());
+    m_ytdlpRuntime.insert(QStringLiteral("denoPath"), deno);
+    m_ytdlpRuntime.insert(QStringLiteral("ejsLocal"), localEjs);
+    m_ytdlpRuntime.insert(QStringLiteral("ejsSystem"), systemEjs);
+    m_ytdlpRuntime.insert(QStringLiteral("ejsAvailable"), localEjs || systemEjs);
+    m_ytdlpRuntime.insert(QStringLiteral("ejsLocalDir"), ejsDir);
+    emit ytdlpRuntimeReady(m_ytdlpRuntime);
+
+    // A locally installed ejs package needs no Python import probe. Otherwise
+    // check the system Python in the background: running it synchronously
+    // would freeze the video for as long as Python takes to start.
+    if (localEjs || python.isEmpty())
+        return;
+
+    auto *probe = new QProcess(this);
+    connect(probe, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [this, probe](int code, QProcess::ExitStatus status) {
+                probe->deleteLater();
+                const bool available = status == QProcess::NormalExit && code == 0;
+                m_ytdlpRuntime.insert(QStringLiteral("ejsSystem"), available);
+                m_ytdlpRuntime.insert(QStringLiteral("ejsAvailable"),
+                                      m_ytdlpRuntime.value(QStringLiteral("ejsLocal")).toBool()
+                                      || available);
+                emit ytdlpRuntimeReady(m_ytdlpRuntime);
+            });
+    connect(probe, &QProcess::errorOccurred, this, [probe](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart)
+            probe->deleteLater();
+    });
+    probe->start(python, {QStringLiteral("-c"), QStringLiteral("import yt_dlp_ejs")});
 }
 
 void MediaManager::runPipInstall(const QString &package, const QString &dir,

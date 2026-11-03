@@ -18,6 +18,7 @@ LumaMenu {
     signal toggleCropRequested()
     signal togglePlaylistRequested()
     signal togglePipRequested()
+    signal fitWindowRequested()
     signal openUrlRequested()
 
     onOpened: {
@@ -170,6 +171,11 @@ LumaMenu {
 
             LumaMenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.showPage("playback_mode") }
             LumaMenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; isEnabled: menu.hasVideo; onClicked: menu.showPage("aspect_ratio") }
+            LumaMenuButton {
+                text: qsTr("menu_fit_window")
+                isEnabled: menu.hasVideo
+                onClicked: { menu.fitWindowRequested(); menu.close() }
+            }
             LumaMenuButton { text: qsTr("menu_renderer"); hasArrow: true; onClicked: menu.showPage("renderer") }
 
             LumaMenuButton {
