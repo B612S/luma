@@ -8,8 +8,12 @@
  *     ~/.config/luma/mpv.conf before mpv_initialize(), instead of the upstream
  *     ~/.config/mpvqt/mpvqt.conf loaded after initialization.
  *   - Force vo=libmpv (vo=null when built with LUMA_TEST_MPV_VO for headless
- *     tests), audio-client-name=luma, keep-open=no, cache=yes, cache-secs=300
- *     and demuxer-max-bytes=256MiB after initialization.
+ *     tests), audio-client-name=luma and keep-open=no after initialization.
+ *   - Force the embedding/performance invariants after loading mpv.conf:
+ *     no extra window/OSC/mpv keyboard bindings, idle between playlist entries,
+ *     demuxer thread, cache pause, no disk cache, and no mpv OSD.
+ *   - Leave the stream cache to MpvItem::setSource(): 300 s / 256 MiB for
+ *     network streams only, mpv's default (no demuxer cache) for local files.
  *   - Set video-sync=display-resample when the current value is "audio".
  *   - Add setLogLevel() for the optional mpv.log.
  *   - Stop the event loop instead of spinning when mpv_wait_event() returns
@@ -227,6 +231,15 @@ void MpvController::init()
     configPath.append(QStringLiteral("/mpv.conf"));
     mpv_set_option_string(d_ptr->m_mpv, "include", configPath.toUtf8().constData());
 
+    // Luma owns the window, keyboard and OSD. Keep these out of reach of
+    // mpv.conf: an OSC or a keyboard grab would duplicate (and fight with)
+    // Luma's controls, and an extra window breaks embedding.
+    mpv_set_option_string(d_ptr->m_mpv, "force-window", "no");
+    mpv_set_option_string(d_ptr->m_mpv, "osc", "no");
+    mpv_set_option_string(d_ptr->m_mpv, "input-default-bindings", "no");
+    mpv_set_option_string(d_ptr->m_mpv, "input-vo-keyboard", "no");
+    mpv_set_option_string(d_ptr->m_mpv, "terminal", "no");
+
     if (mpv_initialize(d_ptr->m_mpv) < 0) {
         qFatal("could not initialize mpv context");
     }
@@ -245,11 +258,23 @@ void MpvController::init()
     // CRITICAL: keep-open is disabled so mpv always sends EOF
     // and automatic advance to the next file works.
     mpv_set_property_string(d_ptr->m_mpv, "keep-open", "no");
+    // libmpv must stay alive between playlist entries.
+    mpv_set_property_string(d_ptr->m_mpv, "idle", "yes");
 
-    // Stream cache: allows seeking back roughly 5 minutes, but no more.
-    mpv_set_property_string(d_ptr->m_mpv, "cache", "yes");
-    mpv_set_property_string(d_ptr->m_mpv, "cache-secs", "300");
-    mpv_set_property_string(d_ptr->m_mpv, "demuxer-max-bytes", "256MiB");
+    // Performance invariants, not user preferences:
+    // - demuxing must not block the GUI/decoder thread;
+    // - network playback pauses instead of stuttering on an empty cache;
+    // - Luma never writes its cache to disk;
+    // - Luma draws its own OSD, so mpv must not render one into the frame.
+    mpv_set_property_string(d_ptr->m_mpv, "demuxer-thread", "yes");
+    mpv_set_property_string(d_ptr->m_mpv, "cache-pause", "yes");
+    mpv_set_property_string(d_ptr->m_mpv, "cache-on-disk", "no");
+    mpv_set_property_string(d_ptr->m_mpv, "osd-level", "0");
+
+    // The stream cache is configured per source in MpvItem::setSource(): a
+    // 300 s / 256 MiB cache is only useful for network streams. Forcing it for
+    // local files made mpv keep hundreds of megabytes of demuxer data for no
+    // benefit (local files seek directly).
 
     // Smart settings (applied only if the user has not changed them)
     char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");

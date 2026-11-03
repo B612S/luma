@@ -140,9 +140,11 @@ void KWinBridge::setPipActive(bool active)
         loadWatcher();
         return;
     }
-    // update() in the script keeps only the "Luma PiP" title above the others,
-    // so unloading it is safe even if a window is re-created right after.
-    unloadWatcher();
+    // Keep the watcher loaded after leaving PiP. Unloading it immediately races
+    // with the title change: the script may be gone before it processes the
+    // new title, leaving the normal window keep-above and therefore unable to
+    // snap. The script itself sets keepAbove=false for the normal title; it is
+    // unloaded when the application quits.
 }
 
 bool KWinBridge::loadWatcher()

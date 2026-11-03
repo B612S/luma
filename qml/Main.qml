@@ -3,7 +3,6 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import luma 1.0
 import org.kde.kirigami as Kirigami
-import org.kde.kirigami.primitives as KirigamiPrimitives
 
 ApplicationWindow {
     id: root
@@ -15,14 +14,14 @@ ApplicationWindow {
     minimumHeight: pipMode ? 180 : 480
     // The "PiP" title is what the KWin keep-above script looks for (see KWinBridge).
     title: root.pipMode ? "Luma PiP" : "Luma"
-    // Windowed PiP is drawn as a floating card: the window keeps a transparent
-    // margin for the card's shadow, so the compositor never samples the video at
-    // the window edge (KWin/NVIDIA leaves a 1px artifact there on a bare window).
+    // Windowed PiP is a frameless card with no transparent border. The video is
+    // overscanned by one pixel and the FBO texture is clamped, so the window
+    // edge never samples outside the frame. A single semi-transparent pixel
+    // keeps the surface out of KWin's direct-scanout path without creating a
+    // visible border or a gap when PiP is snapped.
     readonly property bool pipCard: root.pipMode && root.visibility !== Window.FullScreen
-    // The PiP content is rectangular, so the card is square-cornered too; the
-    // margin only holds the shadow and keeps the window edge transparent.
-    readonly property int pipCardMargin: root.pipCard ? 10 : 0
-    readonly property int pipContentMargin: root.pipCardMargin
+    readonly property int pipContentMargin: 0
+    readonly property int pipOverscan: root.pipCard ? -1 : 0
     color: "transparent"
 
     property bool controlsVisible: true
@@ -146,10 +145,9 @@ ApplicationWindow {
         }
         root.show();
         KWinBridge.setPipActive(false);
-        if (pipSavedGeometry.width > 0) {
-            root.x = pipSavedGeometry.x;
-            root.y = pipSavedGeometry.y;
-        }
+        // Do not restore x/y here: Wayland ignores client-side top-level
+        // positioning, and setting it after show can fight KWin's placement.
+        // KWin places the re-created window; the saved size is enough.
         Qt.callLater(function() {
             if (root.pipMode || pipSavedGeometry.width <= 0) return;
             root.width = pipSavedGeometry.width;
@@ -242,27 +240,11 @@ ApplicationWindow {
         }
     }
 
-    // Opaque backdrop for the normal window and for fullscreen PiP: the window
-    // itself stays translucent, so KWin always composites it with its alpha.
+    // Opaque backdrop for the normal window and for PiP.
     Rectangle {
         anchors.fill: parent
         z: -2
-        visible: !root.pipCard
         color: "black"
-    }
-
-    // The card behind the PiP content (windowed PiP only). Its shadow is drawn
-    // outside the item, into the window's transparent margin.
-    KirigamiPrimitives.ShadowedRectangle {
-        anchors.fill: parent
-        anchors.margins: root.pipCardMargin
-        visible: root.pipCard
-        z: -1
-        radius: 0
-        color: "black"
-        shadow.size: 8
-        shadow.color: Qt.rgba(0, 0, 0, 0.4)
-        shadow.yOffset: 2
     }
 
     MpvItem {
@@ -272,7 +254,8 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: root.controlBarPinned ? controlBar.top : parent.bottom
-        anchors.margins: root.pipContentMargin
+        anchors.margins: root.pipOverscan
+        clip: true
         isCasting: CastManager.casting
         z: 0
         visible: !CastManager.casting
@@ -389,9 +372,19 @@ ApplicationWindow {
     }
 
     // In picture-in-picture mode — only minimal custom buttons.
+    // One semi-transparent pixel is enough to keep the whole surface out of
+    // direct scanout. It sits in the bottom-right corner under the controls.
+    Rectangle {
+        visible: root.pipCard
+        width: 1; height: 1
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        color: Qt.rgba(0, 0, 0, 0.5)
+        z: 100
+    }
+
     PipControls {
         anchors.fill: parent
-        anchors.margins: root.pipContentMargin
         mpv: mpv
         active: root.pipMode
         onCloseRequested: root.exitPip()

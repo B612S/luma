@@ -22,9 +22,9 @@ in the file.
 | File | Summary |
 | --- | --- |
 | `mpvabstractitem.cpp` | Uses an explicit `mpv_render_context *` instead of `auto` for the empty render context. |
-| `mpvcontroller.cpp` | Includes Luma's `mpv.conf`, forces mpv playback properties, frees caller-created `mpv_node`s, handles unavailable properties safely, and exposes `setLogLevel()` for the optional `mpv.log`. |
+| `mpvcontroller.cpp` | Includes Luma's `mpv.conf`, forces mpv playback and embedding/performance properties, leaves the stream cache to `MpvItem::setSource()`, frees caller-created `mpv_node`s, handles unavailable properties safely, and exposes `setLogLevel()` for the optional `mpv.log`. |
 | `mpvcontroller.h` | Declares `setLogLevel()` for the optional `mpv.log`. |
-| `mpvrenderer.cpp` | Wayland-only display setup, casting/video-off guard, framebuffer clearing, no `ready()` emission. |
+| `mpvrenderer.cpp` | Wayland-only display setup, casting/video-off guard, framebuffer clearing, clamped FBO sampling, no `ready()` emission. |
 | `mpvrenderer.h` | Removed the unused `m_isFramebufferReady` flag; added a required include. |
 
 The detailed change lists are in the comment block at the top of each file.

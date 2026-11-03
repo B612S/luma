@@ -15,7 +15,13 @@ void FrameDecoder::cancelCurrentDecode() {
     m_cancelFlag.storeRelaxed(1);
 }
 
+void FrameDecoder::clearCache() {
+    m_cache.clear();
+}
+
 void FrameDecoder::cleanup() {
+    // The cached frames belong to the file being closed.
+    m_cache.clear();
     if (m_swsCtx) { sws_freeContext(m_swsCtx); m_swsCtx = nullptr; }
     if (m_codecCtx) { avcodec_free_context(&m_codecCtx); m_codecCtx = nullptr; }
     if (m_fmtCtx) { avformat_close_input(&m_fmtCtx); m_fmtCtx = nullptr; }

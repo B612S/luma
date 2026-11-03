@@ -20,7 +20,7 @@
 <message><source>menu_playback_mode</source><translation>Режим воспроизведения</translation></message>
 <message><source>osd_playback_mode</source><translation>Режим: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Соотношение сторон</translation></message>
-<message><source>menu_crop</source><translation>Обрезать чёрные поля</translation></message>
+<message><source>menu_crop</source><translation>Убрать чёрные поля</translation></message>
 <message><source>playback_sequential</source><translation>По порядку</translation></message>
 <message><source>playback_repeat</source><translation>Повторять файл</translation></message>
 <message><source>playback_shuffle</source><translation>Вперемешку</translation></message>
@@ -113,7 +113,7 @@
 <message><source>settings_hwdec_auto_copy</source><translation>Автоматически (с копированием)</translation></message>
 <message><source>settings_hwdec_disabled</source><translation>Отключено (программное декодирование)</translation></message>
 <message><source>settings_hwdec_hint</source><translation>«Копирующие» режимы возвращают кадры в системную память: они работают с видеофильтрами, но медленнее.</translation></message>
-<message><source>settings_ytdlp</source><translation>yt-dlp</translation></message>
+<message><source>settings_ytdlp</source><translation>Интернет-воспроизведение</translation></message>
 <message><source>settings_ytdlp_quality</source><translation>Качество видео</translation></message>
 <message><source>settings_ytdlp_quality_best</source><translation>Наилучшее доступное</translation></message>
 <message><source>settings_ytdlp_quality_audio</source><translation>Только звук</translation></message>
@@ -123,6 +123,16 @@
 <message><source>settings_ytdlp_proxy_none</source><translation>Не используется</translation></message>
 <message><source>settings_ytdlp_proxy_hint</source><translation>Формат: host:port, например 127.0.0.1:1080</translation></message>
 <message><source>settings_ytdlp_proxy_invalid</source><translation>Укажите адрес в виде host:port</translation></message>
+<message><source>settings_ytdlp_runtime_title</source><translation>Компоненты YouTube</translation></message>
+<message><source>settings_ytdlp_runtime_ytdlp</source><translation>yt-dlp: %1</translation></message>
+<message><source>settings_ytdlp_runtime_deno</source><translation>Deno: %1</translation></message>
+<message><source>settings_ytdlp_runtime_ejs</source><translation>yt-dlp-ejs: %1</translation></message>
+<message><source>settings_ytdlp_runtime_found</source><translation>найден</translation></message>
+<message><source>settings_ytdlp_runtime_missing</source><translation>не найден</translation></message>
+<message><source>settings_ytdlp_runtime_hint</source><translation>Отсутствующие yt-dlp или yt-dlp-ejs можно установить в ~/.local/share/luma кнопками выше; Deno устанавливается пакетным менеджером системы. Вместе они решают JavaScript-проверку YouTube без чтения куки браузера.</translation></message>
+<message><source>settings_ytdlp_runtime_installing</source><translation>Установка…</translation></message>
+<message><source>settings_ytdlp_runtime_install_ytdlp</source><translation>Установить yt-dlp</translation></message>
+<message><source>settings_ytdlp_runtime_install_ejs</source><translation>Установить yt-dlp-ejs</translation></message>
 <message><source>about_title</source><translation>О программе</translation></message>
 <message><source>about_version</source><translation>Версия %1</translation></message>
 <message><source>about_description</source><translation>Быстрый и минималистичный медиаплеер.</translation></message>
@@ -262,6 +272,9 @@
 <context>
 <name>MediaManager</name>
 <message><source>dialog_open_video</source><translation>Открыть медиафайл</translation></message>
+<message><source>ytdlp_python_missing</source><translation>python3 не найден, установить yt-dlp-ejs нельзя</translation></message>
+<message><source>ytdlp_install_dir_failed</source><translation>Не удалось создать %1</translation></message>
+<message><source>ytdlp_install_start_failed</source><translation>Не удалось запустить pip</translation></message>
 <message><source>dialog_video_filter</source><translation>Видеофайлы (*.mp4 *.mkv *.avi *.webm);;Все файлы (*)</translation></message>
 <message><source>dialog_open_folder</source><translation>Выбор папки</translation></message>
 <message><source>dialog_open_url</source><translation>Открыть ссылку</translation></message>

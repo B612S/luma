@@ -164,24 +164,11 @@ ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *me
         m_isInternalVolume = false;
     });
 
-    m_wheelDebounceTimer = new QTimer(this);
-    m_wheelDebounceTimer->setSingleShot(true);
-    m_wheelDebounceTimer->setInterval(80);
-    connect(m_wheelDebounceTimer, &QTimer::timeout, this, [this]() {
-        if (qAbs(m_wheelVolumeDelta) > 0.001) {
-            if (m_castManager && m_castManager->casting()) {
-                double newVol = qBound(0.0, m_castManager->remoteVolume() + m_wheelVolumeDelta, 100.0);
-                m_castManager->setVolume(newVol);
-                if (m_osd) m_osd->showVolume(newVol);
-            } else if (m_mpv) {
-                double currentVol = m_mpv->volume();
-                double newVol = qBound(0.0, currentVol + m_wheelVolumeDelta, 100.0);
-                m_isInternalVolume = true;
-                m_mpv->setVolume(newVol);
-                if (m_osd) m_osd->showVolume(newVol);
-            }
-            m_wheelVolumeDelta = 0.0;
-        }
+    m_wheelTargetTimer = new QTimer(this);
+    m_wheelTargetTimer->setSingleShot(true);
+    m_wheelTargetTimer->setInterval(250);
+    connect(m_wheelTargetTimer, &QTimer::timeout, this, [this]() {
+        m_wheelTargetValid = false;
     });
 
     QTimer::singleShot(1000, this, [this]() { m_isInternalVolume = false; });
@@ -433,12 +420,13 @@ void ShortcutHandler::onFileChanged() {
     m_seekTimer->stop();
     m_volTimer->stop();
     m_volResetTimer->stop();
-    m_wheelDebounceTimer->stop();
+    m_wheelTargetTimer->stop();
     m_targetSeekTime = 0.0;
     m_lastPosition = 0.0;
     m_seekStep = 0.0;
     m_volStep = 0.0;
-    m_wheelVolumeDelta = 0.0;
+    m_wheelVolumeTarget = 0.0;
+    m_wheelTargetValid = false;
 
     m_cropEnabled = false;
     m_cropPending = false;
@@ -640,6 +628,23 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
                         || action == ShortcutAction::ToggleCrop;
     if (videoOnly && (!m_media || !m_media->hasVideo()))
         return;
+
+    // Live TV/radio has no DVR window: seeking and frame stepping would only
+    // move playback away from the live edge (which followLiveEdge() then has
+    // to undo). Pause is still allowed; it jumps back on resume.
+    if (m_media && m_media->liveStream()) {
+        switch (action) {
+            case ShortcutAction::SeekBackward:
+            case ShortcutAction::SeekForward:
+            case ShortcutAction::SeekBackwardLong:
+            case ShortcutAction::SeekForwardLong:
+            case ShortcutAction::FrameBackward:
+            case ShortcutAction::FrameForward:
+                return;
+            default:
+                break;
+        }
+    }
 
     switch (action) {
         case ShortcutAction::TogglePause:
@@ -876,18 +881,25 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 
         double volStep = (delta / 120.0) * 5.0;
 
-        // While casting, send it straight to Chromecast and consume the event
-        if (m_castManager && m_castManager->casting()) {
-            double newVol = qBound(0.0, m_castManager->remoteVolume() + volStep, 100.0);
-            m_castManager->setVolume(newVol);
-            if (m_osd) m_osd->showVolume(newVol);
-            m_volResetTimer->start();
-            return true;
+        // Apply the change on the same event that produced it: the slider reads
+        // mpv's volume, so a deferred update made the handle jump after the
+        // wheel had already stopped. The target only coalesces a burst of
+        // events, so steps are not lost while mpv reports the old volume.
+        if (!m_wheelTargetValid) {
+            m_wheelVolumeTarget = (m_castManager && m_castManager->casting())
+                ? m_castManager->remoteVolume() : m_mpv->volume();
+            m_wheelTargetValid = true;
         }
+        m_wheelVolumeTarget = qBound(0.0, m_wheelVolumeTarget + volStep, 100.0);
 
-        m_wheelVolumeDelta += volStep;
-        m_wheelDebounceTimer->start();
+        if (m_castManager && m_castManager->casting()) {
+            m_castManager->setVolume(m_wheelVolumeTarget);
+        } else {
+            m_mpv->setVolume(m_wheelVolumeTarget);
+        }
+        if (m_osd) m_osd->showVolume(m_wheelVolumeTarget);
 
+        m_wheelTargetTimer->start();
         m_volResetTimer->start();
         return true;
     }

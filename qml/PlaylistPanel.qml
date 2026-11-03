@@ -316,7 +316,7 @@ Rectangle {
         // separator and that edge.
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 42
+            Layout.preferredHeight: 50
             color: "transparent"
 
             Rectangle {
@@ -343,13 +343,13 @@ Rectangle {
                                                   Kirigami.Theme.textColor.g,
                                                   Kirigami.Theme.textColor.b, 0.5)
                     color: Kirigami.Theme.textColor
-                    font.pixelSize: 13
+                    font.pixelSize: 15
                     selectByMouse: true
                     // Reserve room for the magnifier on the left and the clear
                     // button on the right; the field itself spans the full
                     // playlist width.
-                    leftPadding: 28
-                    rightPadding: searchField.text.length > 0 ? 34 : 10
+                    leftPadding: 34
+                    rightPadding: searchField.text.length > 0 ? 40 : 12
                     topPadding: 0
                     bottomPadding: 0
                     background: Rectangle {
@@ -369,9 +369,9 @@ Rectangle {
 
                 Kirigami.Icon {
                     anchors.left: parent.left
-                    anchors.leftMargin: 8
+                    anchors.leftMargin: 9
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 14; height: 14
+                    width: 18; height: 18
                     source: "edit-find-symbolic"
                     color: Kirigami.Theme.textColor
                     isMask: true
@@ -382,7 +382,7 @@ Rectangle {
                     anchors.right: parent.right
                     anchors.rightMargin: 4
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 24; height: 24
+                    width: 28; height: 28
                     visible: searchField.text.length > 0
 
                     Rectangle {
@@ -395,7 +395,7 @@ Rectangle {
 
                     Kirigami.Icon {
                         anchors.centerIn: parent
-                        width: 16; height: 16
+                        width: 18; height: 18
                         source: "window-close-symbolic"
                         color: Kirigami.Theme.textColor
                         isMask: true

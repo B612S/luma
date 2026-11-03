@@ -100,7 +100,7 @@ private:
     QTimer *m_seekTimer = nullptr;
     QTimer *m_volTimer = nullptr;
     QTimer *m_volResetTimer = nullptr;
-    QTimer *m_wheelDebounceTimer = nullptr;
+    QTimer *m_wheelTargetTimer = nullptr;
 
     double m_seekStep = 0.0;
     double m_targetSeekTime = 0.0;
@@ -125,6 +125,10 @@ private:
     GlobalShortcuts *m_globalShortcuts = nullptr;
     QString m_shortcutsPath;
 
-    double m_wheelVolumeDelta = 0.0;
+    // Wheel volume changes are applied immediately. The target is kept for a
+    // short burst so fast wheel/touchpad events accumulate instead of being
+    // lost while mpv has not reported the previous volume yet.
+    double m_wheelVolumeTarget = 0.0;
+    bool m_wheelTargetValid = false;
     bool m_globalShortcutsAllowed = true;
 };

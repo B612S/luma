@@ -19,6 +19,13 @@ Rectangle {
     property bool hovered: hoverArea.containsMouse
     property bool isSeeking: false
     property bool isVolumeSeeking: false
+
+    // The slider stays at the requested position until mpv actually reports a
+    // position close to it. Releasing it earlier made the handle jump back to
+    // the old position (and then forward again) on a slow or exact seek.
+    property double seekTarget: 0
+    property bool seekPending: false
+    readonly property double seekTolerance: 1.0
     property bool hasVideo: CastManager.casting || (mpv.duration > 0)
 
     // Audio file: preview frames while seeking aren't needed. For files opened
@@ -42,39 +49,37 @@ Rectangle {
     readonly property bool showSeekPreview: !CastManager.casting && !root.audioFile
                                             && !root.isLive && !root.networkStream
 
-    // Live stream (radio): seeking is only possible within the cache,
-    // so the slider shows the cache window and is pinned to the right.
+    // Live stream (online TV/radio): there is no rewind/DVR any more.
+    // The control bar only shows a LIVE indicator; if playback falls behind
+    // the live edge (network pause, buffering), followLiveEdge() jumps back.
     readonly property bool isLive: !CastManager.casting && typeof Media !== "undefined"
                                    && Media.liveStream === true
-    readonly property real liveWindow: 300 // seconds; matches cache-secs in mpv
-    // In a live stream mpv keeps a buffer ahead of the player, so "duration" runs
-    // ahead of the position even without seeking. Treat the smallest observed lag
-    // as the live point and measure seeking from it.
-    property real liveBaseline: -1
-    readonly property real liveRawBehind: Math.max(0, root.displayDuration - root.displayPosition)
-    readonly property real liveBehind: root.isLive
-        ? (root.liveBaseline < 0
-               ? 0   // live point not measured yet — assume we are live
-               : Math.max(0, Math.min(root.liveWindow, root.liveRawBehind - Math.max(0, root.liveBaseline))))
-        : 0
-
-    onIsLiveChanged: root.liveBaseline = -1
+    Timer {
+        id: liveFollowTimer
+        interval: 3000
+        repeat: true
+        running: root.isLive && !root.displayPaused
+        onTriggered: root.followLiveEdge()
+    }
 
     Connections {
         target: mpv
-        function onPositionChanged() {
-            if (!root.isLive || seekSlider.seeking || root.displayDuration <= 0) return;
-            const raw = root.liveRawBehind;
-            if (root.liveBaseline < 0) {
-                root.liveBaseline = raw;
-                return;
+        function onSourceChanged() {
+            // A pending seek belongs to the old file; never keep the new
+            // file's slider pinned to its position.
+            root.finishSeek();
+            // Drop the last preview of the previous file.
+            if (previewImage) previewImage.source = "";
+            if (seekTooltip) {
+                seekTooltip.currentThumbId = "";
+                seekTooltip.pendingTime = -1;
             }
-            // At stream start the buffer ahead is still empty and growing; while we are live,
-            // let the baseline follow it (but not jump — don't eat up the rewind).
-            if (raw > root.liveBaseline && raw - root.liveBaseline <= 2)
-                root.liveBaseline = raw;
+            if (root.isLive) liveFollowTimer.restart();
         }
-        function onSourceChanged() { root.liveBaseline = -1; }
+        function onDurationChanged() {
+            // The file was stopped/ended while a seek was still settling.
+            if (mpv.duration <= 0) root.finishSeek();
+        }
     }
 
     property bool isPlaylistOpen: false
@@ -91,6 +96,7 @@ Rectangle {
     : (mpv.duration || 0)
 
     property double displayPosition: CastManager.casting ? CastManager.remotePosition : (mpv.position || 0)
+    onDisplayPositionChanged: root.checkSeekFinished()
     property bool displayPaused: CastManager.casting ? !CastManager.isRemotePlaying : mpv.paused
     property double displayVolume: CastManager.casting ? CastManager.remoteVolume : (mpv.volume || 0)
 
@@ -191,45 +197,68 @@ Rectangle {
                 id: seekSlider
                 anchors.fill: parent
                 from: 0
-                to: root.isLive ? root.liveWindow : root.displayDuration
+                to: root.displayDuration
                 focus: false
-                enabled: root.hasVideo
+                visible: !root.isLive
+                enabled: root.hasVideo && !root.isLive
 
                 property bool seeking: false
                 value: seeking ? value
-                               : (root.isLive ? root.liveWindow - root.liveBehind
-                                              : root.displayPosition)
+                               : (root.seekPending ? root.seekTarget
+                                                  : root.displayPosition)
+
+                onValueChanged: {
+                    if (seeking) root.seekTarget = value;
+                }
 
                 onPressedChanged: {
-                    if (pressed && root.hasVideo) {
-                        seeking = true
-                        root.isSeeking = true
-                        shortcuts.setSliderSeeking(true)
-                    } else {
+                    if (pressed) {
+                        if (!root.hasVideo) return;
+                        seekDelayTimer.stop();
+                        seekWatchdog.stop();
+                        seeking = true;
+                        root.seekPending = false;
+                        root.seekTarget = value;
+                        root.isSeeking = true;
+                        shortcuts.setSliderSeeking(true);
+                    } else if (seeking) {
+                        const target = seekSlider.value;
+                        root.seekTarget = target;
+                        // Keep the handle at the requested position while mpv
+                        // performs the seek; displayPosition may still report
+                        // the old position for a moment.
+                        root.seekPending = true;
+                        seekWatchdog.restart();
+
                         if (CastManager.casting) {
-                            CastManager.seekTo(value)
-                        } else if (root.isLive) {
-                            // value: 0 is the start of the cache, liveWindow is the live edge.
-                            const behind = Math.max(0, root.liveWindow - value);
-                            const livePos = Math.max(0, root.displayDuration - Math.max(0, root.liveBaseline));
-                            if (livePos > 0)
-                                mpv.seekExact(Math.max(0, livePos - behind));
+                            CastManager.seekTo(target)
                         } else {
-                            mpv.seekExact(value)
+                            mpv.seekExact(target)
                         }
 
-                        seekDelayTimer.start()
-                        shortcuts.setSliderSeeking(false)
+                        seeking = false;
+                        root.isSeeking = false;
+                        shortcuts.setSliderSeeking(false);
+                        // A click on (or very near) the current position may not
+                        // produce any position change to wait for.
+                        root.checkSeekFinished();
+                        seekDelayTimer.start();
                     }
+                }
+
+                // Fallback for a seek that never reports a matching position
+                // (for example an unseekable stream): stop holding the handle.
+                Timer {
+                    id: seekWatchdog
+                    interval: 5000
+                    onTriggered: root.finishSeek()
                 }
 
                 Timer {
                     id: seekDelayTimer
                     interval: 300
                     onTriggered: {
-                        seekSlider.seeking = false
-                        root.isSeeking = false
-                        Osd.requestTimeOsd(seekSlider.value, root.displayDuration)
+                        Osd.requestTimeOsd(root.seekTarget, root.displayDuration)
                         Qt.callLater(() => { Osd.endTemporaryOsd() })
                     }
                 }
@@ -263,9 +292,19 @@ Rectangle {
                 }
             }
 
+            Label {
+                visible: root.isLive
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: 2
+                text: "● " + qsTr("live_now")
+                color: Kirigami.Theme.negativeTextColor
+                font.pixelSize: 14
+                font.bold: true
+            }
+
             Rectangle {
                 id: seekTooltip
-                visible: seekSlider.seeking
+                visible: seekSlider.seeking && !root.isLive
                 z: 100
                 width: root.showSeekPreview ? 160 : (seekTimeText.implicitWidth + 16)
                 height: root.showSeekPreview ? (90 + 24) : 24
@@ -340,9 +379,7 @@ Rectangle {
                     Text {
                         id: seekTimeText
                         anchors.centerIn: parent
-                        text: root.isLive
-                              ? "-" + formatTime(root.liveWindow - seekSlider.value)
-                              : formatTime(seekSlider.value)
+                        text: formatTime(seekSlider.value)
                         color: "white"
                         font.pixelSize: 12
                         font.bold: true
@@ -352,11 +389,8 @@ Rectangle {
         }
 
         Label {
-            text: root.isLive
-                  ? (seekSlider.seeking
-                        ? "-" + formatTime(root.liveWindow - seekSlider.value)
-                        : (root.liveBehind < 1 ? qsTr("live_now") : "-" + formatTime(root.liveBehind)))
-                  : formatTime(root.displayPosition) + " / " + formatTime(root.displayDuration)
+            visible: !root.isLive
+            text: formatTime(root.displayPosition) + " / " + formatTime(root.displayDuration)
             color: Kirigami.Theme.textColor
             font.pixelSize: 13
             font.weight: Font.Medium
@@ -517,6 +551,34 @@ Rectangle {
                 onClicked: root.playlistToggleRequested()
             }
         }
+    }
+
+    // Live streams are always kept at the live edge. A pause or a network
+    // hiccup can leave playback far behind; jump back instead of offering a
+    // DVR window that no longer exists.
+    function followLiveEdge() {
+        if (!root.isLive || root.displayPaused) return;
+        // A live HLS stream without DVR is not seekable at all; asking mpv to
+        // seek would only spam "Cannot seek in this stream" every 3 seconds.
+        if (mpv.observedProperty("seekable") !== true) return;
+        // Read the observed value directly: it is not a QML property with a
+        // change signal, and a cached binding would go stale.
+        const cacheTime = Number(mpv.observedProperty("demuxer-cache-time"));
+        const edge = cacheTime > 0 ? cacheTime : root.displayDuration;
+        if (!(edge > 0)) return;
+        if (edge - root.displayPosition > 4)
+            mpv.seekFast(edge);
+    }
+
+    function checkSeekFinished() {
+        if (!root.seekPending) return;
+        if (Math.abs(root.displayPosition - root.seekTarget) <= root.seekTolerance)
+            root.finishSeek();
+    }
+
+    function finishSeek() {
+        root.seekPending = false;
+        if (seekWatchdog) seekWatchdog.stop();
     }
 
     function formatTime(seconds) {

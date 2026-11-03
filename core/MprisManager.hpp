@@ -70,7 +70,7 @@ public:
     bool getCanGoPrevious() const { return m_mpv != nullptr; }
     bool getCanPlay() const { return m_mpv != nullptr; }
     bool getCanPause() const { return m_mpv != nullptr; }
-    bool getCanSeek() const { return m_mpv != nullptr; }
+    bool getCanSeek() const;
     bool getCanControl() const { return m_mpv != nullptr; }
 
     bool getFullscreen() const { return false; }

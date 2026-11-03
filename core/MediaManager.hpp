@@ -2,6 +2,8 @@
 #include <QObject>
 #include <QStringList>
 #include <QByteArray>
+#include <functional>
+#include <QVariantMap>
 #include <QElapsedTimer>
 #include <QPointer>
 #include <QDBusInterface>
@@ -9,6 +11,7 @@
 #include "PlaylistModel.hpp"
 
 class ConfigManager;
+class IcyMetadataReader;
 class PlaylistManager;
 class QProcess;
 class QTimer;
@@ -46,6 +49,12 @@ public:
     bool liveStream() const { return m_liveStream; }
     bool isLoading() const { return m_loading; }
 
+    // Runtime requirements for YouTube's JavaScript challenge. The ejs
+    // package can be installed into ~/.local/share/luma without touching the
+    // system Python installation.
+    Q_INVOKABLE QVariantMap ytdlpRuntimeInfo() const;
+    Q_INVOKABLE void installYtdlp();
+    Q_INVOKABLE void installYtdlpEjs();
     Q_INVOKABLE void openFile(const QString &path);
     Q_INVOKABLE void openFolder(const QString &folder);
     Q_INVOKABLE void addToPlaylist(const QString &path);
@@ -92,6 +101,8 @@ signals:
     void isManualSwitchChanged();
     void playlistChanged();
     void liveStreamChanged();
+    void ytdlpInstallFinished(bool success, const QString &message);
+    void ytdlpEjsInstallFinished(bool success, const QString &message);
     void loadingChanged();
     // Text for the OSD while a URL is being opened via yt-dlp.
     void downloadStatus(const QString &message);
@@ -113,14 +124,20 @@ private:
     void _notifyForFile(const QString &path);
     // Live stream title (ICY for radio).
     void onMediaTitleChanged();
+    void onIcyTitleChanged(const QString &title);
+    void applyIcyTitle();
     // yt-dlp returns direct URLs; mpv plays them through the local SOCKS bridge.
     void openUrlAsync(const QString &url, bool keepPlaylist = false);
     void finishUrlResolution(const QString &url, bool keepPlaylist, bool ok);
     void playStream(const QString &originalUrl, const QString &videoUrl,
-                    const QString &audioUrl, const QString &title, bool keepPlaylist);
+                    const QString &audioUrl, const QString &title, bool keepPlaylist,
+                    bool isLive);
     void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
-    // The external audio track (video-only + audio) is attached after fileLoaded.
     void onMpvFileLoaded();
+    QString ytdlpLocalDir() const;
+    void runPipInstall(const QString &package, const QString &dir,
+                       std::function<void(bool, const QString &)> done);
+    QString ytdlpEjsLocalDir() const;
 
     MpvItem *m_mpv;
     PlaylistManager *m_playlists = nullptr;
@@ -140,6 +157,9 @@ private:
     QDBusInterface *m_notifyInterface = nullptr;
     QProcess *m_ytdlpProcess = nullptr;
     QTimer *m_ytdlpTimeout = nullptr;
+    IcyMetadataReader *m_icyReader = nullptr;
+    QTimer *m_icyTitleTimer = nullptr;
+    QString m_pendingIcyTitle;
     QByteArray m_ytdlpStdoutBuffer;
     QString m_ytdlpStderr;
     QString m_defaultFileManagerName;
@@ -148,7 +168,7 @@ private:
     QString m_resolvedTitle;
     QString m_resolvedVideoUrl;
     QString m_resolvedAudioUrl;
-    QString m_pendingAudioUrl;
+    bool m_resolvedIsLive = false;
     bool m_ytdlpTimedOut = false;
     // The source came from yt-dlp: its media-title is a fragment of a googlevideo URL,
     // so no notification is needed for it (the original URL is sent to playStream).

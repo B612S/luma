@@ -75,6 +75,39 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- The 5-minute stream cache (300 s, 256 MiB) is now enabled only for network video on
+  demand. Local files use mpv's default (no demuxer cache), which removes up to 256 MiB
+  of unnecessary memory during local playback. Live TV/radio uses a 30 s forward-only
+  buffer and no rewind cache: the seek slider is hidden, seek shortcuts and MPRIS seeking
+  are ignored, and playback is pulled back to the live edge when it falls behind.
+- The “yt-dlp” section in Playback settings is now called “Internet playback”, since it
+  covers all link-based playback rather than one helper program.
+- yt-dlp now runs with the Deno JavaScript runtime when it is installed and the user has
+  not configured another runtime. This lets it solve YouTube's JavaScript challenge
+  without reading cookies from the user's browser. Videos that require a YouTube account
+  or a PO token can still ask for cookies, which is outside the player's control.
+- *Settings → Playback → Internet playback* shows whether `yt-dlp`, Deno and
+  `yt-dlp-ejs` are available; a missing `yt-dlp` or `yt-dlp-ejs` gets an install button,
+  while found components only show their status. Both packages are installed on demand
+  into `~/.local/share/luma` without touching the system Python, and Luma prefers the
+  local copies when launching yt-dlp.
+- `yt-dlp` is no longer listed as a PKGBUILD optional dependency or described as an
+  AppImage requirement; both `yt-dlp` and `yt-dlp-ejs` are installed from the Internet
+  playback settings when the user asks for it.
+- Twitch HLS playback starts three segments before the live edge instead of the oldest
+  segment of the DVR window, so a stale preroll block at the beginning is not replayed.
+  Twitch's server-side ad at the live edge itself is outside the player's control.
+- The playlist search field is 8 px taller and uses a larger font and icons, so its text and controls have more breathing room.
+- The “Crop black bars” menu item is now called “Remove black bars” / «Убрать чёрные
+  поля».
+- Luma now enforces the mpv options its embedding depends on: mpv stays idle between
+  playlist entries, demuxing runs on its own thread, network playback pauses on an empty
+  cache, the disk cache is off, and mpv's own window, OSC, OSD and default keyboard
+  bindings are disabled. Setting these in `mpv.conf` can no longer break Luma's UI,
+  shortcuts or playback flow.
+- The statistics panel shows only the basic extra tags (track, disc and radio stream
+  information) instead of every tag found in the file. Arbitrary or corrupt metadata
+  keys are no longer displayed.
 - Luma now requires Qt 6.9 or newer (enforced by CMake and the Arch package dependencies).
   The playlist filter uses the non-deprecated `beginFilterChange()`/`endFilterChange()`
   API instead of `invalidateFilter()`.
@@ -121,6 +154,54 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Radio streams show the current song again. mpv exposes only the static station
+  name in its metadata for these Icecast/Shoutcast streams, so Luma now reads the
+  per-track ICY `StreamTitle` over a separate metadata connection and updates the
+  playlist entry and notification when the song changes. The reader starts only
+  after mpv has opened the stream, and URL/host titles are ignored, so opening
+  radio does not send several duplicate notifications. Radio uses a 4 s forward
+  cache and the title update is delayed by the measured mpv cache distance, so the
+  notification appears when the song actually starts rather than ~15 s earlier.
+- Windowed PiP no longer has a transparent shadow margin or a visible border. The video
+  is overscanned by one pixel with a clamped FBO texture, and a single semi-transparent
+  pixel keeps the surface out of KWin's direct-scanout path. PiP snaps without a visible
+  gap; the remaining artifacts are a KWin/NVIDIA direct-scanout issue that also affects
+  Firefox PiP.
+- Leaving PiP no longer races KWin's keep-above cleanup: the helper script stays
+  loaded until the application quits, so the normal window cannot remain keep-above and
+  refuse to snap. Restoring the saved x/y position was removed because Wayland ignores
+  client-side top-level positioning and the request could fight KWin's placement.
+- Live streams show a single LIVE indicator again: the duplicate time label was removed
+  and the remaining red `● LIVE` label is aligned with the transport icon.
+- YouTube/Twitch live streams now get their audio track. yt-dlp reports the audio-only
+  HLS format of a live stream with `acodec` empty/`none`, so Luma used to classify it as
+  neither video nor audio and never passed it to mpv. Stream type is now determined from
+  `audio_ext`/`video_ext`/`resolution` as well, and the audio is attached at load time.
+- Twitch and other live streams can no longer be dragged back into their DVR window: the
+  seek slider is hidden for live content, keyboard seek/frame-step actions and MPRIS
+  `Seek`/`SetPosition` are ignored, and `CanSeek` is false.
+- Intermittent “SOCKS proxy connection failed” errors during live playback are retried
+  once before returning a 502 to mpv. HLS opens many segment connections, and a refused
+  connection used to surface as a dropped segment and visible stutter.
+- YouTube and other yt-dlp links no longer lose the first seconds of audio. yt-dlp
+  returns video and audio as separate URLs; the audio is now passed to mpv's `loadfile`
+  as a file-local `audio-file=...` option, so both tracks open and start together. It used
+  to be attached with `audio-add` only after `fileLoaded`, when playback had already begun.
+- Seek-preview frames from a previous file are released when switching files. The
+  thumbnail provider (up to 50 frames) and the frame decoder (30 frames) kept decoded
+  images until new previews replaced them, and the QML preview kept the last texture; all
+  of them are cleared on a source change now.
+- Changing the volume with the mouse wheel (or a touchpad) now moves the volume slider on
+  the same event: the wheel handler used to accumulate the steps and apply them after an
+  80 ms debounce, so the handle stayed still and then jumped to the new position.
+- The seek bar stays at the requested position after releasing the handle until mpv
+  reports a position close to it (with a 5 s fallback). Releasing it after a fixed 300 ms
+  let a slow or exact seek show the old position first, so the handle jumped back and
+  then forward again.
+- Saved playlists are no longer rescanned for audio tags at startup. Reading the tags of
+  every playlist entry (hundreds of files) competed with the first paint and with mpv
+  opening the requested file; a playlist's tags are refreshed when it is opened, and new
+  files are still scanned as soon as they are added.
 - Seek-bar previews now decode forward from the previous keyframe to the requested
   timestamp instead of returning the keyframe itself. Previously the image changed only
   when a new keyframe was reached (often every ~10 seconds); now it follows the video

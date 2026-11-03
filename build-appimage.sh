@@ -247,9 +247,6 @@ exec "$HERE/usr/bin/luma" "$@"
 RUN
 chmod +x "$APPDIR/AppRun"
 
-# yt-dlp is optional. Do not copy the distro wrapper blindly: on most systems it
-# is a Python script that imports modules from the system Python installation.
-
 OUTPUT="$DIST_DIR/Luma-$VERSION-$ARCH.AppImage"
 rm -f "$OUTPUT"
 echo "Packing $OUTPUT..."

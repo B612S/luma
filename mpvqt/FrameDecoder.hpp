@@ -21,6 +21,7 @@ public:
 
     QImage decodeFrame(const QString &filePath, double timeInSeconds);
     void cancelCurrentDecode();
+    void clearCache();
 
 private:
     bool openFile(const QString &filePath);

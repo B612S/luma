@@ -20,7 +20,7 @@
 <message><source>menu_playback_mode</source><translation>Playback mode</translation></message>
 <message><source>osd_playback_mode</source><translation>Mode: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Aspect ratio</translation></message>
-<message><source>menu_crop</source><translation>Crop black bars</translation></message>
+<message><source>menu_crop</source><translation>Remove black bars</translation></message>
 <message><source>playback_sequential</source><translation>Play in order</translation></message>
 <message><source>playback_repeat</source><translation>Repeat current file</translation></message>
 <message><source>playback_shuffle</source><translation>Shuffle</translation></message>
@@ -113,7 +113,7 @@
 <message><source>settings_hwdec_auto_copy</source><translation>Automatic (copy-back)</translation></message>
 <message><source>settings_hwdec_disabled</source><translation>Disabled (software decoding)</translation></message>
 <message><source>settings_hwdec_hint</source><translation>“Copy” modes return frames to system memory: they work with video filters but are slower.</translation></message>
-<message><source>settings_ytdlp</source><translation>yt-dlp</translation></message>
+<message><source>settings_ytdlp</source><translation>Internet playback</translation></message>
 <message><source>settings_ytdlp_quality</source><translation>Video quality</translation></message>
 <message><source>settings_ytdlp_quality_best</source><translation>Best available</translation></message>
 <message><source>settings_ytdlp_quality_audio</source><translation>Audio only</translation></message>
@@ -123,6 +123,16 @@
 <message><source>settings_ytdlp_proxy_none</source><translation>Not used</translation></message>
 <message><source>settings_ytdlp_proxy_hint</source><translation>Format: host:port, e.g. 127.0.0.1:1080</translation></message>
 <message><source>settings_ytdlp_proxy_invalid</source><translation>Enter the address as host:port</translation></message>
+<message><source>settings_ytdlp_runtime_title</source><translation>YouTube runtime</translation></message>
+<message><source>settings_ytdlp_runtime_ytdlp</source><translation>yt-dlp: %1</translation></message>
+<message><source>settings_ytdlp_runtime_deno</source><translation>Deno: %1</translation></message>
+<message><source>settings_ytdlp_runtime_ejs</source><translation>yt-dlp-ejs: %1</translation></message>
+<message><source>settings_ytdlp_runtime_found</source><translation>found</translation></message>
+<message><source>settings_ytdlp_runtime_missing</source><translation>not found</translation></message>
+<message><source>settings_ytdlp_runtime_hint</source><translation>Missing yt-dlp or yt-dlp-ejs can be installed into ~/.local/share/luma with the buttons above; Deno must be installed by the system package manager. Together they solve YouTube’s JavaScript challenge without reading browser cookies.</translation></message>
+<message><source>settings_ytdlp_runtime_installing</source><translation>Installing…</translation></message>
+<message><source>settings_ytdlp_runtime_install_ytdlp</source><translation>Install yt-dlp</translation></message>
+<message><source>settings_ytdlp_runtime_install_ejs</source><translation>Install yt-dlp-ejs</translation></message>
 <message><source>about_title</source><translation>About</translation></message>
 <message><source>about_version</source><translation>Version %1</translation></message>
 <message><source>about_description</source><translation>A fast, minimalist media player.</translation></message>
@@ -262,6 +272,9 @@
 <context>
 <name>MediaManager</name>
 <message><source>dialog_open_video</source><translation>Open media file</translation></message>
+<message><source>ytdlp_python_missing</source><translation>python3 not found; cannot install yt-dlp-ejs</translation></message>
+<message><source>ytdlp_install_dir_failed</source><translation>Could not create %1</translation></message>
+<message><source>ytdlp_install_start_failed</source><translation>Could not start pip</translation></message>
 <message><source>dialog_video_filter</source><translation>Video files (*.mp4 *.mkv *.avi *.webm);;All files (*)</translation></message>
 <message><source>dialog_open_folder</source><translation>Choose folder</translation></message>
 <message><source>dialog_open_url</source><translation>Open link</translation></message>

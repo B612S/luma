@@ -16,6 +16,13 @@ public:
         m_images.insert(id, image);
     }
 
+    // Old frames are useless after switching files and would otherwise stay
+    // in the image cache until 50 new thumbnails replace them.
+    void clear() {
+        QMutexLocker locker(&m_mutex);
+        m_images.clear();
+    }
+
     QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override {
         Q_UNUSED(requestedSize)
         // requestImage() may be called from the image-loading thread while the

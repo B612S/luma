@@ -617,11 +617,16 @@ Rectangle {
             list.push({ key: key, label: tagDisplayLabel(key),
                         value: cleanTagValue(key, merged[key]) });
 
-        // The first five fields are shown directly under the title. Everything
-        // else (track, disc, comment, encoder, ...) follows the main stats.
-        const primaryKeys = ["title", "icy-title", "artist", "album",
-                             "genre", "icy-genre", "date", "year"];
-        const secondary = list.filter(tag => primaryKeys.indexOf(tag.key) === -1);
+        // The first five fields are shown directly under the title. Only the
+        // basic secondary tags are shown as well: track/disc for local audio
+        // and the stream identity for radio. A file can carry an arbitrary
+        // (and sometimes corrupt) set of tags, so dumping all of them only
+        // clutters the panel.
+        const secondaryKeys = ["track", "tracknumber", "disc", "discnumber",
+                               "icy-name", "icy-url", "icy-description",
+                               "icy-br", "icy-sr", "icy-samplerate",
+                               "icy-channels", "icy-pub"];
+        const secondary = list.filter(tag => secondaryKeys.indexOf(tag.key) !== -1);
 
         let mainTitle = "";
         if (isLive && merged["icy-title"] !== undefined)

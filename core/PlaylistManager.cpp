@@ -72,14 +72,10 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
         }
     });
 
-    // Refresh tags in the background on every start, without blocking the UI.
-    for (PlaylistModel *model : m_models) {
-        if (!model) continue;
-        for (const PlaylistModel::Entry &entry : model->entries()) {
-            if (!entry.path.contains(QStringLiteral("://")) && isAudioPath(entry.path))
-                m_tagScanner->enqueue(entry.path);
-        }
-    }
+    // Do not rescan every saved playlist at startup: reading tags for hundreds
+    // of files competed with the first paint and with mpv opening the requested
+    // file. The saved tags are still shown; a playlist is refreshed when it is
+    // opened (see setActiveId), and newly added files are scanned immediately.
 }
 
 PlaylistManager::~PlaylistManager() {
@@ -263,6 +259,19 @@ void PlaylistManager::setActiveId(const QString &id) {
     m_activeId = id;
     emit activeIdChanged();
     emit activeModelChanged();
+    scanPlaylistTags(id);
+}
+
+void PlaylistManager::scanPlaylistTags(const QString &id) {
+    if (!m_tagScanner || m_scannedPlaylists.contains(id)) return;
+    PlaylistModel *model = m_models.value(id, nullptr);
+    if (!model) return;
+    m_scannedPlaylists.insert(id);
+
+    for (const PlaylistModel::Entry &entry : model->entries()) {
+        if (!entry.path.contains(QStringLiteral("://")) && isAudioPath(entry.path))
+            m_tagScanner->enqueue(entry.path);
+    }
 }
 
 PlaylistModel* PlaylistManager::activeModel() const {
@@ -315,6 +324,7 @@ void PlaylistManager::deletePlaylist(const QString &id) {
     }
     m_names.remove(id);
     m_modes.remove(id);
+    m_scannedPlaylists.remove(id);
     m_order.removeAll(id);
 
     saveOrder();

@@ -8,6 +8,7 @@
 #include <QQuickImageProvider>
 #include <QQmlEngine>
 #include <QTimer>
+#include <QUrl>
 #include "mpvcontroller.h"
 #include "core/ThumbnailProvider.hpp"
 #include "mpvqt/FrameDecoder.hpp"
@@ -16,6 +17,10 @@ ThumbnailWorker::ThumbnailWorker(QObject *parent) : QObject(parent) {}
 
 ThumbnailWorker::~ThumbnailWorker() {
     delete m_decoder;
+}
+
+void ThumbnailWorker::clearCache() {
+    if (m_decoder) m_decoder->clearCache();
 }
 
 void ThumbnailWorker::decode(const QString &filePath, double time, const QString &requestId) {
@@ -66,6 +71,9 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     setProperty("video-unscaled", "no");
 
     observeProperty("time-pos", MPV_FORMAT_DOUBLE);
+    // End of the demuxer cache: the live edge of a live stream.
+    observeProperty("demuxer-cache-time", MPV_FORMAT_DOUBLE);
+    observeProperty("seekable", MPV_FORMAT_FLAG);
     observeProperty("duration", MPV_FORMAT_DOUBLE);
     observeProperty("pause", MPV_FORMAT_FLAG);
     observeProperty("volume", MPV_FORMAT_DOUBLE);
@@ -181,14 +189,78 @@ void MpvItem::setMuted(bool m) {
     setProperty("mute", m);
 }
 
-void MpvItem::setSource(const QString &src) {
+void MpvItem::setExternalAudio(const QString &url) {
+    m_externalAudio = url;
+}
+
+void MpvItem::setSource(const QString &src, bool live) {
     m_source = src;
+    // Frames decoded for the previous file are never requested again, and the
+    // QML preview still holds the last one. Drop both so switching files does
+    // not keep old thumbnails (and their textures) alive.
+    if (QQmlEngine *engine = qmlEngine(this)) {
+        if (auto *provider = dynamic_cast<ThumbnailProvider *>(
+                engine->imageProvider(QStringLiteral("thumbnail")))) {
+            provider->clear();
+        }
+    }
+    if (m_thumbWorker)
+        QMetaObject::invokeMethod(m_thumbWorker.data(), "clearCache", Qt::QueuedConnection);
+
+    // Keep the 5-minute rewind cache for network streams only. For a local
+    // file "auto" means no demuxer cache (mpv's default): seeking is direct,
+    // and forcing the stream cache made RSS grow by hundreds of megabytes.
+    const QUrl url(src);
+    const bool network = !url.scheme().isEmpty() && !url.isLocalFile();
+    if (live) {
+        // Live TV/radio: no rewind/DVR, but a forward buffer is still needed
+        // to absorb HLS segment and network jitter. HLS needs a larger window;
+        // Icecast/Shoutcast radio does not, and a long radio buffer made the
+        // ICY title run ~15 s ahead of the audio.
+        const bool hls = url.path().endsWith(QStringLiteral(".m3u8"), Qt::CaseInsensitive)
+                         || url.path().endsWith(QStringLiteral(".mpd"), Qt::CaseInsensitive);
+        setProperty("cache", QStringLiteral("yes"));
+        setProperty("cache-secs", hls ? 30.0 : 4.0);
+        setProperty("demuxer-max-bytes", hls ? QStringLiteral("64MiB") : QStringLiteral("16MiB"));
+        setProperty("demuxer-max-back-bytes", QStringLiteral("0"));
+
+        // Twitch puts a PREROLL stitched ad at the beginning of the live
+        // playlist; starting at segment 0 shows "Commercial break in progress"
+        // for ~30 s. Start a few segments before the live edge instead. This
+        // only affects the HLS demuxer and is ignored by other streams.
+        if (url.host().contains(QStringLiteral("twitch"), Qt::CaseInsensitive)
+                || url.host().contains(QStringLiteral("ttvnw.net"), Qt::CaseInsensitive)) {
+            setProperty("demuxer-lavf-o", QStringLiteral("live_start_index=-3"));
+        }
+    } else {
+        setProperty("cache", network ? QStringLiteral("yes") : QStringLiteral("auto"));
+        if (network) {
+            setProperty("cache-secs", 300.0);
+            setProperty("demuxer-max-bytes", QStringLiteral("256MiB"));
+        }
+    }
+
+    // yt-dlp returns video and audio as separate URLs. Pass the audio as a
+    // file-local loadfile option: both tracks are then opened together and
+    // playback starts with sound. Adding it in fileLoaded() instead made the
+    // first seconds of audio play before the external track was attached.
+    QStringList loadCommand{QStringLiteral("loadfile"), src};
+    if (!m_externalAudio.isEmpty()) {
+        // loadfile() option values are comma-separated, so quote the URL:
+        // googlevideo URLs contain commas (e.g. in sparams) and would
+        // otherwise be cut into several unknown options.
+        QString audio = m_externalAudio;
+        audio.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+        audio.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+        loadCommand << QStringLiteral("replace") << QStringLiteral("-1")
+                    << QStringLiteral("audio-file=\"%1\"").arg(audio);
+    }
+    m_externalAudio.clear();
+
     emit sourceChanged();
     // Start loading after QML closes the menu and repaints the frame:
     // mpv briefly stops video output when switching files.
-    QTimer::singleShot(0, this, [this, src]() {
-        command(QStringList() << "loadfile" << src);
-    });
+    QTimer::singleShot(0, this, [this, loadCommand]() { command(loadCommand); });
 }
 
 void MpvItem::setCropEnabled(bool enabled) {
@@ -323,6 +395,15 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
     else if (property == "media-title") {
         // For radio mpv updates this title when the track changes (ICY).
         const QString title = value.toString();
+        // Do not replace a real ICY title with the stream URL that mpv falls
+        // back to when the metadata map arrives first.
+        if (title.startsWith(QStringLiteral("http://"))
+                || title.startsWith(QStringLiteral("https://"))) {
+            if (!m_mediaTitle.isEmpty()
+                    && !m_mediaTitle.startsWith(QStringLiteral("http://"))
+                    && !m_mediaTitle.startsWith(QStringLiteral("https://")))
+                return;
+        }
         if (m_mediaTitle != title) {
             m_mediaTitle = title;
             emit mediaTitleChanged();

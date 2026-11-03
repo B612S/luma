@@ -1,4 +1,5 @@
 #include "MediaManager.hpp"
+#include "IcyMetadataReader.hpp"
 #include "PlaylistManager.hpp"
 #include "ConfigManager.hpp"
 #include "TagManager.hpp"
@@ -184,6 +185,24 @@ bool isDirectStreamUrl(const QUrl &url) {
         if (path.endsWith(ext)) return true;
     }
 
+    return path.isEmpty() || path == QStringLiteral("/");
+}
+
+// Only live/radio URLs should lose seeking. A direct .mp4/.mkv/.webm URL is
+// still a finite video, even though it bypasses yt-dlp.
+bool isLiveStreamUrl(const QUrl &url) {
+    const QString scheme = url.scheme();
+    if (scheme != QStringLiteral("http") && scheme != QStringLiteral("https")) return false;
+
+    if (url.port(-1) != -1) return true; // Icecast/Shoutcast usually uses a port
+
+    const QString path = url.path().toLower();
+    static const QStringList liveExts = {
+        ".m3u8", ".mp3", ".aac", ".ogg", ".opus", ".flac", ".m4a"
+    };
+    for (const QString &ext : liveExts) {
+        if (path.endsWith(ext)) return true;
+    }
     return path.isEmpty() || path == QStringLiteral("/");
 }
 
@@ -592,6 +611,12 @@ MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
     m_ytdlpTimeout = new QTimer(this);
     m_ytdlpTimeout->setSingleShot(true);
     m_ytdlpTimeout->setInterval(30000);
+    m_icyReader = new IcyMetadataReader(this);
+    connect(m_icyReader, &IcyMetadataReader::titleChanged,
+            this, &MediaManager::onIcyTitleChanged);
+    m_icyTitleTimer = new QTimer(this);
+    m_icyTitleTimer->setSingleShot(true);
+    connect(m_icyTitleTimer, &QTimer::timeout, this, &MediaManager::applyIcyTitle);
     connect(m_ytdlpTimeout, &QTimer::timeout, this, [this]() {
         if (!m_ytdlpProcess || m_ytdlpProcess->state() == QProcess::NotRunning) return;
         m_ytdlpTimedOut = true;
@@ -620,6 +645,127 @@ void MediaManager::setMpv(MpvItem *mpv) {
     }
 }
 
+QString MediaManager::ytdlpLocalDir() const
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (base.isEmpty())
+        base = QDir::homePath() + QStringLiteral("/.local/share");
+    return base + QStringLiteral("/luma/yt-dlp");
+}
+
+QString MediaManager::ytdlpEjsLocalDir() const
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (base.isEmpty())
+        base = QDir::homePath() + QStringLiteral("/.local/share");
+    return base + QStringLiteral("/luma/yt-dlp-ejs");
+}
+
+QVariantMap MediaManager::ytdlpRuntimeInfo() const
+{
+    QVariantMap info;
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    const QString systemYtdlp = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
+    const QString ytdlpDir = ytdlpLocalDir();
+    const QString ejsDir = ytdlpEjsLocalDir();
+    const bool localYtdlp = QFileInfo(ytdlpDir + QStringLiteral("/yt_dlp/__init__.py")).exists();
+    const bool localEjs = QFileInfo(ejsDir + QStringLiteral("/yt_dlp_ejs/__init__.py")).exists();
+
+    QString ytdlpVersion;
+    if (localYtdlp && !python.isEmpty()) {
+        QProcess versionProbe;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        QString pyPath = ytdlpDir + QLatin1Char(':') + ejsDir;
+        const QString oldPyPath = env.value(QStringLiteral("PYTHONPATH"));
+        if (!oldPyPath.isEmpty()) pyPath += QLatin1Char(':') + oldPyPath;
+        env.insert(QStringLiteral("PYTHONPATH"), pyPath);
+        versionProbe.setProcessEnvironment(env);
+        versionProbe.start(python, {QStringLiteral("-m"), QStringLiteral("yt_dlp"), QStringLiteral("--version")});
+        if (versionProbe.waitForFinished(1000)
+                && versionProbe.exitStatus() == QProcess::NormalExit
+                && versionProbe.exitCode() == 0)
+            ytdlpVersion = QString::fromUtf8(versionProbe.readAllStandardOutput()).trimmed();
+    } else if (!systemYtdlp.isEmpty()) {
+        QProcess versionProbe;
+        versionProbe.start(systemYtdlp, {QStringLiteral("--version")});
+        if (versionProbe.waitForFinished(1000)
+                && versionProbe.exitStatus() == QProcess::NormalExit
+                && versionProbe.exitCode() == 0)
+            ytdlpVersion = QString::fromUtf8(versionProbe.readAllStandardOutput()).trimmed();
+    }
+
+    const QString deno = QStandardPaths::findExecutable(QStringLiteral("deno"));
+    bool systemEjs = false;
+    if (!python.isEmpty()) {
+        QProcess probe;
+        probe.start(python, {QStringLiteral("-c"), QStringLiteral("import yt_dlp_ejs")});
+        if (probe.waitForFinished(1000))
+            systemEjs = probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+    }
+
+    info.insert(QStringLiteral("ytdlp"), localYtdlp || !systemYtdlp.isEmpty());
+    info.insert(QStringLiteral("ytdlpLocal"), localYtdlp);
+    info.insert(QStringLiteral("ytdlpSystem"), !systemYtdlp.isEmpty());
+    info.insert(QStringLiteral("ytdlpPath"), localYtdlp ? ytdlpDir : systemYtdlp);
+    info.insert(QStringLiteral("ytdlpVersion"), ytdlpVersion);
+    info.insert(QStringLiteral("deno"), !deno.isEmpty());
+    info.insert(QStringLiteral("denoPath"), deno);
+    info.insert(QStringLiteral("ejsLocal"), localEjs);
+    info.insert(QStringLiteral("ejsSystem"), systemEjs);
+    info.insert(QStringLiteral("ejsAvailable"), localEjs || systemEjs);
+    info.insert(QStringLiteral("ejsLocalDir"), ejsDir);
+    return info;
+}
+
+void MediaManager::runPipInstall(const QString &package, const QString &dir,
+                                 std::function<void(bool, const QString &)> done)
+{
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    if (python.isEmpty()) {
+        done(false, tr("ytdlp_python_missing"));
+        return;
+    }
+    if (!QDir().mkpath(dir)) {
+        done(false, tr("ytdlp_install_dir_failed").arg(dir));
+        return;
+    }
+
+    auto *proc = new QProcess(this);
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [proc, done](int code, QProcess::ExitStatus status) {
+                const QString out = QString::fromUtf8(proc->readAllStandardOutput()
+                                                      + proc->readAllStandardError()).trimmed();
+                proc->deleteLater();
+                done(status == QProcess::NormalExit && code == 0,
+                     out.isEmpty() ? QString() : out.right(1000));
+            });
+    connect(proc, &QProcess::errorOccurred, this, [proc, done](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart) return;
+        proc->deleteLater();
+        done(false, MediaManager::tr("ytdlp_install_start_failed"));
+    });
+    proc->setProgram(python);
+    proc->setArguments({QStringLiteral("-m"), QStringLiteral("pip"), QStringLiteral("install"),
+                        QStringLiteral("--target"), dir, QStringLiteral("--upgrade"), package});
+    proc->start();
+}
+
+void MediaManager::installYtdlp()
+{
+    runPipInstall(QStringLiteral("yt-dlp"), ytdlpLocalDir(),
+                  [this](bool ok, const QString &message) {
+                      emit ytdlpInstallFinished(ok, message);
+                  });
+}
+
+void MediaManager::installYtdlpEjs()
+{
+    runPipInstall(QStringLiteral("yt-dlp-ejs"), ytdlpEjsLocalDir(),
+                  [this](bool ok, const QString &message) {
+                      emit ytdlpEjsInstallFinished(ok, message);
+                  });
+}
+
 void MediaManager::setLiveStream(bool live) {
     if (m_liveStream == live) return;
     m_liveStream = live;
@@ -646,9 +792,14 @@ void MediaManager::onMediaTitleChanged() {
 
     const QString title = m_mpv->mediaTitle().trimmed();
     if (title.isEmpty() || title == m_lastStreamTitle) return;
-    // For direct streams mpv often reports the URL itself as the title —
-    // don't show it in the playlist or notifications.
-    if (title.startsWith(QStringLiteral("http://")) || title.startsWith(QStringLiteral("https://")))
+    // For direct streams mpv often reports the URL (or just host:port) as the
+    // title — don't show it in the playlist or notifications.
+    const QUrl sourceUrl(source);
+    if (title.startsWith(QStringLiteral("http://")) || title.startsWith(QStringLiteral("https://"))
+            || title == sourceUrl.toString()
+            || title == sourceUrl.authority()
+            || title == sourceUrl.host()
+            || title == sourceUrl.path())
         return;
     m_lastStreamTitle = title;
 
@@ -660,6 +811,45 @@ void MediaManager::onMediaTitleChanged() {
 
     if (m_config && m_config->notifications()) {
         const QUrl url(source);
+        _sendNotification(title, url.host(), QString());
+    }
+}
+
+void MediaManager::onIcyTitleChanged(const QString &title)
+{
+    if (title.isEmpty() || title == m_lastStreamTitle || title == m_pendingIcyTitle)
+        return;
+
+    // The reader sees the live ICY title, while mpv plays behind its forward
+    // cache. Delay the playlist/notification update by that buffer so the title
+    // changes when the song actually starts.
+    double delay = 0.0;
+    if (m_mpv) {
+        const double cacheEnd = m_mpv->observedProperty("demuxer-cache-time").toDouble();
+        const double position = m_mpv->position();
+        if (cacheEnd > position && cacheEnd - position < 120.0)
+            delay = cacheEnd - position;
+    }
+    m_pendingIcyTitle = title;
+    if (!m_icyTitleTimer) return;
+    m_icyTitleTimer->start(qRound(delay * 1000.0));
+}
+
+void MediaManager::applyIcyTitle()
+{
+    const QString title = m_pendingIcyTitle;
+    m_pendingIcyTitle.clear();
+    if (title.isEmpty() || title == m_lastStreamTitle) return;
+    m_lastStreamTitle = title;
+
+    if (m_playlists) {
+        PlaylistModel *model = m_playlists->activeModel();
+        if (model && m_mpv)
+            model->setStreamTitle(m_mpv->source(), title);
+    }
+
+    if (m_config && m_config->notifications() && m_mpv) {
+        const QUrl url(m_mpv->source());
         _sendNotification(title, url.host(), QString());
     }
 }
@@ -959,7 +1149,7 @@ bool MediaManager::updateStreamUrl(const QString &oldUrl, const QString &newUrl)
     if (url.startsWith(QStringLiteral("http://")) || url.startsWith(QStringLiteral("https://")))
         m_playlists->fetchUrlTitle(m_playlists->activeId(), url);
 
-    if (wasCurrent && m_mpv) m_mpv->setSource(url);
+    if (wasCurrent && m_mpv) m_mpv->setSource(url, m_liveStream);
     return true;
 }
 
@@ -1138,13 +1328,25 @@ void MediaManager::openFolder(const QString &folder) {
 
 void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     if (!m_mpv || !m_playlists) return;
+    if (m_icyReader) m_icyReader->stop();
+    if (m_icyTitleTimer) m_icyTitleTimer->stop();
+    m_pendingIcyTitle.clear();
     setLoading(true);
 
-    const QString exe = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    const bool localYtdlp = QFileInfo(ytdlpLocalDir()
+                                      + QStringLiteral("/yt_dlp/__init__.py")).exists();
+    QString exe;
+    QStringList runtimePrefix;
+    if (localYtdlp && !python.isEmpty()) {
+        exe = python;
+        runtimePrefix << QStringLiteral("-m") << QStringLiteral("yt_dlp");
+    } else {
+        exe = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
+    }
     if (exe.isEmpty()) {
         // yt-dlp is not installed — hand the URL to mpv (it has its own ytdl).
-        m_pendingAudioUrl.clear();
-        playStream(url, url, QString(), QString(), keepPlaylist);
+        playStream(url, url, QString(), QString(), keepPlaylist, false);
         return;
     }
 
@@ -1159,10 +1361,10 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     }
     if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
 
-    m_pendingAudioUrl.clear();
     m_resolvedTitle.clear();
     m_resolvedVideoUrl.clear();
     m_resolvedAudioUrl.clear();
+    m_resolvedIsLive = false;
     m_ytdlpStdoutBuffer.clear();
     m_ytdlpStderr.clear();
     m_ytdlpTimedOut = false;
@@ -1188,6 +1390,22 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
                                           QStringLiteral("yt-dlp %1").arg(url));
 
     QStringList args = m_config ? m_config->ytdlpConfigArgs() : QStringList();
+
+    // YouTube's bot check needs the JavaScript challenge solved. yt-dlp uses
+    // Deno for that; enable it explicitly when available and the user has not
+    // chosen another runtime. No browser cookies are involved.
+    bool hasJsRuntime = false;
+    for (const QString &arg : std::as_const(args)) {
+        if (arg == QLatin1String("--no-js-runtimes")
+                || arg == QLatin1String("--js-runtimes")
+                || arg.startsWith(QLatin1String("--js-runtimes="))) {
+            hasJsRuntime = true;
+            break;
+        }
+    }
+    if (!hasJsRuntime && !QStandardPaths::findExecutable(QStringLiteral("deno")).isEmpty())
+        args << QStringLiteral("--js-runtimes") << QStringLiteral("deno");
+
     if (ytdlpLogMode == QLatin1String("debug"))
         args << QStringLiteral("--verbose");
     args << QStringLiteral("--no-playlist")
@@ -1197,6 +1415,19 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
 
     proc->setProgram(exe);
     proc->setArguments(args);
+
+    // Prefer user-local yt-dlp and yt-dlp-ejs installations over system paths.
+    QStringList pythonPath;
+    if (localYtdlp) pythonPath << ytdlpLocalDir();
+    if (QFileInfo(ytdlpEjsLocalDir() + QStringLiteral("/yt_dlp_ejs")).isDir())
+        pythonPath << ytdlpEjsLocalDir();
+    if (!pythonPath.isEmpty()) {
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        const QString oldPath = env.value(QStringLiteral("PYTHONPATH"));
+        if (!oldPath.isEmpty()) pythonPath << oldPath;
+        env.insert(QStringLiteral("PYTHONPATH"), pythonPath.join(QLatin1Char(':')));
+        proc->setProcessEnvironment(env);
+    }
 
     connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc]() {
         if (m_ytdlpProcess != proc) return;
@@ -1271,6 +1502,10 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
         } else {
             const QJsonObject info = document.object();
             m_resolvedTitle = info.value(QStringLiteral("title")).toString();
+            m_resolvedIsLive = info.value(QStringLiteral("is_live")).toBool(false);
+            if (!m_resolvedIsLive)
+                m_resolvedIsLive = info.value(QStringLiteral("live_status")).toString()
+                                        == QLatin1String("is_live");
 
             QString muxedUrl;
             const QJsonArray requested = info.value(QStringLiteral("requested_formats")).toArray();
@@ -1278,10 +1513,20 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
                 const QJsonObject format = value.toObject();
                 const QString formatUrl = format.value(QStringLiteral("url")).toString();
                 if (formatUrl.isEmpty()) continue;
+                // Live HLS formats often report acodec as null/"none" even
+                // for audio-only formats. Use yt-dlp's stream type fields as
+                // well, otherwise YouTube live is played without its audio URL.
                 const QString vcodec = format.value(QStringLiteral("vcodec")).toString();
                 const QString acodec = format.value(QStringLiteral("acodec")).toString();
-                const bool hasVideo = !vcodec.isEmpty() && vcodec != QLatin1String("none");
-                const bool hasAudio = !acodec.isEmpty() && acodec != QLatin1String("none");
+                const QString videoExt = format.value(QStringLiteral("video_ext")).toString();
+                const QString audioExt = format.value(QStringLiteral("audio_ext")).toString();
+                const QString resolution = format.value(QStringLiteral("resolution")).toString();
+                const bool hasVideo = (!vcodec.isEmpty() && vcodec != QLatin1String("none"))
+                    || (!videoExt.isEmpty() && videoExt != QLatin1String("none"))
+                    || resolution.contains(QLatin1Char('x'));
+                const bool hasAudio = (!acodec.isEmpty() && acodec != QLatin1String("none"))
+                    || (!audioExt.isEmpty() && audioExt != QLatin1String("none"))
+                    || resolution == QLatin1String("audio only");
                 if (hasVideo && hasAudio) {
                     if (muxedUrl.isEmpty()) muxedUrl = formatUrl;
                 } else if (hasVideo) {
@@ -1318,16 +1563,22 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
         m_resolvedTitle.clear();
         m_resolvedVideoUrl.clear();
         m_resolvedAudioUrl.clear();
+        m_resolvedIsLive = false;
         setLoading(false);
         return;
     }
 
-    playStream(url, m_resolvedVideoUrl, m_resolvedAudioUrl, m_resolvedTitle, keepPlaylist);
+    playStream(url, m_resolvedVideoUrl, m_resolvedAudioUrl, m_resolvedTitle, keepPlaylist,
+               m_resolvedIsLive);
 }
 
 void MediaManager::playStream(const QString &originalUrl, const QString &videoUrl,
-                              const QString &audioUrl, const QString &title, bool keepPlaylist) {
+                              const QString &audioUrl, const QString &title, bool keepPlaylist,
+                              bool isLive) {
     if (!m_mpv || !m_playlists) return;
+    if (m_icyReader) m_icyReader->stop();
+    if (m_icyTitleTimer) m_icyTitleTimer->stop();
+    m_pendingIcyTitle.clear();
 
     if (!keepPlaylist) {
         PlaylistModel *def = m_playlists->defaultModel();
@@ -1354,13 +1605,13 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
     m_lastPlayedTimer.start();
     m_lastStreamTitle.clear();
     m_streamFromYtdlp = true;
-    setLiveStream(false);
+    setLiveStream(isLive);
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
 
-    m_pendingAudioUrl = audioUrl;
+    m_mpv->setExternalAudio(audioUrl);
     setLoading(true);
-    m_mpv->setSource(videoUrl);
+    m_mpv->setSource(videoUrl, isLive);
     m_mpv->setPaused(false);
 
     if (m_history.isEmpty() || m_history.last() != originalUrl) {
@@ -1376,27 +1627,22 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
 
 void MediaManager::onMpvFileLoaded() {
     if (!m_mpv) return;
-
-    if (!m_pendingAudioUrl.isEmpty()) {
-        // A local file may be opened while the previous network stream is still
-        // loading. Do not attach the old external audio track to it.
-        const QString source = m_mpv->source();
-        if (source.startsWith(QStringLiteral("http://"))
-                || source.startsWith(QStringLiteral("https://"))) {
-            const QString audio = m_pendingAudioUrl;
-            m_pendingAudioUrl.clear();
-            m_mpv->command(QStringList() << QStringLiteral("audio-add")
-                                         << audio << QStringLiteral("select"));
-        } else {
-            m_pendingAudioUrl.clear();
-        }
-    }
-
     setLoading(false);
+
+    // Start the ICY reader only after mpv has opened the stream. Opening a
+    // second connection while the radio is still connecting could make some
+    // Shoutcast servers stall the player.
+    if (!m_icyReader || m_streamFromYtdlp) return;
+    const QUrl url(m_mpv->source());
+    if (isDirectStreamUrl(url) && isLiveStreamUrl(url))
+        m_icyReader->start(url);
 }
 
 void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &playUrl) {
     if (!m_mpv || !m_playlists) return;
+    if (m_icyReader) m_icyReader->stop();
+    if (m_icyTitleTimer) m_icyTitleTimer->stop();
+    m_pendingIcyTitle.clear();
 
     PlaylistModel *def = m_playlists->defaultModel();
     if (!def) return;
@@ -1414,16 +1660,16 @@ void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &pl
     m_lastPlayedFile = originalUrl;
     m_lastPlayedTimer.start();
     m_lastStreamTitle.clear();
-    m_pendingAudioUrl.clear();
     m_streamFromYtdlp = false;
-    setLiveStream(isDirectStreamUrl(QUrl(originalUrl)) && originalUrl == playUrl);
+    const bool live = isLiveStreamUrl(QUrl(originalUrl)) && originalUrl == playUrl;
+    setLiveStream(live);
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
 
     m_playlists->setPlayingModel(def);
     def->setCurrentIndex(existingIndex >= 0 ? existingIndex : 0);
     setLoading(true);
-    m_mpv->setSource(playUrl);
+    m_mpv->setSource(playUrl, live);
     m_mpv->setPaused(false);
 
     if (m_history.isEmpty() || m_history.last() != originalUrl) {
@@ -1441,6 +1687,9 @@ void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &pl
 
 void MediaManager::playIndex(int index) {
     if (!m_mpv || !m_playlists) return;
+    if (m_icyReader) m_icyReader->stop();
+    if (m_icyTitleTimer) m_icyTitleTimer->stop();
+    m_pendingIcyTitle.clear();
     PlaylistModel *model = m_playlists->activeModel();
     if (!model) return;
 
@@ -1475,16 +1724,16 @@ void MediaManager::playIndex(int index) {
     }
 
     m_lastStreamTitle.clear();
-    m_pendingAudioUrl.clear();
     m_streamFromYtdlp = false;
-    setLiveStream(isDirectStreamUrl(QUrl(file)));
+    const bool live = isLiveStreamUrl(QUrl(file));
+    setLiveStream(live);
 
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
 
     m_playlists->setPlayingModel(model);
     model->setCurrentIndex(index);
-    m_mpv->setSource(file);
+    m_mpv->setSource(file, live);
     m_mpv->setPaused(false);
 
     if (m_history.isEmpty() || m_history.last() != file) {

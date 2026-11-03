@@ -21,6 +21,7 @@ public:
 
 public slots:
     void decode(const QString &filePath, double time, const QString &requestId);
+    void clearCache();
 
 signals:
     void decoded(const QString &requestId, double time, const QImage &image);
@@ -60,7 +61,12 @@ public:
     bool muted() const { return m_muted; }
     void setMuted(bool m);
     QString source() const { return m_source; }
-    void setSource(const QString &src);
+    // `live` disables the rewind/DVR cache and keeps only a small forward buffer.
+    void setSource(const QString &src, bool live = false);
+    // Audio stream to attach to the next source. yt-dlp returns video and
+    // audio as separate URLs; this is passed as a file-local option so mpv
+    // opens both tracks together instead of adding audio after fileLoaded.
+    void setExternalAudio(const QString &url);
     // Current stream title (for radio — the ICY StreamTitle).
     QString mediaTitle() const { return m_mediaTitle; }
     bool videoDisabled() const { return m_videoDisabled; }
@@ -118,6 +124,7 @@ private:
     void dispatchThumbnail();
 
     QString m_source;
+    QString m_externalAudio;
     QString m_mediaTitle;
     QHash<QString, QVariant> m_observedValues;
     double m_position = 0.0;

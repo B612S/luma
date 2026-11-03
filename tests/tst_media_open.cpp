@@ -21,6 +21,7 @@ private slots:
     void cleanupTestCase();
     void openAudio();
     void openVideo();
+    void externalAudioStartsWithFile();
     void endOfPlaylistStopsPlayback();
     void missingFileReportsUnavailable();
     void fileAvailability();
@@ -147,6 +148,43 @@ void TestMediaOpen::openVideo()
     QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("16:9"), 5000);
     m_media->setAspectRatio("original");
     QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("original"), 5000);
+}
+
+void TestMediaOpen::externalAudioStartsWithFile()
+{
+    stopPlayback();
+
+    // yt-dlp returns separate video/audio URLs. The audio must be attached at
+    // load time, not after fileLoaded, or the first seconds are silent.
+    const QString video = m_temp.path() + QStringLiteral("/external-video.mp4");
+    const QString audio = m_temp.path() + QStringLiteral("/external,audio=1.wav");
+    QVERIFY(QFile::copy(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"), video));
+    QVERIFY(QFile::copy(QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav"), audio));
+
+    m_mpv->setExternalAudio(audio);
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->openFile(video);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QTest::qWait(200);
+
+    int audioTracks = 0;
+    int externalId = -1;
+    const QVariantList tracks = m_mpv->getProperty(QStringLiteral("track-list")).toList();
+    for (const QVariant &item : tracks) {
+        const QVariantMap track = item.toMap();
+        if (track.value(QStringLiteral("type")).toString() != QLatin1String("audio"))
+            continue;
+        ++audioTracks;
+        if (track.value(QStringLiteral("external")).toBool())
+            externalId = track.value(QStringLiteral("id")).toInt();
+    }
+    QVERIFY2(audioTracks >= 2, "the external audio track was not attached");
+    QVERIFY2(externalId > 0, "the external audio track is not marked external");
+    QCOMPARE(m_mpv->getProperty(QStringLiteral("aid")).toInt(), externalId);
+    QVERIFY2(m_mpv->property("audio-codec").toString().contains("PCM", Qt::CaseInsensitive),
+             "the external WAV track is not the selected audio track");
+
+    stopPlayback();
 }
 
 void TestMediaOpen::endOfPlaylistStopsPlayback()

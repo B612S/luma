@@ -35,7 +35,6 @@ makedepends=(
 )
 
 optdepends=(
-    'yt-dlp: playback of links from video sites'
     'avahi: Chromecast discovery'
 )
 

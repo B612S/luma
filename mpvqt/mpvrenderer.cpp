@@ -15,6 +15,8 @@
  *   - Do not emit MpvAbstractItem::ready() from synchronize(); the
  *     m_isFramebufferReady flag was removed accordingly (see mpvrenderer.h).
  *   - The return value of mpv_render_context_render() is no longer logged.
+ *   - The FBO texture is created with GL_CLAMP_TO_EDGE sampling, so resizing a
+ *     PiP window cannot sample the opposite edge of the video.
  *   - Formatting cleanups.
  */
 
@@ -107,7 +109,19 @@ QOpenGLFramebufferObject *MpvRenderer::createFramebufferObject(const QSize &size
     if (m_mpvResourceManager && !m_mpvResourceManager->mpvRenderContext) {
         m_mpvResourceManager->mpvRenderContext = createMpvRenderContext();
     }
-    return QQuickFramebufferObject::Renderer::createFramebufferObject(size);
+    QOpenGLFramebufferObject *fbo = QQuickFramebufferObject::Renderer::createFramebufferObject(size);
+    // Clamp edge samples to the frame; repeat sampling could show the opposite
+    // edge of the video while the PiP item is being resized.
+    if (fbo && fbo->texture() != 0) {
+        QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
+        fbo->bind();
+        f->glBindTexture(GL_TEXTURE_2D, fbo->texture());
+        f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        f->glBindTexture(GL_TEXTURE_2D, 0);
+        fbo->release();
+    }
+    return fbo;
 }
 
 mpv_render_context *MpvRenderer::createMpvRenderContext()

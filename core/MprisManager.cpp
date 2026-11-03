@@ -83,6 +83,10 @@ qlonglong MprisManager::getPosition() const {
     return static_cast<qlonglong>(pos * 1000000);
 }
 
+bool MprisManager::getCanSeek() const {
+    return m_mpv && (!m_media || !m_media->liveStream());
+}
+
 double MprisManager::getVolume() const {
     if (!m_mpv) return 0.0;
     return m_mpv->volume() / 100.0;
@@ -131,13 +135,14 @@ void MprisManager::Stop() {
 }
 
 void MprisManager::Seek(qlonglong offset) {
-    if (!m_mpv) return;
+    if (!m_mpv || (m_media && m_media->liveStream())) return;
     double newPos = m_mpv->position() + (offset / 1000000.0);
     m_mpv->setPosition(std::max(0.0, newPos));
 }
 
 void MprisManager::SetPosition(const QDBusObjectPath &, qlonglong position) {
-    if (m_mpv) m_mpv->setPosition(position / 1000000.0);
+    if (!m_mpv || (m_media && m_media->liveStream())) return;
+    m_mpv->setPosition(position / 1000000.0);
 }
 
 void MprisManager::setVolume(double volume) {

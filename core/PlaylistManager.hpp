@@ -67,6 +67,7 @@ private:
     void loadAll();
     void savePlaylist(const QString &id);
     void loadPlaylist(const QString &id);
+    void scanPlaylistTags(const QString &id);
     void saveOrder();
     // Changes (drag and drop, additions) arrive very often, so writing to disk
     // and the playlistsChanged signal are coalesced via a timer.
@@ -89,5 +90,6 @@ private:
     QTimer m_saveTimer;
     TagScanner *m_tagScanner = nullptr;
     QSet<QString> m_dirtyIds;
+    QSet<QString> m_scannedPlaylists;
     bool m_playlistsChangedPending = false;
 };

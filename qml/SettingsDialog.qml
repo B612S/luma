@@ -24,11 +24,35 @@ Dialog {
     }
 
     readonly property int controlWidth: 200
+    property var ytdlpRuntime: ({})
+    property bool ytdlpInstalling: false
+    property bool ytdlpEjsInstalling: false
+    property string ytdlpInstallMessage: ""
+
+    function refreshYtdlpRuntime() {
+        if (typeof Media !== "undefined" && Media !== null)
+            ytdlpRuntime = Media.ytdlpRuntimeInfo();
+    }
+
+    Connections {
+        target: typeof Media !== "undefined" ? Media : null
+        function onYtdlpInstallFinished(success, message) {
+            settingsDialog.ytdlpInstalling = false;
+            settingsDialog.ytdlpInstallMessage = success ? "" : message;
+            settingsDialog.refreshYtdlpRuntime();
+        }
+        function onYtdlpEjsInstallFinished(success, message) {
+            settingsDialog.ytdlpEjsInstalling = false;
+            settingsDialog.ytdlpInstallMessage = success ? "" : message;
+            settingsDialog.refreshYtdlpRuntime();
+        }
+    }
 
     // While the dialog is open, shortcuts (including wheel = volume) are disabled.
     onOpened: {
         if (typeof shortcuts !== "undefined" && shortcuts !== null)
             shortcuts.setShortcutsEnabled(false);
+        settingsDialog.refreshYtdlpRuntime();
         // The dialog's custom content is not focusable by default; without
         // active focus Escape is not delivered to the popup.
         settingsContent.forceActiveFocus();
@@ -495,6 +519,117 @@ Dialog {
                                 color: settingsDialog.proxyAddressValid(Config.ytdlpProxyAddress)
                                        ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
                                        : Kirigami.Theme.negativeTextColor
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                text: qsTr("settings_ytdlp_runtime_title")
+                                color: Kirigami.Theme.textColor
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            ColumnLayout {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    spacing: 8
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: qsTr("settings_ytdlp_runtime_ytdlp").arg(
+                                                  settingsDialog.ytdlpRuntime.ytdlp
+                                                  ? qsTr("settings_ytdlp_runtime_found")
+                                                  : qsTr("settings_ytdlp_runtime_missing"))
+                                        color: settingsDialog.ytdlpRuntime.ytdlp
+                                               ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.8)
+                                               : Kirigami.Theme.negativeTextColor
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Button {
+                                        visible: !settingsDialog.ytdlpRuntime.ytdlp
+                                        enabled: !settingsDialog.ytdlpInstalling
+                                        text: settingsDialog.ytdlpInstalling
+                                              ? qsTr("settings_ytdlp_runtime_installing")
+                                              : qsTr("settings_ytdlp_runtime_install_ytdlp")
+                                        onClicked: {
+                                            settingsDialog.ytdlpInstalling = true;
+                                            settingsDialog.ytdlpInstallMessage = "";
+                                            Media.installYtdlp();
+                                        }
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    spacing: 8
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: qsTr("settings_ytdlp_runtime_deno").arg(
+                                                  settingsDialog.ytdlpRuntime.deno
+                                                  ? qsTr("settings_ytdlp_runtime_found")
+                                                  : qsTr("settings_ytdlp_runtime_missing"))
+                                        color: settingsDialog.ytdlpRuntime.deno
+                                               ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.8)
+                                               : Kirigami.Theme.negativeTextColor
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    spacing: 8
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: qsTr("settings_ytdlp_runtime_ejs").arg(
+                                                  settingsDialog.ytdlpRuntime.ejsAvailable
+                                                  ? qsTr("settings_ytdlp_runtime_found")
+                                                  : qsTr("settings_ytdlp_runtime_missing"))
+                                        color: settingsDialog.ytdlpRuntime.ejsAvailable
+                                               ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.8)
+                                               : Kirigami.Theme.negativeTextColor
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Button {
+                                        visible: !settingsDialog.ytdlpRuntime.ejsAvailable
+                                        enabled: !settingsDialog.ytdlpEjsInstalling
+                                        text: settingsDialog.ytdlpEjsInstalling
+                                              ? qsTr("settings_ytdlp_runtime_installing")
+                                              : qsTr("settings_ytdlp_runtime_install_ejs")
+                                        onClicked: {
+                                            settingsDialog.ytdlpEjsInstalling = true;
+                                            settingsDialog.ytdlpInstallMessage = "";
+                                            Media.installYtdlpEjs();
+                                        }
+                                    }
+                                }
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                text: qsTr("settings_ytdlp_runtime_hint")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                visible: settingsDialog.ytdlpInstallMessage !== ""
+                                text: settingsDialog.ytdlpInstallMessage
+                                color: Kirigami.Theme.negativeTextColor
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
                             }

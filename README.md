@@ -33,7 +33,8 @@
 - **Subtitle tuning** — font, size, weight, text/outline colors, outline width,
   background box, vertical position, ASS style override; applied to mpv live.
 - **Links via yt-dlp** — open a URL from the menu and Luma resolves the direct stream
-  with `yt-dlp` and plays it in mpv with normal seeking. The video title is shown in the
+  with `yt-dlp`. Video-on-demand keeps normal seeking; live links switch to a live-edge
+  mode with a `LIVE` indicator and no seek bar. The video title is shown in the
   notification and playlist. SOCKS proxies work through a local HTTP bridge, so mpv never
   bypasses the proxy.
 - **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`,
@@ -137,9 +138,11 @@ The script builds a Release AppDir and bundles Qt/QML (including Kirigami and
 resulting image is Wayland-only. The Breeze widget style and the small set of Breeze
 icons used by the controls are included as well, so scrollbars and icons do not depend
 on the host's KDE setup. On first use it downloads `linuxdeploy`, its Qt plugin and
-`appimagetool` into `.appimage-tools/`. Optional tools such as `yt-dlp`, `ffmpeg` and
-`avahi-browse` are not bundled; install them on the system when you need link playback
-or casting.
+`appimagetool` into `.appimage-tools/`. `ffmpeg` and `avahi-browse` are not bundled;
+install them on the system for HLS casting and Chromecast discovery. `yt-dlp` and
+`yt-dlp-ejs` can be installed from *Settings → Playback → Internet playback* without
+packaging them; install Deno on the system to solve YouTube's JavaScript challenge
+without reading browser cookies.
 
 Build on the oldest glibc-based distribution you intend to support — an AppImage cannot
 bundle glibc. On systems without FUSE, run the image with
@@ -174,7 +177,8 @@ network, so it is not part of the default run.
 - **Open a file/folder** — right-click the video → *Open*, or drag & drop a file onto
   the window, or pass a path on the command line.
 - **Open a link** — right-click the video → *Open* → *Open link…*; yt-dlp resolves
-  the stream and Luma plays it in mpv. Seeking works as usual.
+  the stream and Luma plays it in mpv. VOD seeks normally; live TV/radio has no seek bar
+  and is kept at the live edge.
 - **Playlists** — the playlist button in the control bar opens the panel. Tabs at the
   top switch playlists; the playlist-menu button on the left opens a dropdown with every
   playlist at once. Right-click a tab for *Add files…*, *Add folder…*,
@@ -303,6 +307,13 @@ starts a local HTTP bridge: mpv fetches the stream (including seeking and Range 
 through it, so a SOCKS-only proxy works without extra tools. HTTP proxies are passed to
 mpv directly. No files are downloaded.
 
+*Playback → Internet playback* also shows the YouTube runtime status. Deno is installed
+with the system package manager; the `yt-dlp-ejs` helper can be installed into
+`~/.local/share/luma` with the button in that section, without modifying the system
+Python. Luma passes Deno to yt-dlp automatically and does not read browser cookies. The
+packages are fetched from PyPI only when you press the install button and keep their own
+licenses (yt-dlp: Unlicense; yt-dlp-ejs: Unlicense/MIT/ISC).
+
 ## Localization
 
 Source strings are in Qt `.ts` files under `locales/` (`en`, `ru`). Japanese and Chinese
@@ -336,7 +347,8 @@ Luma is built on these projects:
 - [mpv / libmpv](https://mpv.io/) and [mpvqt](https://invent.kde.org/libraries/mpvqt) —
   playback engine and Qt bindings.
 - [FFmpeg](https://ffmpeg.org/) — thumbnails and HLS for casting.
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — resolving links from video sites.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — resolving links from video sites;
+  [Deno](https://deno.com/) — its JavaScript runtime for YouTube challenges.
 - [TagLib](https://taglib.org/) — audio metadata.
 - [Wayland](https://wayland.freedesktop.org/), [xkbcommon](https://xkbcommon.org/) and
   [Avahi](https://avahi.org/) — desktop integration.

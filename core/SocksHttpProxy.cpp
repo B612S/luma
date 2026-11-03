@@ -135,6 +135,21 @@ private:
         connect(m_proxy, &QTcpSocket::readyRead, this, &SocksHttpProxyConnection::onProxyReadyRead);
         connect(m_proxy, &QTcpSocket::disconnected, this, &SocksHttpProxyConnection::finish);
         connect(m_proxy, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+            // A local SOCKS client may briefly refuse a connection while it
+            // opens its own upstream connection (HLS opens many parallel
+            // segment requests). Retry once before failing the request: a
+            // 502 here reaches mpv as a dropped segment and looks like a
+            // stutter.
+            if (!m_proxyRetried) {
+                m_proxyRetried = true;
+                m_proxy->disconnect(this);
+                m_proxy->deleteLater();
+                m_proxy = nullptr;
+                QTimer::singleShot(100, this, [this]() {
+                    if (m_state != State::Closed) beginProxy();
+                });
+                return;
+            }
             fail(502, QStringLiteral("SOCKS proxy connection failed"));
         });
         m_proxy->connectToHost(m_manager->socksHost(), m_manager->socksPort());
@@ -418,6 +433,7 @@ private:
     QString m_targetHost;
     quint16 m_targetPort = 0;
     bool m_isConnect = false;
+    bool m_proxyRetried = false;
 };
 
 SocksHttpProxy::SocksHttpProxy(QObject *parent)

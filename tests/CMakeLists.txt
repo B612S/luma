@@ -79,6 +79,7 @@ endif()
 add_executable(tst_media_open
     tst_media_open.cpp
     ${CMAKE_SOURCE_DIR}/core/MediaManager.cpp
+    ${CMAKE_SOURCE_DIR}/core/IcyMetadataReader.cpp
     ${CMAKE_SOURCE_DIR}/core/TagManager.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/MpvItem.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/mpvabstractitem.cpp
