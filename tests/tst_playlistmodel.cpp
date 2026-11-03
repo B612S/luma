@@ -1,8 +1,11 @@
 #include <QTest>
 #include <QSignalSpy>
 #include <QVariantMap>
+#include <QTemporaryDir>
+#include <QFile>
 
 #include "PlaylistModel.hpp"
+#include "PlaylistFilterModel.hpp"
 #include "TestEnvironment.h"
 
 // Playlist logic without a GUI: loading, order, current track, live stream tags.
@@ -27,6 +30,11 @@ private slots:
     void streamTitleIsNotSaved();
     void videoTitlePersists();
     void shuffleKeepsCurrentFirst();
+    void unavailableFlagMarksEntry();
+    void unavailableClearsWhenFileReturns();
+    void existingFileDropsSavedMark();
+    void emptyMetadataIsNotSaved();
+    void filterProxyMapsRows();
 };
 
 void TestPlaylistModel::setFilesAndCurrent()
@@ -138,18 +146,17 @@ void TestPlaylistModel::updateMetadataChangesFields()
     model.setFiles({"song.mp3"}, "song.mp3");
     QSignalSpy modified(&model, &PlaylistModel::modified);
 
-    QVERIFY(model.updateMetadata("song.mp3", "Song title", "Artist", "Album", 2024, 123.0));
+    QVERIFY(model.updateMetadata("song.mp3", "Song title", "Artist", "Album", 2024));
     QCOMPARE(model.data(model.index(0), Qt::UserRole + 6).toString(), QStringLiteral("Song title"));
     QCOMPARE(model.data(model.index(0), Qt::UserRole + 3).toString(), QStringLiteral("Artist"));
     QCOMPARE(model.data(model.index(0), Qt::UserRole + 4).toString(), QStringLiteral("Album"));
-    QCOMPARE(model.data(model.index(0), Qt::UserRole + 5).toDouble(), 123.0);
     QCOMPARE(modified.count(), 1);
 
-    QVERIFY(!model.updateMetadata("song.mp3", "Song title", "Artist", "Album", 2024, 123.0));
+    QVERIFY(!model.updateMetadata("song.mp3", "Song title", "Artist", "Album", 2024));
     QCOMPARE(modified.count(), 1);
 
     // Removed tags fall back to the file name.
-    QVERIFY(model.updateMetadata("song.mp3", "", "", "", 0, 0.0));
+    QVERIFY(model.updateMetadata("song.mp3", "", "", "", 0));
     QCOMPARE(model.data(model.index(0), Qt::UserRole + 6).toString(), QStringLiteral("song"));
 }
 
@@ -307,6 +314,141 @@ void TestPlaylistModel::shuffleKeepsCurrentFirst()
     QCOMPARE(model.fileAt(0), QStringLiteral("a.mp4"));
     QCOMPARE(model.fileAt(3), QStringLiteral("d.mp4"));
     QCOMPARE(model.currentFile(), QStringLiteral("c.mp4"));
+}
+
+void TestPlaylistModel::unavailableFlagMarksEntry()
+{
+    PlaylistModel model;
+    const QString missing = QStringLiteral("/no/such/place/movie.mkv");
+    model.setFiles({missing}, missing);
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 7).toBool(), false);
+
+    model.setUnavailable(missing, true);
+    QVERIFY(model.isUnavailable(missing));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 7).toBool(), true);
+
+    // The mark is written to the entry and restored when the playlist loads.
+    const QVariantList saved = model.toVariantList();
+    QCOMPARE(saved.first().toMap().value("unavailable").toBool(), true);
+    PlaylistModel loaded;
+    loaded.setEntries(saved, "");
+    QCOMPARE(loaded.data(loaded.index(0), Qt::UserRole + 7).toBool(), true);
+    QVERIFY(loaded.isUnavailable(missing));
+
+    model.setUnavailable(missing, false);
+    QVERIFY(!model.isUnavailable(missing));
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 7).toBool(), false);
+    QVERIFY(!model.toVariantList().first().toMap().contains("unavailable"));
+
+    // Rebuilding the list with setFiles (open file/folder) drops the mark.
+    model.setUnavailable(missing, true);
+    model.setFiles({missing}, missing);
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 7).toBool(), false);
+}
+
+// The parent directory is watched: a restored file clears the red mark.
+void TestPlaylistModel::unavailableClearsWhenFileReturns()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + "/restored.mkv";
+
+    PlaylistModel model;
+    model.setFiles({path}, path);
+    model.setUnavailable(path, true);
+    QVERIFY(model.isUnavailable(path));
+    QCOMPARE(model.toVariantList().first().toMap().value("unavailable").toBool(), true);
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.close();
+
+    QTRY_VERIFY_WITH_TIMEOUT(!model.isUnavailable(path), 3000);
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 7).toBool(), false);
+    QVERIFY(!model.toVariantList().first().toMap().contains("unavailable"));
+}
+
+// A saved mark is dropped on load when the file is available again (it was
+// restored while Luma was closed).
+void TestPlaylistModel::existingFileDropsSavedMark()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + "/present.mkv";
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.close();
+
+    QVariantMap entry;
+    entry["path"] = path;
+    entry["unavailable"] = true;
+    PlaylistModel model;
+    model.setEntries({entry}, "");
+    QCOMPARE(model.data(model.index(0), Qt::UserRole + 7).toBool(), false);
+    QVERIFY(!model.isUnavailable(path));
+    QVERIFY(model.takeDroppedUnavailableMarks());
+    QVERIFY(!model.takeDroppedUnavailableMarks());
+}
+
+// Video entries have no artist/album/year; empty values must not reach the
+// playlist file. Real audio metadata is still saved.
+void TestPlaylistModel::emptyMetadataIsNotSaved()
+{
+    PlaylistModel video;
+    video.setFiles({QStringLiteral("/no/such/video.mkv")}, "");
+    const QVariantMap videoEntry = video.toVariantList().first().toMap();
+    QCOMPARE(videoEntry.value("kind").toString(), QStringLiteral("video"));
+    QVERIFY(!videoEntry.contains("artist"));
+    QVERIFY(!videoEntry.contains("album"));
+    QVERIFY(!videoEntry.contains("year"));
+
+    QVariantMap audio;
+    audio["path"] = QStringLiteral("/no/such/song.mp3");
+    audio["kind"] = QStringLiteral("audio");
+    audio["title"] = QStringLiteral("Song");
+    audio["artist"] = QStringLiteral("Artist");
+    audio["album"] = QStringLiteral("Album");
+    audio["year"] = 2024;
+    PlaylistModel songs;
+    songs.setEntries({audio}, "");
+    const QVariantMap songEntry = songs.toVariantList().first().toMap();
+    QCOMPARE(songEntry.value("artist").toString(), QStringLiteral("Artist"));
+    QCOMPARE(songEntry.value("album").toString(), QStringLiteral("Album"));
+    QCOMPARE(songEntry.value("year").toInt(), 2024);
+}
+
+// The playlist search bar filters by title/artist/path and maps filtered rows
+// back to the playlist for playing and the context menu.
+void TestPlaylistModel::filterProxyMapsRows()
+{
+    PlaylistModel model;
+    model.setFiles({"a.mp3", "b.mp3", "c.mp3"}, "a.mp3");
+    model.updateMetadata("a.mp3", "Alpha", "Ann", "", 0);
+    model.updateMetadata("b.mp3", "Beta", "Bob", "", 0);
+    model.updateMetadata("c.mp3", "Gamma", "Ann", "", 0);
+
+    PlaylistFilterModel filter;
+    filter.setPlaylistModel(&model);
+    QCOMPARE(filter.rowCount(), 3);
+    QCOMPARE(filter.mapToSource(0), 0);
+    QCOMPARE(filter.mapFromSource(2), 2);
+
+    filter.setFilter("ann");
+    QCOMPARE(filter.rowCount(), 2);
+    QVERIFY(filter.data(filter.index(0, 0), Qt::DisplayRole).toString().contains("Alpha"));
+    QCOMPARE(filter.mapToSource(0), 0);
+    QCOMPARE(filter.mapToSource(1), 2);
+    QCOMPARE(filter.mapFromSource(0), 0);
+    QCOMPARE(filter.mapFromSource(1), -1);
+    QCOMPARE(filter.mapFromSource(2), 1);
+
+    // The path is searchable too.
+    filter.setFilter("b.mp3");
+    QCOMPARE(filter.rowCount(), 1);
+    QCOMPARE(filter.mapToSource(0), 1);
+
+    filter.setFilter("   ");
+    QCOMPARE(filter.rowCount(), 3);
 }
 
 int main(int argc, char *argv[])

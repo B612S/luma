@@ -69,6 +69,12 @@ LumaMenu {
 
             LumaMenuButton {
                 text: qsTranslate("PlaylistPanel", "playlist_info")
+                // A deleted file has no metadata to show, so the information
+                // dialog would be an empty window.
+                visible: {
+                    const path = trackContextMenu.trackPath();
+                    return path !== "" && Media.isFileAvailable(path);
+                }
                 onClicked: {
                     const path = trackContextMenu.trackPath();
                     if (!path) return;

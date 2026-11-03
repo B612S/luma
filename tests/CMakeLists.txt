@@ -14,6 +14,8 @@ add_library(luma_testcore STATIC
     ${CMAKE_SOURCE_DIR}/core/Logger.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistModel.cpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistModel.hpp
+    ${CMAKE_SOURCE_DIR}/core/PlaylistFilterModel.cpp
+    ${CMAKE_SOURCE_DIR}/core/PlaylistFilterModel.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistManager.cpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistManager.hpp
     ${CMAKE_SOURCE_DIR}/core/TagScanner.cpp
@@ -34,6 +36,7 @@ target_link_libraries(luma_testcore PUBLIC
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Qml
     ${AVFORMAT_LIBRARIES}
     ${AVCODEC_LIBRARIES}
     ${AVUTIL_LIBRARIES}

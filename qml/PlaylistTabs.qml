@@ -175,13 +175,13 @@ Item {
                         tabListMenu.close();
                         return;
                     }
-                    // Position the menu at open time: at component creation the
-                    // panel is not laid out yet, and the popup positioner would
-                    // keep the stale (pre-layout) position.
-                    const pos = allTabsBtn.mapToItem(null, 0, allTabsBtn.height);
-                    tabListMenu.x = pos.x;
-                    tabListMenu.y = pos.y + 4;
-                    tabListMenu.open();
+                    // Cap the list height so a long playlist list scrolls
+                    // instead of growing past the window.
+                    const win = allTabsBtn.Window.window;
+                    tabListMenu.maxListHeight =
+                            Math.max(120, (win ? win.height : 600) - 20);
+                    // The menu follows the button when the window is resized.
+                    tabListMenu.openAt(allTabsBtn, 0, allTabsBtn.height + 4);
                 }
             }
 
@@ -332,12 +332,9 @@ Item {
                                     tabContextMenu.targetName = tabBtn.info.name;
                                     tabContextMenu.targetIsDefault = tabBtn.isDefault;
 
-                                    // The menu is parented to the window overlay, so it
-                                    // uses scene coordinates like the click position.
-                                    let scenePos = mapToItem(null, mouse.x, mouse.y);
-                                    tabContextMenu.x = scenePos.x;
-                                    tabContextMenu.y = scenePos.y;
-                                    tabContextMenu.open();
+                                    // The menu follows the tab when the window is
+                                    // resized or the tab row is scrolled.
+                                    tabContextMenu.openAt(tabBtn, mouse.x, mouse.y);
                                 } else {
                                     Playlists.activeId = tabBtn.info.id;
                                 }
@@ -355,9 +352,14 @@ Item {
                 anchors.fill: parent; radius: 6
                 color: addHover.containsMouse ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1) : "transparent"
             }
-            Text { anchors.centerIn: parent; text: "+"; color: Kirigami.Theme.textColor; font.pixelSize: 20; font.weight: Font.Medium }
-            MouseArea { id: addHover; anchors.fill: parent; hoverEnabled: true; onClicked: root.createRequested() }
-            ToolTip.visible: addHover.containsMouse; ToolTip.text: qsTranslate("PlaylistTabs", "tabs_new"); ToolTip.delay: 500
+            Kirigami.Icon {
+                anchors.centerIn: parent
+                width: 18; height: 18
+                source: "list-add-symbolic"
+                color: Kirigami.Theme.textColor
+                isMask: true
+            }
+            MouseArea { id: addHover; anchors.fill: parent; hoverEnabled: true; onClicked: root.createRequested() }            ToolTip.visible: addHover.containsMouse; ToolTip.text: qsTranslate("PlaylistTabs", "tabs_new"); ToolTip.delay: 500
         }
     }
 
@@ -387,22 +389,35 @@ Item {
     LumaMenu {
         id: tabListMenu
         width: 220
+        // Height cap set by the button before opening: with many playlists the
+        // list scrolls instead of running past the window.
+        property int maxListHeight: 360
         // x/y are set in the button's handler in scene coordinates; the menu is
         // parented to the window overlay and LumaMenu keeps it inside the window.
 
-        Column {
-            width: parent.width
+        ListView {
+            id: playlistsList
+            width: parent ? parent.width : 220
+            height: Math.min(contentHeight, tabListMenu.maxListHeight)
+            implicitHeight: height
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
             spacing: 2
+            model: Playlists.playlists
 
-            Repeater {
-                model: Playlists.playlists
-                LumaMenuButton {
-                    text: modelData.name
-                    checked: modelData.id === Playlists.activeId
-                    onClicked: {
-                        Playlists.activeId = modelData.id;
-                        tabListMenu.close();
-                    }
+            ScrollBar.vertical: ScrollBar {
+                id: playlistsScroll
+                policy: ScrollBar.AsNeeded
+            }
+
+            delegate: LumaMenuButton {
+                width: playlistsList.width
+                       - (playlistsScroll.visible ? playlistsScroll.width : 0)
+                text: modelData.name
+                checked: modelData.id === Playlists.activeId
+                onClicked: {
+                    Playlists.activeId = modelData.id;
+                    tabListMenu.close();
                 }
             }
         }

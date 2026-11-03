@@ -13,7 +13,7 @@
 > application refuses to start without a Wayland session.
 
 <p align="center">
-  <a href="https://www.qt.io/"><img src="https://img.shields.io/badge/Qt-6.5%2B-green?style=flat-square&logo=qt" alt="Qt 6.5+" /></a>
+  <a href="https://www.qt.io/"><img src="https://img.shields.io/badge/Qt-6.9%2B-green?style=flat-square&logo=qt" alt="Qt 6.9+" /></a>
   <a href="https://wayland.freedesktop.org/"><img src="https://img.shields.io/badge/platform-Wayland%20only-blue?style=flat-square" alt="Wayland only" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-orange?style=flat-square" alt="GPL-3.0-or-later" /></a>
 </p>
@@ -73,7 +73,7 @@ Build dependencies:
 
 | Dependency | Notes |
 | --- | --- |
-| Qt 6.5+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, Concurrent, OpenGL, OpenGLWidgets, **WaylandClient**, LinguistTools |
+| Qt 6.9+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, Concurrent, OpenGL, OpenGLWidgets, **WaylandClient**, LinguistTools |
 | Wayland client libraries | `wayland-client` and `xkbcommon` development files (required; there is no X11 backend) |
 | libmpv | `mpv` / `mpv-libs` |
 | TagLib | reading and writing audio tags (`taglib`) |
@@ -179,7 +179,9 @@ network, so it is not part of the default run.
   top switch playlists; the playlist-menu button on the left opens a dropdown with every
   playlist at once. Right-click a tab for *Add files…*, *Add folder…*,
   *Clear playlist*, *Rename*, *Delete*. Right-click a track for playback, shuffle,
-  “Add to playlist”, properties, opening the containing folder and removal.
+  “Add to playlist”, properties, opening the containing folder and removal. The search
+  bar at the bottom filters the current playlist by title, artist or file name; clear it
+  with the × button or Escape.
   Each named playlist keeps its own playback mode (changed in *Playback → Playback
   mode*); the mode chosen in the settings applies only to the Default playlist.
 - **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.

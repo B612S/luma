@@ -153,6 +153,8 @@
 <message><source>playlist_clear</source><translation>Очистить плейлист</translation></message>
 <message><source>playlist_clear_title</source><translation>Очистить плейлист</translation></message>
 <message><source>playlist_clear_confirm</source><translation>Удалить все записи из «%1»? Это действие нельзя отменить.</translation></message>
+<message><source>playlist_search</source><translation>Поиск по плейлисту…</translation></message>
+<message><source>playlist_search_empty</source><translation>Ничего не найдено</translation></message>
 </context>
 
 <context>
@@ -379,6 +381,13 @@
 <message><source>shortcut_cycle_deinterlace</source><translation>Переключить деинтерлейсинг</translation></message>
 <message><source>shortcut_cycle_aspect</source><translation>Переключить соотношение сторон</translation></message>
 <message><source>shortcut_toggle_crop</source><translation>Обрезать чёрные полосы</translation></message>
+</context>
+
+<context>
+<name>FileUnavailableDialog</name>
+<message><source>unavailable_title</source><translation>Файл недоступен</translation></message>
+<message><source>unavailable_text</source><translation>Не удалось открыть файл: возможно, он был перемещён или удалён.</translation></message>
+<message><source>unavailable_ok</source><translation>ОК</translation></message>
 </context>
 
 </TS>

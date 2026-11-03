@@ -22,7 +22,11 @@ private slots:
     void openAudio();
     void openVideo();
     void endOfPlaylistStopsPlayback();
+    void missingFileReportsUnavailable();
+    void fileAvailability();
     void fileInfoRequest();
+    void fileInfoBitrateEstimate();
+    void liveBitrateSample();
     void youtubeLinkThroughYtdlp();
     void realYouTubeLink();
 
@@ -177,6 +181,37 @@ void TestMediaOpen::endOfPlaylistStopsPlayback()
     QVERIFY(!m_media->isLoading());
 }
 
+// A playlist entry whose file was deleted must not be handed to mpv silently:
+// the UI gets a signal and the entry is marked unavailable.
+void TestMediaOpen::missingFileReportsUnavailable()
+{
+    PlaylistModel *def = m_playlists->defaultModel();
+    QVERIFY(def);
+    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
+
+    const QString missing = m_temp.path() + "/deleted-file.mkv";
+    def->setFiles({missing}, missing);
+
+    QSignalSpy spy(m_media, &MediaManager::fileUnavailable);
+    m_media->playIndex(0);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toString(), missing);
+    QCOMPARE(def->data(def->index(0), Qt::UserRole + 7).toBool(), true);
+    QVERIFY(def->isUnavailable(missing));
+    QVERIFY(def->toVariantList().first().toMap().value("unavailable").toBool());
+}
+
+// The playlist context menu hides Information for missing local files but
+// keeps it for streams (where the URL can still be edited).
+void TestMediaOpen::fileAvailability()
+{
+    QVERIFY(!m_media->isFileAvailable(QString()));
+    QVERIFY(!m_media->isFileAvailable(QStringLiteral("/no/such/file.mkv")));
+    QVERIFY(m_media->isFileAvailable(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4")));
+    QVERIFY(m_media->isFileAvailable(QStringLiteral("https://example.com/stream")));
+}
+
 void TestMediaOpen::fileInfoRequest()
 {
     const QString path = QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav");
@@ -190,6 +225,51 @@ void TestMediaOpen::fileInfoRequest()
     const QVariantMap info = args.at(1).toMap();
     QCOMPARE(info.value("path").toString(), path);
     QCOMPARE(info.value("isAudio").toBool(), true);
+}
+
+// Matroska/WebM store no per-track bitrate. The information dialog used to
+// show 0 kbps for both streams; the missing values are now estimated.
+void TestMediaOpen::fileInfoBitrateEstimate()
+{
+    const QString path = QStringLiteral(LUMA_TEST_DATA_DIR "/webm/test_video.webm");
+    QSignalSpy spy(m_media, &MediaManager::fileInfoReady);
+    m_media->requestFileInfo(path);
+
+    QVERIFY(spy.wait(5000));
+    QCOMPARE(spy.count(), 1);
+    const QVariantMap info = spy.takeFirst().at(1).toMap();
+
+    QCOMPARE(info.value("isAudio").toBool(), false);
+    QCOMPARE(info.value("video_bitrate_estimated").toBool(), true);
+    QCOMPARE(info.value("audio_bitrate_estimated").toBool(), true);
+    QVERIFY2(info.value("video_bitrate").toLongLong() > 0, "video bitrate not estimated");
+    QVERIFY2(info.value("audio_bitrate").toLongLong() > 0, "audio bitrate not estimated");
+
+    // The video estimate is the container total minus the other streams, so
+    // both values together should stay close to the container bitrate.
+    const qint64 total = info.value("bitrate").toLongLong();
+    const qint64 sum = info.value("video_bitrate").toLongLong()
+        + info.value("audio_bitrate").toLongLong();
+    QVERIFY(total > 0);
+    QVERIFY(sum <= total * 6 / 5);
+}
+
+// The statistics panel samples the bitrate of a short window around the
+// playback position: mpv's own video-bitrate is a last-GOP average and only
+// changes at keyframes.
+void TestMediaOpen::liveBitrateSample()
+{
+    const QString path = QStringLiteral(LUMA_TEST_DATA_DIR "/webm/test_video.webm");
+    QSignalSpy spy(m_media, &MediaManager::liveBitrateReady);
+    m_media->requestLiveBitrate(path, 1.0);
+
+    QVERIFY(spy.wait(5000));
+    QCOMPARE(spy.count(), 1);
+    const QList<QVariant> args = spy.takeFirst();
+    QCOMPARE(args.at(0).toString(), path);
+    QCOMPARE(args.at(1).toDouble(), 1.0);
+    QVERIFY2(args.at(2).toLongLong() > 0, "video bitrate not sampled");
+    QVERIFY2(args.at(3).toLongLong() > 0, "audio bitrate not sampled");
 }
 
 void TestMediaOpen::youtubeLinkThroughYtdlp()

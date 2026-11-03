@@ -2,6 +2,7 @@
 #include "CastManager.hpp"
 #include "GlobalShortcuts.hpp"
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QKeySequence>
 #include <QSettings>
 #include <QStandardPaths>
@@ -767,6 +768,35 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
 
 bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
     if (!m_enabled) return false;
+
+    // A click outside the focused text field should leave it. Qt Quick only
+    // moves focus when the clicked item is focusable, so clicking the video or
+    // a button would otherwise leave the playlist search focused and block all
+    // keyboard shortcuts.
+    if (event->type() == QEvent::MouseButtonPress) {
+        QObject *focus = QGuiApplication::focusObject();
+        if (focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextField"))) {
+            auto *item = qobject_cast<QQuickItem *>(focus);
+            auto *mouse = static_cast<QMouseEvent *>(event);
+            if (item && mouse && m_window) {
+                QQuickItem *control = item;
+                // The focus object is usually the TextInput inside a TextField;
+                // use the whole TextField for the hit test.
+                for (QQuickItem *p = item; p; p = p->parentItem()) {
+                    if (p->inherits("QQuickTextField")) { control = p; break; }
+                }
+                const QPointF local = control->mapFromGlobal(mouse->globalPosition());
+                if (!control->contains(local)) {
+                    // forceActiveFocus() on the root item does not move active
+                    // focus away from a child TextField, so clear the field's
+                    // focus explicitly.
+                    item->setFocus(false);
+                    if (control != item) control->setFocus(false);
+                }
+            }
+        }
+        return false;
+    }
 
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);

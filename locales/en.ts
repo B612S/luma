@@ -153,6 +153,8 @@
 <message><source>playlist_clear</source><translation>Clear playlist</translation></message>
 <message><source>playlist_clear_title</source><translation>Clear playlist</translation></message>
 <message><source>playlist_clear_confirm</source><translation>Remove all tracks from “%1”? This cannot be undone.</translation></message>
+<message><source>playlist_search</source><translation>Search playlist…</translation></message>
+<message><source>playlist_search_empty</source><translation>Nothing found</translation></message>
 </context>
 
 <context>
@@ -379,6 +381,13 @@
 <message><source>shortcut_cycle_deinterlace</source><translation>Switch deinterlacing</translation></message>
 <message><source>shortcut_cycle_aspect</source><translation>Switch aspect ratio</translation></message>
 <message><source>shortcut_toggle_crop</source><translation>Detect and crop black bars</translation></message>
+</context>
+
+<context>
+<name>FileUnavailableDialog</name>
+<message><source>unavailable_title</source><translation>File unavailable</translation></message>
+<message><source>unavailable_text</source><translation>The file could not be opened because it is missing or has been moved.</translation></message>
+<message><source>unavailable_ok</source><translation>OK</translation></message>
 </context>
 
 </TS>

@@ -12,10 +12,10 @@ url="https://github.com/B612S/luma"
 license=('GPL-3.0-or-later')
 
 depends=(
-    'qt6-base'
-    'qt6-declarative'
-    'qt6-svg'
-    'qt6-wayland'
+    'qt6-base>=6.9.0'
+    'qt6-declarative>=6.9.0'
+    'qt6-svg>=6.9.0'
+    'qt6-wayland>=6.9.0'
     'wayland'
     'libxkbcommon'
     'mpv'
@@ -31,7 +31,7 @@ makedepends=(
     'cmake'
     'ninja'
     'pkgconf'
-    'qt6-tools'
+    'qt6-tools>=6.9.0'
 )
 
 optdepends=(

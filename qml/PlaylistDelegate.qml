@@ -35,7 +35,11 @@ Rectangle {
         anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 8
         Text {
             Layout.fillWidth: true; text: model.display
-            color: Kirigami.Theme.textColor; font.pixelSize: 14
+            // A file that failed to open (deleted or moved) stays red until it
+            // is available again.
+            color: model.unavailable ? Kirigami.Theme.negativeTextColor
+                                     : Kirigami.Theme.textColor
+            font.pixelSize: 14
             font.weight: isCurrent ? Font.Bold : Font.Medium
             elide: Text.ElideRight; wrapMode: Text.NoWrap
             verticalAlignment: Text.AlignVCenter; Layout.alignment: Qt.AlignVCenter
@@ -69,9 +73,9 @@ Rectangle {
         onClicked: (mouse) => {
             if (playlistPanel && playlistPanel.isDragging) return;
             if (mouse.button === Qt.RightButton) {
-                // The panel sets the index and menu position itself.
+                // The panel sets the index and anchors the menu to this row.
                 if (playlistPanel)
-                    playlistPanel.openTrackMenu(itemIndex, mapToItem(null, mouse.x, mouse.y));
+                    playlistPanel.openTrackMenu(itemIndex, itemRect, mouse.x, mouse.y);
             } else {
                 if (playlistView) playlistView.currentIndex = itemIndex;
                 if (playlistPanel && playlistPanel.parent) playlistPanel.parent.forceActiveFocus()
@@ -84,13 +88,17 @@ Rectangle {
             if (playlistPanel && playlistPanel._processingClick) return
                 if (playlistPanel) playlistPanel._processingClick = true
                     if (playlistPanel) playlistPanel.startClickResetTimer()
-                        Media.playIndex(itemIndex)
+                        // The search bar shows filtered rows: play the source row.
+                        if (playlistPanel) playlistPanel.playViewIndex(itemIndex)
                         if (playlistPanel && playlistPanel.parent) playlistPanel.parent.forceActiveFocus()
         }
 
         onPressed: (mouse) => {
             pressX = mouse.x; pressY = mouse.y;
-            if (mouse.button === Qt.LeftButton && playlistPanel) dragHoldTimer.start();
+            // Reordering a filtered list makes no sense: its indices are not
+            // playlist indices.
+            if (mouse.button === Qt.LeftButton && playlistPanel
+                    && !playlistPanel.isFiltering) dragHoldTimer.start();
         }
 
         onPositionChanged: (mouse) => {
@@ -124,7 +132,7 @@ Rectangle {
     Timer {
         id: dragHoldTimer; interval: 1000; repeat: false
         onTriggered: {
-            if (playlistPanel) {
+            if (playlistPanel && !playlistPanel.isFiltering) {
                 playlistPanel.readyIndex = itemIndex; playlistPanel.draggedIndex = itemIndex;
                 playlistPanel.isDragging = true; playlistPanel.startAutoScroll();
             }

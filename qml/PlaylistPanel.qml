@@ -10,6 +10,10 @@ Rectangle {
 
     property var mpv
     property var model: Media.playlist
+    // Search bar at the bottom filters the current playlist; while it is
+    // non-empty the list shows the proxy instead of the model itself.
+    readonly property bool isFiltering: searchField.text.trim() !== ""
+    readonly property var viewModel: isFiltering ? playlistFilter : panel.model
     property bool hovered: hoverArea.containsMouse
     property bool isOpen: false
     property bool _processingClick: false
@@ -37,6 +41,18 @@ Rectangle {
     onIsOpenChanged: {
         if (!isOpen) {
             contextMenu.close(); tabs.closeMenus(); infoDialog.close();
+            // Never keep keyboard focus inside the closed search field.
+            searchField.focus = false;
+            if (panel.parent) panel.parent.forceActiveFocus();
+        }
+    }
+
+    onIsFilteringChanged: {
+        if (isFiltering) {
+            listView.currentIndex = -1;
+            listView.positionViewAtBeginning();
+        } else {
+            scrollToCurrent();
         }
     }
 
@@ -44,12 +60,17 @@ Rectangle {
         target: Playlists
         function onActiveIdChanged() {
             panel.endDrag(); contextMenu.close(); tabs.closeMenus(); infoDialog.close();
+            // The search belongs to the playlist being left.
+            searchField.text = "";
         }
     }
 
     Connections {
         target: model
-        function onCurrentIndexChanged() { if (model) listView.currentIndex = model.currentIndex; }
+        function onCurrentIndexChanged() {
+            // While filtering the list rows are proxy rows, not model rows.
+            if (model && !panel.isFiltering) listView.currentIndex = model.currentIndex;
+        }
     }
 
     Connections {
@@ -61,7 +82,30 @@ Rectangle {
     }
 
     function closeContextMenu() { contextMenu.close(); tabs.closeMenus(); }
-    function scrollToCurrent() { if (panel.model) listView.currentIndex = panel.model.currentIndex; scrollTimer.start(); }
+
+    // The list shows either the playlist model or the filtered proxy, so rows
+    // must be translated before playing or opening the context menu.
+    function sourceIndex(viewIndex) {
+        if (!isFiltering) return viewIndex;
+        return playlistFilter.mapToSource(viewIndex);
+    }
+
+    function viewIndexForSource(sourceRow) {
+        if (!isFiltering) return sourceRow;
+        return playlistFilter.mapFromSource(sourceRow);
+    }
+
+    function playViewIndex(viewIndex) {
+        const source = sourceIndex(viewIndex);
+        if (source >= 0) Media.playIndex(source);
+    }
+
+    function scrollToCurrent() {
+        if (!panel.model) return;
+        const viewIndex = viewIndexForSource(panel.model.currentIndex);
+        if (viewIndex >= 0) listView.currentIndex = viewIndex;
+        scrollTimer.start();
+    }
 
     function switchPlaylist(direction) {
         const list = Playlists.playlists;
@@ -99,13 +143,13 @@ Rectangle {
 
     // The track menu lives in this file: from outside (the delegate) we call it by
     // function name, not via `panel.contextMenu` — an id is not an object property.
-    // The menu is parented to the window overlay, so scenePos is already in its
-    // coordinate space; LumaMenu keeps it inside the window.
-    function openTrackMenu(index, scenePos) {
-        contextMenuIndex = index;
-        contextMenu.x = scenePos.x;
-        contextMenu.y = scenePos.y;
-        contextMenu.open();
+    // The menu is anchored to the clicked row, so it follows the row (and the
+    // window) instead of staying at stale window coordinates.
+    function openTrackMenu(viewIndex, anchorItem, localX, localY) {
+        const source = sourceIndex(viewIndex);
+        if (source < 0) return;
+        contextMenuIndex = source;
+        contextMenu.openAt(anchorItem, localX, localY);
     }
 
     function openInfoDialog(path) {
@@ -194,7 +238,7 @@ Rectangle {
     }
 
     ColumnLayout {
-        anchors.fill: parent; anchors.margins: 8; spacing: 6
+        anchors.fill: parent; anchors.margins: 8; anchors.bottomMargin: 0; spacing: 6
 
         PlaylistTabs {
             id: tabs; Layout.fillWidth: true; Layout.preferredHeight: 36
@@ -212,46 +256,169 @@ Rectangle {
             color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
         }
 
-        ListView {
-            id: listView
+        Item {
             Layout.fillWidth: true; Layout.fillHeight: true
-            clip: true; model: panel.model
-            boundsBehavior: Flickable.StopAtBounds
-            focus: true; interactive: !panel.isDragging; cacheBuffer: 400
-            currentIndex: panel.model ? panel.model.currentIndex : -1
 
-            ScrollBar.vertical: ScrollBar { id: vbar; policy: ScrollBar.AsNeeded }
+            ListView {
+                id: listView
+                anchors.fill: parent
+                clip: true; model: panel.viewModel
+                boundsBehavior: Flickable.StopAtBounds
+                focus: true; interactive: !panel.isDragging; cacheBuffer: 400
+                currentIndex: panel.isFiltering ? -1
+                                                : (panel.model ? panel.model.currentIndex : -1)
 
-            WheelHandler {
-                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                onWheel: (event) => {
-                    // Horizontal two-finger swipe / tilt switches playlists;
-                    // vertical wheel keeps scrolling the tracks.
-                    if (Math.abs(event.angleDelta.x) > Math.abs(event.angleDelta.y)) {
-                        panel.handleHorizontalSwipe(event.angleDelta.x);
+                ScrollBar.vertical: ScrollBar { id: vbar; policy: ScrollBar.AsNeeded }
+
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: (event) => {
+                        // Horizontal two-finger swipe / tilt switches playlists;
+                        // vertical wheel keeps scrolling the tracks.
+                        if (Math.abs(event.angleDelta.x) > Math.abs(event.angleDelta.y)) {
+                            panel.handleHorizontalSwipe(event.angleDelta.x);
+                            event.accepted = true;
+                            return;
+                        }
+
+                        var maxY = Math.max(0, listView.contentHeight - listView.height);
+                        var baseY = wheelAnim.running ? wheelAnim.to : listView.contentY;
+                        wheelAnim.stop(); wheelAnim.from = listView.contentY;
+                        wheelAnim.to = Math.max(0, Math.min(maxY, baseY - event.angleDelta.y));
+                        wheelAnim.start();
                         event.accepted = true;
-                        return;
                     }
+                }
 
-                    var maxY = Math.max(0, listView.contentHeight - listView.height);
-                    var baseY = wheelAnim.running ? wheelAnim.to : listView.contentY;
-                    wheelAnim.stop(); wheelAnim.from = listView.contentY;
-                    wheelAnim.to = Math.max(0, Math.min(maxY, baseY - event.angleDelta.y));
-                    wheelAnim.start();
-                    event.accepted = true;
+                // PASS REFERENCES TO THE DELEGATE
+                delegate: PlaylistDelegate {
+                    playlistView: listView
+                    playlistPanel: panel
+                    scrollBar: vbar
+                    isReady: panel.readyIndex === index
+                    isBeingDragged: panel.draggedIndex === index
+                    isCurrent: model.isCurrent
                 }
             }
 
-            // PASS REFERENCES TO THE DELEGATE
-            delegate: PlaylistDelegate {
-                playlistView: listView
-                playlistPanel: panel
-                scrollBar: vbar
-                isReady: panel.readyIndex === index
-                isBeingDragged: panel.draggedIndex === index
-                isCurrent: model.isCurrent
+            Label {
+                anchors.centerIn: parent
+                visible: panel.isFiltering && listView.count === 0
+                text: qsTranslate("PlaylistPanel", "playlist_search_empty")
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.6)
+                font.pixelSize: 13
             }
         }
+
+        // Search bar, styled like the playlist panel itself. It reaches the
+        // bottom edge of the panel so the field can be centered between the
+        // separator and that edge.
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 42
+            color: "transparent"
+
+            Rectangle {
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                height: 1
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.15)
+            }
+
+            Item {
+                id: searchBox
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.topMargin: 6
+                anchors.bottomMargin: 6
+
+                TextField {
+                    id: searchField
+                    anchors.fill: parent
+                    placeholderText: qsTranslate("PlaylistPanel", "playlist_search")
+                    placeholderTextColor: Qt.rgba(Kirigami.Theme.textColor.r,
+                                                  Kirigami.Theme.textColor.g,
+                                                  Kirigami.Theme.textColor.b, 0.5)
+                    color: Kirigami.Theme.textColor
+                    font.pixelSize: 13
+                    selectByMouse: true
+                    // Reserve room for the magnifier on the left and the clear
+                    // button on the right; the field itself spans the full
+                    // playlist width.
+                    leftPadding: 28
+                    rightPadding: searchField.text.length > 0 ? 34 : 10
+                    topPadding: 0
+                    bottomPadding: 0
+                    background: Rectangle {
+                        radius: 6
+                        color: searchField.activeFocus
+                               ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                         Kirigami.Theme.textColor.b, 0.1)
+                               : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                         Kirigami.Theme.textColor.b, 0.06)
+                    }
+                    onAccepted: if (panel.parent) panel.parent.forceActiveFocus()
+                    Keys.onEscapePressed: {
+                        text = "";
+                        if (panel.parent) panel.parent.forceActiveFocus();
+                    }
+                }
+
+                Kirigami.Icon {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 14; height: 14
+                    source: "edit-find-symbolic"
+                    color: Kirigami.Theme.textColor
+                    isMask: true
+                }
+
+                Item {
+                    id: clearButton
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 24; height: 24
+                    visible: searchField.text.length > 0
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 6
+                        color: clearHover.containsMouse
+                               ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                         Kirigami.Theme.textColor.b, 0.1)
+                               : "transparent"
+                    }
+
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        width: 16; height: 16
+                        source: "window-close-symbolic"
+                        color: Kirigami.Theme.textColor
+                        isMask: true
+                    }
+
+                    MouseArea {
+                        id: clearHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            searchField.text = "";
+                            searchField.forceActiveFocus();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    PlaylistFilterModel {
+        id: playlistFilter
+        playlistModel: panel.model
+        filter: searchField.text
     }
 
     // Track menu

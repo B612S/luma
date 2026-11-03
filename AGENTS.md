@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Luma: a Linux video player. C++17 + Qt 6.5/QML (Kirigami) GUI on top of libmpv, with
+Luma: a Linux video player. C++17 + Qt 6.9/QML (Kirigami) GUI on top of libmpv, with
 FFmpeg for thumbnails and Chromecast casting. CMake is the only build system.
 
 **Platform: Wayland only.** Luma targets Wayland compositors; X11 is not supported and
@@ -42,8 +42,8 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   them missing; failure appears as a QML import error on launch.
 - Adding a `.cpp` requires editing the `qt_add_executable(luma ...)` source list. Adding
   a `.qml` file requires adding it to `qt_add_qml_module(... QML_FILES ...)`; QML is
-  loaded from the resource URL `qrc:/luma/qml/Main.qml`, so unlisted files simply won't
-  exist at runtime. C++ classes with `QML_ELEMENT` are registered automatically.
+  loaded from the resource URL `qrc:/qt/qml/luma/qml/Main.qml`, so unlisted files simply
+  won't exist at runtime. C++ classes with `QML_ELEMENT` are registered automatically.
 - Translations: `.qm` files are generated during the build from `locales/*.ts`
   (`en`, `ru`; Japanese/Chinese are temporarily disabled) and installed to
   `share/luma/translations`; keep the TS list in `CMakeLists.txt` in sync when adding a language.

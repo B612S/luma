@@ -276,7 +276,7 @@ Dialog {
 
                 Label {
                     Layout.fillWidth: true; visible: !dialog.isAudio && !dialog.isStream
-                    text: "<b>" + qsTranslate("StatsPanel", "stats_vid_bitrate") + ":</b> " + (dialog.fileInfo.video_bitrate || 0) + " kbps"
+                    text: "<b>" + qsTranslate("StatsPanel", "stats_vid_bitrate") + ":</b> " + dialog.bitrateText(dialog.fileInfo.video_bitrate, dialog.fileInfo.video_bitrate_estimated)
                     textFormat: Text.RichText; color: Kirigami.Theme.textColor
                 }
 
@@ -294,7 +294,7 @@ Dialog {
 
                 Label {
                     Layout.fillWidth: true; visible: !dialog.isStream
-                    text: "<b>" + qsTranslate("StatsPanel", "stats_aud_bitrate") + ":</b> " + (dialog.fileInfo.audio_bitrate || 0) + " kbps"
+                    text: "<b>" + qsTranslate("StatsPanel", "stats_aud_bitrate") + ":</b> " + dialog.bitrateText(dialog.fileInfo.audio_bitrate, dialog.fileInfo.audio_bitrate_estimated)
                     textFormat: Text.RichText; color: Kirigami.Theme.textColor
                 }
             }
@@ -317,6 +317,14 @@ Dialog {
             onClicked: dialog.close()
         }
         Item { implicitWidth: 16; implicitHeight: 1 }
+    }
+
+    // The container does not always store a per-stream bitrate; the backend
+    // estimates it then and says so, so mark the value as approximate and
+    // never show a misleading "0 kbps".
+    function bitrateText(kbps, estimated) {
+        if (!kbps || isNaN(kbps) || kbps <= 0) return "N/A";
+        return (estimated ? "≈" : "") + kbps + " kbps";
     }
 
     function formatTime(seconds) {

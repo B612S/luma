@@ -10,7 +10,8 @@ Popup {
     id: menu
 
     // Every in-app menu is shown in the window overlay, so x/y are window
-    // coordinates and Qt can keep the popup inside the window with margins.
+    // coordinates. openAt() anchors the menu to an item and keeps it inside the
+    // window; the anchor is followed on resize.
     parent: Overlay.overlay
     margins: 10
 
@@ -27,6 +28,71 @@ Popup {
     // Window that tracks the open menu, remembered while the menu is open: the
     // content item may already be out of the scene when the menu is closing.
     property var menuHostWindow: null
+
+    // Original anchor: the menu follows this item (and the local point inside
+    // it) when the window is resized or the layout moves the item, instead of
+    // keeping stale window coordinates.
+    property Item anchorItem: null
+    property point anchorPoint: Qt.point(0, 0)
+    property bool anchored: false
+
+    function openAt(item, localX, localY) {
+        anchorItem = item;
+        anchorPoint = Qt.point(localX, localY);
+        anchored = item !== null;
+        positionAtAnchor();
+        open();
+    }
+
+    function menuContentHeight() {
+        if (contentItem && contentItem.implicitHeight > 0)
+            return contentItem.implicitHeight + topPadding + bottomPadding;
+        return height > 0 ? height : 0;
+    }
+
+    // Place the menu at the anchor, keeping it inside the window. If it does
+    // not fit below the anchor, open it above the point (like the main menu).
+    function positionAtAnchor() {
+        if (!anchored || !anchorItem) return;
+        const scene = anchorItem.mapToItem(null, anchorPoint.x, anchorPoint.y);
+        const win = menuWindow();
+        if (!win) {
+            x = scene.x;
+            y = scene.y;
+            return;
+        }
+
+        const margin = 10;
+        const w = width > 0 ? width : implicitWidth;
+        const h = menuContentHeight();
+        let ny = scene.y;
+        if (h > 0 && ny + h > win.height - margin) {
+            const above = scene.y - h;
+            if (above >= margin) ny = above;
+        }
+        x = Math.max(margin, Math.min(scene.x, Math.max(margin, win.width - w - margin)));
+        y = Math.max(margin, Math.min(ny, Math.max(margin, win.height - h - margin)));
+    }
+
+    // Follow window resizes, content size changes (pages) and the anchor moving
+    // (scrolling a tab row or a playlist).
+    Connections {
+        target: menu.menuHostWindow
+        function onWidthChanged() { menu.positionAtAnchor(); }
+        function onHeightChanged() { menu.positionAtAnchor(); }
+    }
+
+    Connections {
+        target: menu.anchorItem
+        function onXChanged() { menu.positionAtAnchor(); }
+        function onYChanged() { menu.positionAtAnchor(); }
+    }
+
+    Connections {
+        target: menu.contentItem
+        function onImplicitWidthChanged() { menu.positionAtAnchor(); }
+        function onImplicitHeightChanged() { menu.positionAtAnchor(); }
+    }
 
     // Only one menu may be open at a time: the application window tracks the
     // open menu and the previous one is closed before the new one is shown.
@@ -48,6 +114,7 @@ Popup {
         if (win.currentOpenMenu && win.currentOpenMenu !== menu)
             win.currentOpenMenu.close();
         win.currentOpenMenu = menu;
+        positionAtAnchor();
     }
 
     function unregisterMenu() {

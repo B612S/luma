@@ -13,7 +13,6 @@ struct ScannedTags {
     QString artist;
     QString album;
     int year = 0;
-    double duration = 0.0;
     bool ok = false;
 };
 
@@ -42,8 +41,6 @@ ScannedTags scanTags(const QString &path)
                 }
             }
         }
-        if (ctx->duration > 0)
-            result.duration = double(ctx->duration) / AV_TIME_BASE;
     }
     avformat_close_input(&ctx);
     return result;
@@ -93,8 +90,7 @@ void TagScanner::enqueue(const QString &path)
         const ScannedTags tags = scanTags(path);
         QMetaObject::invokeMethod(this, [this, path, tags]() {
             m_pending.remove(path);
-            emit scanned(path, tags.title, tags.artist, tags.album, tags.year,
-                         tags.duration, tags.ok);
+            emit scanned(path, tags.title, tags.artist, tags.album, tags.year, tags.ok);
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }

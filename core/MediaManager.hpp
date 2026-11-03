@@ -57,9 +57,16 @@ public:
     Q_INVOKABLE void copyToClipboard(const QString &text);
     Q_INVOKABLE void removeFromPlaylist(int index);
     Q_INVOKABLE QString getDefaultFileManagerName();
+    // Used by the playlist context menu: file-only actions (Information) are
+    // hidden for entries whose file has been deleted or moved.
+    Q_INVOKABLE bool isFileAvailable(const QString &path) const;
     // Blocking variant (kept for API compatibility); the UI uses the async one.
     Q_INVOKABLE QVariantMap getFileInfo(const QString &path);
     Q_INVOKABLE void requestFileInfo(const QString &path);
+    // Bitrate of a short window around the playback position. The statistics
+    // panel uses it for video, where mpv's value is a last-GOP average that
+    // only changes at keyframes.
+    Q_INVOKABLE void requestLiveBitrate(const QString &path, double position);
     // Audio file tags: read and written in the file itself (via TagLib).
     Q_INVOKABLE QVariantMap readTags(const QString &path);
     Q_INVOKABLE bool saveTags(const QString &path, const QVariantMap &tags);
@@ -90,6 +97,11 @@ signals:
     void downloadStatus(const QString &message);
     // Result of the asynchronous file-properties request.
     void fileInfoReady(const QString &path, const QVariantMap &info);
+    // Result of requestLiveBitrate(): average over the sampled window.
+    void liveBitrateReady(const QString &path, double position,
+                          qint64 videoBps, qint64 audioBps);
+    // A local file could not be opened because it no longer exists.
+    void fileUnavailable(const QString &path);
 
 private:
     // Nothing is playing any more (end of the playlist or "stop" mode): unload

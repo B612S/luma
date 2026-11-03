@@ -17,7 +17,7 @@ public:
 
 signals:
     void scanned(const QString &path, const QString &title, const QString &artist,
-                 const QString &album, int year, double duration, bool ok);
+                 const QString &album, int year, bool ok);
 
 private:
     QThread m_thread;

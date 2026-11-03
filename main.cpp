@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
         shortcuts->setGlobalShortcutsAllowed(config.singleInstance());
     });
 
-    engine.load(QUrl(QStringLiteral("qrc:/luma/qml/Main.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/luma/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) return -1;
 
     auto root = qobject_cast<QQuickWindow*>(engine.rootObjects().first());

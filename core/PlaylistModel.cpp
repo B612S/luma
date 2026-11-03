@@ -1,5 +1,6 @@
 #include "PlaylistModel.hpp"
 #include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QUrl>
 #include <QRandomGenerator>
 #include <algorithm>
@@ -30,7 +31,7 @@ void PlaylistModel::setVideoTitle(const QString &path, const QString &title) {
 
 bool PlaylistModel::updateMetadata(const QString &path, const QString &title,
                                     const QString &artist, const QString &album,
-                                    int year, double duration)
+                                    int year)
 {
     for (int i = 0; i < m_entries.size(); ++i) {
         Entry &e = m_entries[i];
@@ -41,7 +42,7 @@ bool PlaylistModel::updateMetadata(const QString &path, const QString &title,
                                  ? QFileInfo(e.path).completeBaseName()
                                  : title;
         if (e.title == newTitle && e.artist == artist && e.album == album
-                && e.year == year && qAbs(e.duration - duration) < 0.001) {
+                && e.year == year) {
             return false;
         }
 
@@ -49,14 +50,90 @@ bool PlaylistModel::updateMetadata(const QString &path, const QString &title,
         e.artist = artist;
         e.album = album;
         e.year = year;
-        e.duration = duration;
         emit dataChanged(index(i), index(i),
                          {Qt::DisplayRole, Qt::UserRole + 3, Qt::UserRole + 4,
-                          Qt::UserRole + 5, Qt::UserRole + 6});
+                          Qt::UserRole + 6});
         emit modified();
         return true;
     }
     return false;
+}
+
+void PlaylistModel::setUnavailable(const QString &path, bool unavailable) {
+    if (path.isEmpty()) return;
+    if (m_unavailable.contains(path) == unavailable) return;
+
+    bool changed = false;
+    for (int i = 0; i < m_entries.size(); ++i) {
+        Entry &entry = m_entries[i];
+        if (entry.path != path || entry.unavailable == unavailable) continue;
+        entry.unavailable = unavailable;
+        changed = true;
+        emit dataChanged(index(i), index(i), {Qt::UserRole + 7});
+    }
+
+    if (unavailable) {
+        m_unavailable.insert(path);
+        watchUnavailableDirectory(path);
+    } else {
+        m_unavailable.remove(path);
+        pruneUnavailableWatcher(QFileInfo(path).absolutePath());
+    }
+
+    // Named playlists save the mark, so a deleted file stays red after a restart.
+    if (changed) emit modified();
+}
+
+void PlaylistModel::pruneUnavailableWatcher(const QString &dir) {
+    if (!m_watcher || dir.isEmpty()) return;
+    for (const QString &missing : m_unavailable) {
+        if (QFileInfo(missing).absolutePath() == dir) return;
+    }
+    m_watcher->removePath(dir);
+}
+
+void PlaylistModel::watchUnavailableDirectory(const QString &path) {
+    if (!m_watcher) {
+        m_watcher = new QFileSystemWatcher(this);
+        connect(m_watcher, &QFileSystemWatcher::directoryChanged, this,
+                &PlaylistModel::onUnavailableDirectoryChanged);
+    }
+
+    const QString dir = QFileInfo(path).absolutePath();
+    if (dir.isEmpty() || m_watcher->directories().contains(dir)) return;
+    if (QFileInfo(dir).isDir()) m_watcher->addPath(dir);
+}
+
+// A watched directory changed (for example, the user restored a deleted file):
+// drop the mark for every missing entry that exists again and save that.
+void PlaylistModel::onUnavailableDirectoryChanged(const QString &dir) {
+    bool changed = false;
+    for (auto it = m_unavailable.begin(); it != m_unavailable.end(); ) {
+        const QString path = *it;
+        if (QFileInfo(path).absolutePath() != dir || !QFileInfo::exists(path)) {
+            ++it;
+            continue;
+        }
+        it = m_unavailable.erase(it);
+        for (int i = 0; i < m_entries.size(); ++i) {
+            Entry &entry = m_entries[i];
+            if (entry.path != path || !entry.unavailable) continue;
+            entry.unavailable = false;
+            changed = true;
+            emit dataChanged(index(i), index(i), {Qt::UserRole + 7});
+        }
+    }
+
+    pruneUnavailableWatcher(dir);
+    if (changed) emit modified();
+}
+
+void PlaylistModel::clearUnavailable() {
+    if (m_watcher) {
+        const QStringList dirs = m_watcher->directories();
+        if (!dirs.isEmpty()) m_watcher->removePaths(dirs);
+    }
+    m_unavailable.clear();
 }
 
 int PlaylistModel::rowCount(const QModelIndex &parent) const {
@@ -92,8 +169,8 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
         case Qt::UserRole + 2:  return e.kind;
         case Qt::UserRole + 3:  return e.artist;
         case Qt::UserRole + 4:  return e.album;
-        case Qt::UserRole + 5:  return e.duration;
         case Qt::UserRole + 6:  return e.title;
+        case Qt::UserRole + 7:  return e.unavailable;
         default: return {};
     }
 }
@@ -106,8 +183,8 @@ QHash<int, QByteArray> PlaylistModel::roleNames() const {
         {Qt::UserRole + 2,   "kind"},
         {Qt::UserRole + 3,   "artist"},
         {Qt::UserRole + 4,   "album"},
-        {Qt::UserRole + 5,   "duration"},
-        {Qt::UserRole + 6,   "title"}
+        {Qt::UserRole + 6,   "title"},
+        {Qt::UserRole + 7,   "unavailable"}
     };
 }
 
@@ -117,12 +194,15 @@ QVariant PlaylistModel::entryToVariant(const Entry &e) const {
     m["kind"] = e.kind;
     // Don't save the live radio title: it goes stale after a restart.
     // Save the video title from yt-dlp.
-    if (!e.path.contains(QStringLiteral("://")) || e.persistTitle)
+    if (!e.title.isEmpty()
+            && (!e.path.contains(QStringLiteral("://")) || e.persistTitle))
         m["title"] = e.title;
-    m["artist"] = e.artist;
-    m["album"] = e.album;
-    m["year"] = e.year;
-    m["duration"] = e.duration;
+    // Empty metadata is not written: a video entry only needs path/kind/title.
+    if (!e.artist.isEmpty()) m["artist"] = e.artist;
+    if (!e.album.isEmpty()) m["album"] = e.album;
+    if (e.year > 0) m["year"] = e.year;
+    // Saved only when set, so ordinary playlists stay unchanged.
+    if (e.unavailable) m["unavailable"] = true;
     return m;
 }
 
@@ -139,7 +219,7 @@ PlaylistModel::Entry PlaylistModel::variantToEntry(const QVariantMap &m) const {
     e.artist = m.value("artist").toString();
     e.album = m.value("album").toString();
     e.year = m.value("year").toInt();
-    e.duration = m.value("duration").toDouble();
+    e.unavailable = m.value("unavailable").toBool();
     if (e.title.isEmpty() && !e.path.contains(QStringLiteral("://")))
         e.title = QFileInfo(e.path).completeBaseName();
     return e;
@@ -150,6 +230,7 @@ PlaylistModel::Entry PlaylistModel::variantToEntry(const QVariantMap &m) const {
 // ---------------------------------------------------------------------------
 
 void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
+    clearUnavailable();
     beginResetModel();
     m_entries.clear();
     m_originalPaths.clear();
@@ -175,6 +256,8 @@ void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
 }
 
 void PlaylistModel::setEntries(const QVariantList &entries, const QString &current) {
+    clearUnavailable();
+    m_droppedUnavailableMarks = false;
     beginResetModel();
     m_entries.clear();
     m_originalPaths.clear();
@@ -191,9 +274,26 @@ void PlaylistModel::setEntries(const QVariantList &entries, const QString &curre
     for (int i = 0; i < m_entries.size(); ++i) {
         if (m_entries[i].path == current) { m_currentIndex = i; break; }
     }
+
+    // Restore the saved "unavailable" marks. A file that came back while Luma
+    // was closed is available again, so its stale mark is dropped (the next
+    // save rewrites the entry).
+    for (Entry &entry : m_entries) {
+        if (!entry.unavailable) continue;
+        if (QFileInfo::exists(entry.path)) {
+            entry.unavailable = false;
+            m_droppedUnavailableMarks = true;
+            continue;
+        }
+        m_unavailable.insert(entry.path);
+    }
+
     endResetModel();
     emit currentIndexChanged();
     emit countChanged();
+
+    for (const QString &path : m_unavailable)
+        watchUnavailableDirectory(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +507,9 @@ void PlaylistModel::removeItem(int index) {
     }
     endRemoveRows();
 
+    // No duplicate left: the runtime "unavailable" mark no longer applies.
+    if (indexOf(path) < 0) setUnavailable(path, false);
+
     if (wasCurrent) {
         if (m_entries.isEmpty()) {
             m_currentIndex = -1;
@@ -428,6 +531,7 @@ void PlaylistModel::removeItem(int index) {
 }
 
 void PlaylistModel::clear() {
+    clearUnavailable();
     beginResetModel();
     m_entries.clear();
     m_originalPaths.clear();

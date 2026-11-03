@@ -7,7 +7,7 @@
 # none is planned. Build on the oldest distribution you intend to support: the
 # AppImage cannot bundle the build host's glibc.
 #
-# Requirements: cmake, ninja (or make), a C++17 compiler, Qt 6 development
+# Requirements: cmake, ninja (or make), a C++17 compiler, Qt 6.9 development
 # packages, qmake6, curl, and the runtime QML modules used by the app
 # (Kirigami, qqc2-desktop-style). Network access is needed the first time to
 # download linuxdeploy/appimagetool.

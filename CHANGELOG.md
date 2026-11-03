@@ -8,6 +8,18 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- A search bar at the bottom of the playlist filters the current playlist by title,
+  artist or path. It is styled like the panel, has a clear button, shows “Nothing
+  found” for an empty result and does not affect drag & drop reordering (disabled
+  while a filter is active). The search field spans the playlist width, with the
+  magnifier and clear button inside it.
+- The all-playlists dropdown caps its height and scrolls when the playlists no longer
+  fit on screen.
+- Playlist entries whose file was deleted or moved are drawn in red, and opening one shows
+  a notice dialog instead of doing nothing. The file's directory is watched, so the red
+  mark disappears as soon as the file is available again; a successful play also clears it.
+  The mark is saved in named playlists and restored on the next start (a file restored while
+  Luma was closed loses it); the Default playlist is not stored on disk.
 - Picture-in-picture stays above all other windows on KDE Plasma: Wayland has no client
   request for this and KWin ignores `Qt::WindowStaysOnTopHint`, so while PiP is active a
   small KWin script is loaded through KWin's D-Bus scripting interface and unloaded when
@@ -63,6 +75,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Luma now requires Qt 6.9 or newer (enforced by CMake and the Arch package dependencies).
+  The playlist filter uses the non-deprecated `beginFilterChange()`/`endFilterChange()`
+  API instead of `invalidateFilter()`.
+- Playlist files no longer store a per-entry `duration` (it was never displayed or used
+  for sorting), and empty metadata is omitted: `artist`/`album` are written only when set
+  and `year` only when it is not 0, so video entries keep just path, kind and title.
+  Existing playlists lose the redundant fields on their next save.
 - New application icon: a flat orange rounded square with a white play button (the vector
   source is in `assets/luma.svg`).
 - Picture-in-picture is now drawn as a square floating card with a small soft shadow, and
@@ -95,12 +114,41 @@ All notable changes to Luma are documented here. The format is based on
   same custom popup as the player's main menu instead of the platform menu style. The
   submenus (“Add to playlist”, “Sort”) are pages of the same popup. The shared row,
   separator and popup styling lives in `LumaMenu.qml`, `LumaMenuButton.qml` and
-  `LumaMenuSeparator.qml`, which the main menu uses as well. The menus are placed in window
-  coordinates and kept inside the window, switching pages fades like in the main menu, and
-  opening one menu closes the previously open one, so only one menu is visible at a time.
+  `LumaMenuSeparator.qml`, which the main menu uses as well. The menus are anchored to the
+  element they were opened from and kept inside the window, switching pages fades like in
+  the main menu, and opening one menu closes the previously open one, so only one menu is
+  visible at a time.
 
 ### Fixed
 
+- Seek-bar previews now decode forward from the previous keyframe to the requested
+  timestamp instead of returning the keyframe itself. Previously the image changed only
+  when a new keyframe was reached (often every ~10 seconds); now it follows the video
+  continuously, like YouTube.
+- Keyboard shortcuts work again after using the playlist search: clicking anywhere outside
+  a focused text field, or closing the playlist panel, now releases keyboard focus instead
+  of leaving every subsequent key in the search field.
+- Startup after the Qt 6.9 minimum bump: the QML module uses the standard `/qt/qml`
+  resource prefix now, so the engine loads `qrc:/qt/qml/luma/qml/Main.qml` instead of the
+  old `qrc:/luma/qml/Main.qml` path.
+- Context menus stay attached to the button, tab, playlist row or statistics panel they
+  were opened from when the window is resized, and are kept inside the window instead of
+  drifting over other elements.
+- The saved “unavailable” mark of a playlist entry is removed from the playlist file once
+  the file is available again: the directory watcher triggers a save while Luma runs, and
+  loading rewrites the playlist when the file returned while Luma was closed.
+- The playlist context menu hides Information for an entry whose file was deleted or
+  moved: the dialog had no metadata to show. The item stays for streams, where the URL
+  can still be edited.
+- The media information dialog no longer shows “0 kbps” for Matroska/WebM files, which
+  store no per-track bitrate: the missing values are estimated from packet sizes over a
+  bounded scan (the video track uses the exact container total minus the other streams)
+  and marked with “≈”.
+- The statistics panel samples the video bitrate of a short window around the playback
+  position, so it updates while playing instead of showing mpv's last-GOP value, which
+  could stay at 9 kbps for the first seconds of a multi-Mbps video because mpv only
+  updates it at keyframes. The file's average video bitrate stays in the information
+  dialog.
 - Re-entering picture-in-picture no longer shows a black border around the video: the
   window is always translucent, with an opaque backdrop behind the normal and fullscreen
   window, so KWin keeps compositing the PiP margin with its alpha.

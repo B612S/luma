@@ -71,7 +71,7 @@
 
 | Зависимость | Примечание |
 | --- | --- |
-| Qt 6.5+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, Concurrent, OpenGL, OpenGLWidgets, **WaylandClient**, LinguistTools |
+| Qt 6.9+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, Concurrent, OpenGL, OpenGLWidgets, **WaylandClient**, LinguistTools |
 | Библиотеки Wayland | файлы разработки `wayland-client` и `xkbcommon` (обязательны; X11-бэкенда нет) |
 | libmpv | пакет `mpv` / `mpv-libs` |
 | TagLib | чтение и запись тегов аудиофайлов (`taglib`) |

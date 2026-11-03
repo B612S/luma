@@ -164,6 +164,7 @@ ApplicationWindow {
     property bool isDialogOpen: settingsDialog.visible ||
     playlistPanel.hasOpenDialog ||
     infoDialog.visible ||
+    fileUnavailableDialog.visible ||
     urlDialog.dialog.visible
 
     Component.onCompleted: {
@@ -285,9 +286,16 @@ ApplicationWindow {
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             enabled: !root.isDialogOpen
-            focus: false
+            focus: true
             activeFocusOnTab: false
             cursorShape: root.cursorVisible ? Qt.ArrowCursor : Qt.BlankCursor
+
+            onPressed: (mouse) => {
+                // Clicking the picture must take focus away from text inputs
+                // (e.g. the playlist search), otherwise all shortcuts stay
+                // swallowed by the focused text field.
+                if (mouse.button === Qt.LeftButton) forceActiveFocus();
+            }
 
             onPositionChanged: (mouse) => {
                 if (Math.abs(mouse.x - root.lastMouseX) < 3 && Math.abs(mouse.y - root.lastMouseY) < 3) return;
@@ -319,15 +327,7 @@ ApplicationWindow {
                     var controlBarTop = root.height - 20 - controlBar.height;
                     if (mouse.y >= controlBarTop) return;
                     contextMenu.currentPage = "main";
-                    var menuHeight = contextMenu.getContentHeight();
-                    var menuWidth = contextMenu.width;
-                    var globalPos = mapToItem(null, mouse.x, mouse.y);
-                    var px = globalPos.x; var py = globalPos.y;
-                    if (px + menuWidth > root.width) px = root.width - menuWidth - 10;
-                    if (py + menuHeight > root.height) py = globalPos.y - menuHeight;
-                    contextMenu.x = Math.max(10, px);
-                    contextMenu.y = Math.max(10, py);
-                    contextMenu.open();
+                    contextMenu.openAt(videoMouseArea, mouse.x, mouse.y);
                 }
             }
             onDoubleClicked: (mouse) => {
@@ -341,6 +341,7 @@ ApplicationWindow {
     }
 
     Rectangle {
+        id: castOverlay
         anchors.fill: parent
         color: "black"
         visible: CastManager.casting
@@ -354,7 +355,7 @@ ApplicationWindow {
                     if (root.pipMode) return;
                     if (contextMenu.visible) { contextMenu.close(); return; }
                     contextMenu.currentPage = "main";
-                    contextMenu.open();
+                    contextMenu.openAt(castOverlay, mouse.x, mouse.y);
                 }
             }
         }
@@ -463,6 +464,12 @@ ApplicationWindow {
 
     SettingsDialog { id: settingsDialog }
     MediaInfoDialog { id: infoDialog }
+    FileUnavailableDialog { id: fileUnavailableDialog }
+
+    Connections {
+        target: Media
+        function onFileUnavailable(path) { fileUnavailableDialog.openWith(path); }
+    }
 
     AddUrlDialog {
         id: urlDialog

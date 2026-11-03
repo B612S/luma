@@ -27,12 +27,21 @@ private slots:
     void playlistModesPersist();
     void onlyPlayingPlaylistIsMarked();
     void addAudioAndVideoFiles();
+    void unavailableMarkPersists();
+    void unavailableMarkClearedAtRuntime();
+    void staleUnavailableMarkRemovedOnLoad();
 
 private:
     static QString playlistsDir()
     {
         return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
                + "/luma/playlists";
+    }
+    static QString playlistJson(const QString &id)
+    {
+        QFile f(playlistsDir() + "/" + id + ".json");
+        if (!f.open(QIODevice::ReadOnly)) return {};
+        return QString::fromUtf8(f.readAll());
     }
     static QString configDir()
     {
@@ -318,6 +327,123 @@ void TestPlaylistManager::playlistModesPersist()
     PlaylistManager manager2(&config2);
     QCOMPARE(manager2.playlistMode(id), QStringLiteral("repeat"));
     QCOMPARE(manager2.playlistMode(PlaylistManager::DEFAULT_ID), QStringLiteral("shuffle"));
+}
+
+// The "unavailable" mark is saved in named playlists, so a deleted file stays
+// red after a restart until it comes back.
+void TestPlaylistManager::unavailableMarkPersists()
+{
+    ConfigManager config;
+    PlaylistManager manager(&config);
+    const QString id = manager.createPlaylist("Missing");
+    QVERIFY(!id.isEmpty());
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + "/deleted.mkv";
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.close();
+
+    manager.addFilesToPlaylist(id, {path});
+    PlaylistModel *model = manager.modelById(id);
+    QVERIFY(model);
+    QCOMPARE(model->rowCount(), 1);
+    QVERIFY(QFile::remove(path));
+
+    // What playIndex() does for a local file that no longer exists.
+    model->setUnavailable(path, true);
+    QVERIFY(model->isUnavailable(path));
+    manager.setActiveId(id);
+    manager.saveActive();
+    // Duration is metadata, not playlist data: it must not be written.
+    QVERIFY(!playlistJson(id).contains("\"duration\""));
+    // The fixture is a video file: empty artist/album/year are omitted too.
+    QVERIFY(!playlistJson(id).contains("\"artist\""));
+    QVERIFY(!playlistJson(id).contains("\"album\""));
+    QVERIFY(!playlistJson(id).contains("\"year\""));
+
+    PlaylistManager reloaded(&config);
+    PlaylistModel *restored = reloaded.modelById(id);
+    QVERIFY(restored);
+    QCOMPARE(restored->rowCount(), 1);
+    QCOMPARE(restored->data(restored->index(0), Qt::UserRole + 7).toBool(), true);
+    QVERIFY(restored->isUnavailable(path));
+}
+
+// The file comes back while Luma is running: the watcher clears the mark and
+// the autosave removes "unavailable" from the playlist file.
+void TestPlaylistManager::unavailableMarkClearedAtRuntime()
+{
+    ConfigManager config;
+    PlaylistManager manager(&config);
+    const QString id = manager.createPlaylist("Runtime");
+    QVERIFY(!id.isEmpty());
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + "/deleted.mkv";
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.close();
+
+    manager.addFilesToPlaylist(id, {path});
+    PlaylistModel *model = manager.modelById(id);
+    QVERIFY(model);
+    QVERIFY(QFile::remove(path));
+    model->setUnavailable(path, true);
+    manager.setActiveId(id);
+    manager.saveActive();
+    QVERIFY(playlistJson(id).contains("\"unavailable\""));
+
+    QFile restored(path);
+    QVERIFY(restored.open(QIODevice::WriteOnly));
+    restored.close();
+
+    QTRY_VERIFY_WITH_TIMEOUT(!model->isUnavailable(path), 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(!playlistJson(id).contains("\"unavailable\""), 3000);
+}
+
+// The file came back while Luma was closed: loading the playlist drops the
+// stale mark and rewrites the file immediately.
+void TestPlaylistManager::staleUnavailableMarkRemovedOnLoad()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.path() + "/deleted.mkv";
+
+    QString id;
+    {
+        ConfigManager config;
+        PlaylistManager manager(&config);
+        id = manager.createPlaylist("Stale");
+        QVERIFY(!id.isEmpty());
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+        manager.addFilesToPlaylist(id, {path});
+        PlaylistModel *model = manager.modelById(id);
+        QVERIFY(model);
+        QVERIFY(QFile::remove(path));
+        model->setUnavailable(path, true);
+        manager.setActiveId(id);
+        manager.saveActive();
+        QVERIFY(playlistJson(id).contains("\"unavailable\""));
+    }
+
+    // Restored while the player is not running.
+    QFile restored(path);
+    QVERIFY(restored.open(QIODevice::WriteOnly));
+    restored.close();
+
+    ConfigManager config2;
+    PlaylistManager manager2(&config2);
+    PlaylistModel *model2 = manager2.modelById(id);
+    QVERIFY(model2);
+    QCOMPARE(model2->rowCount(), 1);
+    QCOMPARE(model2->data(model2->index(0), Qt::UserRole + 7).toBool(), false);
+    QVERIFY(!playlistJson(id).contains("\"unavailable\""));
 }
 
 int main(int argc, char *argv[])

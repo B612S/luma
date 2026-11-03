@@ -372,8 +372,4 @@ LumaMenu {
             LumaMenuButton { text: qsTr("menu_back"); onClicked: menu.showPage("playback") }
         }
     }
-
-    function getContentHeight() {
-        return contentColumn.implicitHeight + menu.topPadding + menu.bottomPadding;
-    }
 }

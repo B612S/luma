@@ -21,7 +21,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Luma is Wayland-only: the Qt Wayland client integration is required, not optional.
-find_package(Qt6 REQUIRED COMPONENTS
+find_package(Qt6 6.9 REQUIRED COMPONENTS
     Core Gui Quick QuickControls2 Widgets DBus Network Concurrent
     OpenGL OpenGLWidgets LinguistTools WaylandClient
 )
@@ -42,7 +42,7 @@ pkg_check_modules(AVCODEC REQUIRED libavcodec)
 pkg_check_modules(SWSCALE REQUIRED libswscale)
 pkg_check_modules(AVUTIL REQUIRED libavutil)
 
-qt_standard_project_setup()
+qt_standard_project_setup(REQUIRES 6.9)
 
 qt_add_executable(luma
     main.cpp
@@ -51,6 +51,7 @@ qt_add_executable(luma
     core/MprisManager.cpp
     core/Logger.cpp
     core/PlaylistModel.cpp
+    core/PlaylistFilterModel.cpp
     core/PlaylistManager.cpp
     core/MediaManager.cpp
     core/OsdManager.cpp
@@ -97,6 +98,7 @@ qt_add_qml_module(luma
         qml/StatsPanel.qml
         qml/SettingsDialog.qml
         qml/MediaInfoDialog.qml
+        qml/FileUnavailableDialog.qml
     SOURCES
         mpvqt/MpvItem.hpp
         mpvqt/FrameDecoder.hpp
@@ -106,6 +108,7 @@ qt_add_qml_module(luma
         core/ShortcutAction.hpp
         core/ShortcutHandler.hpp
         core/PlaylistModel.hpp
+        core/PlaylistFilterModel.hpp
         core/PlaylistManager.hpp
         core/MediaManager.hpp
         core/OsdManager.hpp

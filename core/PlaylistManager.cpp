@@ -64,11 +64,11 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
     m_tagScanner = new TagScanner(this);
     connect(m_tagScanner, &TagScanner::scanned, this,
             [this](const QString &path, const QString &title, const QString &artist,
-                   const QString &album, int year, double duration, bool ok) {
+                   const QString &album, int year, bool ok) {
         if (!ok) return;
         for (PlaylistModel *model : m_models) {
             if (model)
-                model->updateMetadata(path, title, artist, album, year, duration);
+                model->updateMetadata(path, title, artist, album, year);
         }
     });
 
@@ -195,6 +195,11 @@ void PlaylistManager::loadPlaylist(const QString &id) {
         entries.append(v.toObject().toVariantMap());
     }
     model->setEntries(entries, "");
+
+    // The file came back while Luma was closed: setEntries() dropped its stale
+    // "unavailable" mark, so rewrite the playlist without it.
+    if (model->takeDroppedUnavailableMarks())
+        savePlaylist(id);
 }
 
 void PlaylistManager::savePlaylist(const QString &id) {
@@ -397,9 +402,8 @@ QVariantMap PlaylistManager::buildEntry(const QString &path) const {
     QFileInfo fi(path);
     entry["path"] = fi.absoluteFilePath();
     entry["kind"] = isAudioPath(path) ? "audio" : "video";
-    // Tags and duration are read by TagScanner in the background.
+    // Tags are read by TagScanner in the background.
     entry["title"] = fi.completeBaseName().isEmpty() ? fi.fileName() : fi.completeBaseName();
-    entry["duration"] = 0.0;
     return entry;
 }
 
@@ -450,7 +454,6 @@ void PlaylistManager::addUrlToPlaylist(const QString &id, const QString &url) {
     // A stream may be either video or radio — assume audio by default.
     entry["kind"] = "audio";
     entry["title"] = "";
-    entry["duration"] = 0.0;
 
     model->appendEntry(entry);
 

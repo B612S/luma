@@ -6,6 +6,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+class QFileSystemWatcher;
+
 class PlaylistModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)
@@ -19,10 +21,12 @@ public:
         QString artist;
         QString album;
         int     year = 0;
-        double  duration = 0.0;
         // The video title from yt-dlp is saved in the playlist; the live ICY title
         // of radio is not (it goes stale after a restart).
         bool persistTitle = false;
+        // The file was missing when it was last opened; saved so the red mark
+        // survives a restart and cleared when the file comes back.
+        bool unavailable = false;
     };
 
     explicit PlaylistModel(QObject *parent = nullptr);
@@ -54,9 +58,22 @@ public:
 
     // Video title from yt-dlp: shown and saved in the playlist.
     void setVideoTitle(const QString &path, const QString &title);
-    // Updates local audio metadata read in the background (tags/duration).
+    // Deleted or moved files: the delegate draws such entries in the negative
+    // color. The mark is saved in named playlists and the parent directory is
+    // watched so it disappears when the file comes back.
+    void setUnavailable(const QString &path, bool unavailable);
+    bool isUnavailable(const QString &path) const { return m_unavailable.contains(path); }
+    // setEntries() dropped a saved mark because the file exists again. The
+    // owner should save the playlist so the stale field leaves the file.
+    bool takeDroppedUnavailableMarks()
+    {
+        const bool dropped = m_droppedUnavailableMarks;
+        m_droppedUnavailableMarks = false;
+        return dropped;
+    }
+    // Updates local audio metadata read in the background (tags).
     bool updateMetadata(const QString &path, const QString &title, const QString &artist,
-                        const QString &album, int year, double duration);
+                        const QString &album, int year);
     Q_INVOKABLE void sortBy(const QString &key, bool ascending = true);
 
     // --- Changes (emit modified) ---
@@ -79,11 +96,19 @@ private:
     QVariant entryToVariant(const Entry &e) const;
     Entry variantToEntry(const QVariantMap &m) const;
 
+    void clearUnavailable();
+    void watchUnavailableDirectory(const QString &path);
+    void pruneUnavailableWatcher(const QString &dir);
+    void onUnavailableDirectoryChanged(const QString &dir);
+
     QStringList m_originalPaths;   // for disabling shuffle
     // Fast duplicate check when a whole folder is appended (appendEntry used
     // to scan every existing entry for every new file).
     QSet<QString> m_paths;
     QVector<Entry> m_entries;
+    QSet<QString> m_unavailable;   // mirrors Entry::unavailable for the watcher
+    bool m_droppedUnavailableMarks = false;
+    QFileSystemWatcher *m_watcher = nullptr;
     int m_currentIndex = -1;
     QString m_currentPlayingFile;
     bool m_isPlaying = true;

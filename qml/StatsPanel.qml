@@ -24,6 +24,16 @@ Rectangle {
     property string _staticAudioCodec: ""
     property bool _staticImageTrack: false
 
+    // Current video bitrate sampled from the file around the playback
+    // position (bps). mpv's "video-bitrate" is the average of the last GOP and
+    // only changes at keyframes, so it can keep one GOP's value for many
+    // seconds; audio packets are all keyframes, which is why mpv's
+    // "audio-bitrate" already updates every ~0.5 s.
+    property real _liveVideoBitrate: 0
+    property real _lastBitrateSamplePosition: -1
+    property double _lastBitrateSampleTime: 0
+    property bool _bitrateSamplePending: false
+
     // Full metadata for audio files and radio streams (mpv metadata plus the
     // tags read asynchronously by MediaManager for local files).
     property var tagList: []
@@ -59,6 +69,9 @@ Rectangle {
         if (isOpen) {
             statsPanel.opacity = 1.0
             resetStaticCache()
+            // Sample the current window at once, so the first refresh already
+            // has it instead of mpv's last-GOP estimate.
+            requestLiveBitrate()
             updateTimer.start()
         } else {
             statsPanel.opacity = 0.0
@@ -97,6 +110,14 @@ Rectangle {
             statsPanel._fileTags = merged;
             statsPanel.updateTags();
         }
+
+        function onLiveBitrateReady(path, position, videoBps, audioBps) {
+            statsPanel._bitrateSamplePending = false;
+            if (!mpv || path !== mpv.source) return;
+            // The user may have seeked while the sample was running.
+            if (Math.abs(position - mpv.position) > 5) return;
+            if (videoBps > 0) statsPanel._liveVideoBitrate = videoBps;
+        }
     }
 
     function resetStaticCache() {
@@ -108,6 +129,10 @@ Rectangle {
         _staticVideoCodec = ""
         _staticAudioCodec = ""
         _staticImageTrack = false
+        _liveVideoBitrate = 0
+        _lastBitrateSamplePosition = -1
+        _lastBitrateSampleTime = 0
+        _bitrateSamplePending = false
         tagList = []
         secondaryTagList = []
         primaryTitle = ""
@@ -142,8 +167,6 @@ Rectangle {
             const loading = typeof Media !== "undefined" && Media.isLoading === true;
             if (loading || !mpv || (mpv.duration <= 0 && !live)) return;
 
-            requestTags();
-
             const title = currentDisplayTitle();
             if (title !== "") _staticFile = title;
             if (_staticFile === "")
@@ -171,7 +194,23 @@ Rectangle {
             }
 
             updateTags();
+            requestTags();
             const shownTitle = displayTitle();
+
+            // mpv's video-bitrate is the average of the last GOP and changes
+            // only at keyframes. Sample the current window from the file while
+            // playing; audio packets are keyframes, so mpv's audio-bitrate
+            // already updates every ~0.5 s.
+            const source = mpv.source || "";
+            const localFile = source !== "" && source.indexOf("http://") !== 0
+                && source.indexOf("https://") !== 0;
+            if (localFile && statsPanel.hasVideo && !statsPanel._bitrateSamplePending) {
+                const now = Date.now();
+                const moved = Math.abs(mpv.position - statsPanel._lastBitrateSamplePosition) > 5;
+                const periodic = !mpv.paused
+                    && now - statsPanel._lastBitrateSampleTime >= 2000;
+                if (moved || periodic) statsPanel.requestLiveBitrate();
+            }
 
             fileLabel.text = "<b>" + qsTr("stats_file") + ":</b> " + shownTitle
             sizeLabel.text = "<b>" + qsTr("stats_size") + ":</b> " + _staticSize
@@ -182,7 +221,11 @@ Rectangle {
                 resLabel.text = "<b>" + qsTr("stats_resolution") + ":</b> " + _staticWidth + "x" + _staticHeight
                 fpsLabel.text = "<b>" + qsTr("stats_fps") + ":</b> " + safeNumber(statsProperty("container-fps"), 2)
 
-                let vidBitrate = statsProperty("video-bitrate");
+                // A freshly sampled window when available, otherwise mpv's
+                // last-GOP estimate (also the only value for network streams).
+                const vidBitrate = localFile && statsPanel._liveVideoBitrate > 0
+                    ? statsPanel._liveVideoBitrate
+                    : statsProperty("video-bitrate");
             vidBitrateLabel.text = "<b>" + qsTr("stats_vid_bitrate") + ":</b> " + formatBitrate(vidBitrate)
 
             hwdecLabel.text = "<b>" + qsTr("stats_hwdec") + ":</b> " + safeString(statsProperty("hwdec-current"))
@@ -358,6 +401,20 @@ Rectangle {
         if (path === _tagsInfoPath) return;
         _tagsInfoPath = path;
         Media.requestFileInfo(path);
+    }
+
+    function requestLiveBitrate() {
+        if (typeof Media === "undefined" || !mpv) return;
+        if (statsPanel._bitrateSamplePending) return;
+        // Radio has no local file to sample, and cover art is not video.
+        if (!(Number(statsProperty("width")) > 0)) return;
+        const path = mpv.source;
+        if (!path || path.indexOf("http://") === 0 || path.indexOf("https://") === 0) return;
+        if (!(mpv.position >= 0)) return;
+        statsPanel._bitrateSamplePending = true;
+        statsPanel._lastBitrateSamplePosition = mpv.position;
+        statsPanel._lastBitrateSampleTime = Date.now();
+        Media.requestLiveBitrate(path, mpv.position);
     }
 
     function displayTitle() {
@@ -682,9 +739,10 @@ Rectangle {
         return mb.toFixed(2) + " MiB";
     }
 
-    // Proper bitrate formatting (mpv reports in bps)
+    // Both mpv and the sampler report bps; show N/A instead of a misleading
+    // "0 kbps" when the bitrate is not available.
     function formatBitrate(bps) {
-        if (!bps || isNaN(bps) || bps <= 0) return "0 kbps";
+        if (!bps || isNaN(bps) || bps <= 0) return "N/A";
 
         if (bps >= 1000000) {
             return (bps / 1000000).toFixed(2) + " Mbps";
@@ -709,12 +767,9 @@ Rectangle {
             statsContextMenu.close();
             return;
         }
-        // The menu is parented to the window overlay: use scene coordinates.
-        // LumaMenu keeps it inside the window.
-        const scene = statsPanel.mapToItem(null, localX, localY);
-        statsContextMenu.x = scene.x;
-        statsContextMenu.y = scene.y;
-        statsContextMenu.open();
+        // Anchor to the panel: the menu follows it (and the window) instead of
+        // staying at stale scene coordinates.
+        statsContextMenu.openAt(statsPanel, localX, localY);
     }
 
     function closeContextMenu() {
