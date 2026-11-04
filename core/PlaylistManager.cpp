@@ -2,6 +2,8 @@
 #include "ConfigManager.hpp"
 #include "Logger.hpp"
 #include "TagScanner.hpp"
+#include "RadioNameResolver.hpp"
+#include "PlaylistSaver.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -61,6 +63,18 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
 
     loadAll();
 
+    m_saver = new PlaylistSaver(this);
+
+    m_radioNames = new RadioNameResolver(this);
+    connect(m_radioNames, &RadioNameResolver::nameResolved, this,
+            [this](const QString &url, const QString &name) {
+        m_stationNames.insert(url, name);
+        for (PlaylistModel *model : m_models) {
+            if (model && model->contains(url))
+                model->setStationTitle(url, name);
+        }
+    });
+
     m_tagScanner = new TagScanner(this);
     connect(m_tagScanner, &TagScanner::scanned, this,
             [this](const QString &path, const QString &title, const QString &artist,
@@ -81,8 +95,10 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
 PlaylistManager::~PlaylistManager() {
     if (m_tagScanner)
         m_tagScanner->stop();
-    if (m_saveTimer.isActive())
+    if (m_saveTimer.isActive() || !m_dirtyIds.isEmpty())
         flushPendingSaves();
+    if (m_saver)
+        m_saver->waitForIdle();
 }
 
 void PlaylistManager::scheduleSave(const QString &id) {
@@ -96,7 +112,7 @@ void PlaylistManager::flushPendingSaves() {
     const QSet<QString> ids = m_dirtyIds;
     m_dirtyIds.clear();
     for (const QString &id : ids)
-        savePlaylist(id);
+        queuePlaylistSave(id);
     if (m_playlistsChangedPending) {
         m_playlistsChangedPending = false;
         emit playlistsChanged();
@@ -186,11 +202,7 @@ void PlaylistManager::loadPlaylist(const QString &id) {
         });
     }
 
-    QVariantList entries;
-    for (const QJsonValue &v : obj.value("entries").toArray()) {
-        entries.append(v.toObject().toVariantMap());
-    }
-    model->setEntries(entries, "");
+    model->setEntriesFromJson(obj.value("entries").toArray(), "");
 
     // The file came back while Luma was closed: setEntries() dropped its stale
     // "unavailable" mark, so rewrite the playlist without it.
@@ -198,21 +210,31 @@ void PlaylistManager::loadPlaylist(const QString &id) {
         savePlaylist(id);
 }
 
+void PlaylistManager::queuePlaylistSave(const QString &id)
+{
+    if (id == DEFAULT_ID || !m_saver) return;
+    PlaylistModel *model = m_models.value(id, nullptr);
+    if (!model) return;
+    m_saver->save(playlistFilePath(id), id, m_names.value(id, id),
+                  normalizedPlaylistMode(m_modes.value(id)), model->entries());
+}
+
 void PlaylistManager::savePlaylist(const QString &id) {
     if (id == DEFAULT_ID) return;
     PlaylistModel *model = m_models.value(id, nullptr);
     if (!model) return;
+
+    // A synchronous save must reflect the newest state: wait until snapshots
+    // queued earlier have been written, otherwise an older one could land
+    // after this file and overwrite it.
+    if (m_saver) m_saver->waitForIdle();
 
     QJsonObject obj;
     obj["id"] = id;
     obj["name"] = m_names.value(id, id);
     obj["mode"] = normalizedPlaylistMode(m_modes.value(id));
 
-    QJsonArray entries;
-    for (const QVariant &v : model->toVariantList()) {
-        entries.append(QJsonObject::fromVariantMap(v.toMap()));
-    }
-    obj["entries"] = entries;
+    obj["entries"] = model->toJsonArray();
 
     // Atomic replace: a crash while saving must not truncate the playlist.
     QSaveFile f(playlistFilePath(id));
@@ -260,6 +282,23 @@ void PlaylistManager::setActiveId(const QString &id) {
     emit activeIdChanged();
     emit activeModelChanged();
     scanPlaylistTags(id);
+    resolveStationNames(activeModel());
+}
+
+void PlaylistManager::resolveStationNames(PlaylistModel *model)
+{
+    if (!model || !m_radioNames) return;
+    for (const PlaylistModel::Entry &entry : model->entries()) {
+        if (!entry.station.isEmpty() || entry.persistTitle) continue;
+        if (!entry.path.startsWith(QStringLiteral("http://"))
+                && !entry.path.startsWith(QStringLiteral("https://")))
+            continue;
+        const QString known = m_stationNames.value(entry.path);
+        if (!known.isEmpty())
+            model->setStationTitle(entry.path, known);
+        else
+            m_radioNames->resolve(entry.path);
+    }
 }
 
 void PlaylistManager::scanPlaylistTags(const QString &id) {
@@ -311,6 +350,7 @@ void PlaylistManager::deletePlaylist(const QString &id) {
 
     // A pending save must not resurrect a deleted playlist.
     m_dirtyIds.remove(id);
+    if (m_saver) m_saver->waitForIdle();
 
     if (m_activeId == id) {
         setActiveId(DEFAULT_ID);
@@ -467,6 +507,11 @@ void PlaylistManager::addUrlToPlaylist(const QString &id, const QString &url) {
 
     model->appendEntry(entry);
 
+    // The same link may already have been resolved in another playlist.
+    const QString known = m_stationNames.value(trimmed);
+    if (!known.isEmpty())
+        model->setStationTitle(trimmed, known);
+
     if (id != DEFAULT_ID) scheduleSave(id);
     else emit playlistsChanged();
 
@@ -477,6 +522,10 @@ void PlaylistManager::addUrlToPlaylist(const QString &id, const QString &url) {
 }
 
 void PlaylistManager::fetchUrlTitle(const QString &id, const QString &url) {
+    // The link may be a radio stream: its icy-name is the only useful title
+    // and yt-dlp fails on those. Probe it in parallel with yt-dlp.
+    if (m_radioNames) m_radioNames->resolve(url);
+
     const QString exe = QStandardPaths::findExecutable(QStringLiteral("yt-dlp"));
     if (exe.isEmpty()) return;
 

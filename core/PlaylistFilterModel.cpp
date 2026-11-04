@@ -46,11 +46,13 @@ bool PlaylistFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sou
     const QModelIndex idx = m_model->index(sourceRow, 0, sourceParent);
     const QString display = m_model->data(idx, Qt::DisplayRole).toString();
     const QString title = m_model->data(idx, Qt::UserRole + 6).toString();
+    const QString station = m_model->data(idx, Qt::UserRole + 8).toString();
     const QString artist = m_model->data(idx, Qt::UserRole + 3).toString();
     const QString path = m_model->data(idx, Qt::UserRole).toString();
 
     return display.contains(needle, Qt::CaseInsensitive)
         || title.contains(needle, Qt::CaseInsensitive)
+        || station.contains(needle, Qt::CaseInsensitive)
         || artist.contains(needle, Qt::CaseInsensitive)
         || path.contains(needle, Qt::CaseInsensitive);
 }

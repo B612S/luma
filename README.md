@@ -189,7 +189,8 @@ network, so it is not part of the default run.
   *Clear playlist*, *Rename*, *Delete*. Right-click a track for playback, shuffle,
   “Add to playlist”, properties, opening the containing folder and removal. The search
   bar at the bottom filters the current playlist by title, artist or file name; clear it
-  with the × button or Escape.
+  with the × button or Escape. Radio links show the station name fetched from the stream
+  instead of the URL; while a station plays, its current track is shown.
   Each named playlist keeps its own playback mode (changed in *Playback → Playback
   mode*); the mode chosen in the settings applies only to the Default playlist.
 - **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.

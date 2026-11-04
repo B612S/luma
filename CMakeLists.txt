@@ -53,9 +53,13 @@ qt_add_executable(luma
     core/PlaylistModel.cpp
     core/PlaylistFilterModel.cpp
     core/PlaylistManager.cpp
+    core/PlaylistSaver.cpp
+    core/PlaylistSaver.hpp
     core/MediaManager.cpp
     core/IcyMetadataReader.cpp
     core/IcyMetadataReader.hpp
+    core/RadioNameResolver.cpp
+    core/RadioNameResolver.hpp
     core/OsdManager.cpp
     core/KWinBridge.cpp
     core/TagManager.cpp

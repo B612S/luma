@@ -18,6 +18,10 @@ add_library(luma_testcore STATIC
     ${CMAKE_SOURCE_DIR}/core/PlaylistFilterModel.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistManager.cpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistManager.hpp
+    ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.cpp
+    ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.hpp
+    ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.cpp
+    ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.hpp
     ${CMAKE_SOURCE_DIR}/core/TagScanner.cpp
     ${CMAKE_SOURCE_DIR}/core/TagScanner.hpp
     ${CMAKE_SOURCE_DIR}/core/ShortcutAction.cpp
@@ -116,7 +120,7 @@ target_compile_definitions(tst_media_open PRIVATE
 )
 add_test(NAME tst_media_open COMMAND tst_media_open)
 set_tests_properties(tst_media_open PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-config;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-cache"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;LUMA_TEST_NO_NETWORK=1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-config;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-cache"
     TIMEOUT 60
     LABELS "integration;libmpv"
 )

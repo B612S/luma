@@ -1193,9 +1193,8 @@ void MediaManager::removeFromPlaylist(int index) {
         model->removeItem(index);
     }
 
-    // Save if this is a named playlist
-    if (m_playlists->activeId() != PlaylistManager::DEFAULT_ID)
-        m_playlists->saveActive();
+    // PlaylistModel::removeItem() emits modified, so the named playlist is
+    // autosaved in the background; no blocking save is needed here.
 }
 
 void MediaManager::addToPlaylist(const QString &path) {
@@ -1230,6 +1229,7 @@ void MediaManager::openFile(const QString &path) {
 
     // URLs go to Default
     if (path.startsWith("http://") || path.startsWith("https://")) {
+        clearPendingUrlPlayback();
         if (isDirectStreamUrl(QUrl(path))) playResolvedUrl(path, path);
         else openUrlAsync(path);
         return;
@@ -1558,6 +1558,11 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
         m_resolvedVideoUrl.clear();
         m_resolvedAudioUrl.clear();
         m_resolvedIsLive = false;
+        // The link failed to resolve: do not leave the loading entry marked as
+        // playing. A playlist that was already playing keeps its marker.
+        if (m_pendingUrlModel && !m_pendingUrlWasPlaying)
+            m_pendingUrlModel->setPlaying(false);
+        clearPendingUrlPlayback();
         setLoading(false);
         return;
     }
@@ -1587,13 +1592,24 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
         def->setCurrentIndex(existingIndex >= 0 ? existingIndex : 0);
     }
 
-    PlaylistModel *titleModel = keepPlaylist ? m_playlists->activeModel()
+    // Keep the playing marker on the playlist the URL was started from, not
+    // on the tab that happens to be active after yt-dlp finishes (the user
+    // may switch playlists while the link is being resolved).
+    PlaylistModel *titleModel = keepPlaylist ? m_pendingUrlModel.data()
                                              : m_playlists->defaultModel();
+    if (keepPlaylist && !titleModel)
+        titleModel = m_playlists->activeModel();
     if (titleModel) {
         m_playlists->setPlayingModel(titleModel);
+        // Re-find the row: the playlist could have been reordered while the
+        // link was loading.
+        const int index = titleModel->indexOf(originalUrl);
+        if (index >= 0)
+            titleModel->setCurrentIndex(index);
         if (!title.isEmpty())
             titleModel->setVideoTitle(originalUrl, title);
     }
+    clearPendingUrlPlayback();
 
     m_lastPlayedFile = originalUrl;
     m_lastPlayedTimer.start();
@@ -1632,8 +1648,15 @@ void MediaManager::onMpvFileLoaded() {
         m_icyReader->start(url);
 }
 
+void MediaManager::clearPendingUrlPlayback()
+{
+    m_pendingUrlModel.clear();
+    m_pendingUrlWasPlaying = false;
+}
+
 void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &playUrl) {
     if (!m_mpv || !m_playlists) return;
+    clearPendingUrlPlayback();
     if (m_icyReader) m_icyReader->stop();
     if (m_icyTitleTimer) m_icyTitleTimer->stop();
     m_pendingIcyTitle.clear();
@@ -1713,9 +1736,16 @@ void MediaManager::playIndex(int index) {
     if ((file.startsWith(QStringLiteral("http://")) || file.startsWith(QStringLiteral("https://")))
             && !isDirectStreamUrl(QUrl(file))) {
         model->setCurrentIndex(index);
+        // Mark the entry as playing right away: resolving the link can take a
+        // while and the playlist should show what is about to play. Other
+        // playlists keep their marker until the link actually resolves.
+        m_pendingUrlWasPlaying = model->isPlaying();
+        m_pendingUrlModel = model;
+        model->setPlaying(true);
         openUrlAsync(file, true);
         return;
     }
+    clearPendingUrlPlayback();
 
     m_lastStreamTitle.clear();
     m_streamFromYtdlp = false;
@@ -1774,6 +1804,7 @@ void MediaManager::playNext() {
 
 void MediaManager::stopPlayback() {
     if (!m_mpv) return;
+    clearPendingUrlPlayback();
     // Unload the file so the video area goes black and the control bar returns
     // to 00:00 instead of leaving the last frame of the finished playlist on
     // screen.

@@ -1,5 +1,7 @@
 #pragma once
 #include <QAbstractListModel>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QVector>
 #include <QSet>
 #include <QStringList>
@@ -18,6 +20,10 @@ public:
         QString path;
         QString kind;      // "video" | "audio"
         QString title;
+        // Radio station name (the ICY "icy-name" header). Unlike the live
+        // stream title it is stable, so it is saved and shown while the
+        // station is not playing.
+        QString station;
         QString artist;
         QString album;
         int     year = 0;
@@ -38,6 +44,9 @@ public:
     // --- Loading (does not emit modified, so nothing is saved when reading from disk) ---
     Q_INVOKABLE void setFiles(const QStringList &files, const QString &current);
     Q_INVOKABLE void setEntries(const QVariantList &entries, const QString &current);
+    // Same as setEntries(), but reads the objects directly from the playlist
+    // file: the QVariantMap round trip was a large part of the load time.
+    void setEntriesFromJson(const QJsonArray &entries, const QString &current);
 
     // --- Reading ---
     Q_INVOKABLE QString fileAt(int index) const;
@@ -50,8 +59,12 @@ public:
     int currentIndex() const { return m_currentIndex; }
     void setCurrentIndex(int idx);
 
-    // Live stream title (radio): shown instead of the URL, not saved.
+    // Live stream title (radio): shown instead of the URL while it plays, not
+    // saved (it goes stale).
     void setStreamTitle(const QString &path, const QString &title);
+    // Radio station name from the stream's ICY headers: saved in the playlist
+    // and shown when the station is not playing.
+    void setStationTitle(const QString &path, const QString &name);
     // Only the model that owns the active playback shows the ▶ marker.
     void setPlaying(bool playing);
     bool isPlaying() const { return m_isPlaying; }
@@ -85,6 +98,10 @@ public:
 
     // --- Serialization ---
     QVariantList toVariantList() const;
+    // Playlist entries as the JSON objects written to disk. Building the file
+    // directly from Entry skips the QVariantMap conversion on save.
+    QJsonArray toJsonArray() const;
+    static QJsonArray entriesToJson(const QVector<Entry> &entries);
     const QVector<Entry> &entries() const { return m_entries; }
 
 signals:
@@ -93,6 +110,11 @@ signals:
     void modified();
 
 private:
+    void installEntries(QVector<Entry> &&entries, const QString &current);
+    static Entry makeEntry(const QString &path, const QString &kind, const QString &title,
+                           const QString &station, const QString &artist, const QString &album,
+                           int year, bool unavailable);
+    static Entry entryFromJson(const QJsonObject &obj);
     QVariant entryToVariant(const Entry &e) const;
     Entry variantToEntry(const QVariantMap &m) const;
 

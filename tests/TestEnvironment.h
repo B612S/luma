@@ -20,6 +20,9 @@ inline QString initTestEnvironment()
         QDir().mkpath(root + "/cache");
         qputenv("XDG_CONFIG_HOME", (root + "/config").toUtf8());
         qputenv("XDG_CACHE_HOME", (root + "/cache").toUtf8());
+        // PlaylistManager probes radio links for their station name; tests must
+        // stay offline (they use a fake yt-dlp for link titles).
+        qputenv("LUMA_TEST_NO_NETWORK", "1");
     }
     return root;
 }

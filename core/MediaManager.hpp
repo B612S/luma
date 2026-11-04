@@ -136,6 +136,7 @@ private:
                     const QString &audioUrl, const QString &title, bool keepPlaylist,
                     bool isLive);
     void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
+    void clearPendingUrlPlayback();
     void onMpvFileLoaded();
     QString ytdlpLocalDir() const;
     void runPipInstall(const QString &package, const QString &dir,
@@ -146,6 +147,14 @@ private:
     PlaylistManager *m_playlists = nullptr;
     ConfigManager *m_config = nullptr;
     QStringList m_history;
+    // The playlist a URL was started from. yt-dlp resolves the link
+    // asynchronously; the user may switch tabs before it finishes, and the
+    // playing marker must stay on the original playlist, not on the tab that
+    // happens to be active when playback starts.
+    QPointer<PlaylistModel> m_pendingUrlModel;
+    // Whether that playlist was already marked as playing before the link
+    // started loading (then a failure must not clear its marker).
+    bool m_pendingUrlWasPlaying = false;
     QString m_playMode = "sequential";
     bool m_isManualSwitch = false;
 

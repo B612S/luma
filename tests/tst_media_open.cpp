@@ -29,6 +29,7 @@ private slots:
     void fileInfoBitrateEstimate();
     void liveBitrateSample();
     void youtubeLinkThroughYtdlp();
+    void youtubeFromPlaylistKeepsPlayingMarker();
     void realYouTubeLink();
 
 private:
@@ -345,6 +346,62 @@ void TestMediaOpen::youtubeLinkThroughYtdlp()
         def->data(def->index(index), Qt::UserRole + 6).toString(),
         QStringLiteral("Fake YouTube"), 5000);
     QVERIFY(m_media->hasVideo());
+}
+
+void TestMediaOpen::youtubeFromPlaylistKeepsPlayingMarker()
+{
+    stopPlayback();
+
+    // yt-dlp is slow enough for the tab switch to happen while the link is
+    // being resolved.
+    QTemporaryDir fakeBin;
+    QVERIFY(fakeBin.isValid());
+    const QString video = QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4");
+    const QString scriptPath = fakeBin.path() + "/yt-dlp";
+    QFile script(scriptPath);
+    QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    script.write("#!/bin/sh\n"
+                 "sleep 0.4\n"
+                 "printf '{\"title\":\"Fake YouTube\",\"url\":\"%s\"}\\n' \"$LUMA_FAKE_VIDEO\"\n");
+    script.close();
+    QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                  | QFileDevice::ExeOwner));
+    qputenv("LUMA_FAKE_VIDEO", video.toUtf8());
+    qputenv("PATH", fakeBin.path().toUtf8() + ':' + m_oldPath);
+
+    const QString firstId = m_playlists->createPlaylist(QStringLiteral("First"));
+    const QString secondId = m_playlists->createPlaylist(QStringLiteral("Second"));
+    QVERIFY(!firstId.isEmpty());
+    QVERIFY(!secondId.isEmpty());
+
+    const QString url = QStringLiteral("https://www.youtube.com/watch?v=playlist-marker");
+    m_playlists->addUrlToPlaylist(firstId, url);
+    PlaylistModel *first = m_playlists->modelById(firstId);
+    PlaylistModel *second = m_playlists->modelById(secondId);
+    QVERIFY(first);
+    QVERIFY(second);
+
+    m_playlists->setActiveId(firstId);
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playIndex(0);
+    // The entry is marked as playing immediately, while yt-dlp is still busy.
+    QVERIFY(first->isPlaying());
+    // The user switches to the other playlist before yt-dlp has resolved the
+    // link; the playing marker must stay on the first playlist.
+    m_playlists->setActiveId(secondId);
+
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 15000);
+    QTRY_VERIFY_WITH_TIMEOUT(first->isPlaying(), 5000);
+    QCOMPARE(first->currentIndex(), 0);
+    QVERIFY2(first->data(first->index(0), Qt::DisplayRole).toString()
+                 .startsWith(QStringLiteral("▶ ")),
+             qPrintable(first->data(first->index(0), Qt::DisplayRole).toString()));
+    QVERIFY(!second->isPlaying());
+
+    stopPlayback();
+    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
+    m_playlists->deletePlaylist(firstId);
+    m_playlists->deletePlaylist(secondId);
 }
 
 void TestMediaOpen::realYouTubeLink()

@@ -28,6 +28,8 @@ private slots:
     void urlEntryShowsLink();
     void streamTitleReplacesUrl();
     void streamTitleIsNotSaved();
+    void stationNameShowsInsteadOfUrl();
+    void radioShowsStationWhenNotPlaying();
     void videoTitlePersists();
     void shuffleKeepsCurrentFirst();
     void unavailableFlagMarksEntry();
@@ -277,6 +279,61 @@ void TestPlaylistModel::streamTitleIsNotSaved()
     const QVariantList saved = model.toVariantList();
     QCOMPARE(int(saved.size()), 1);
     QVERIFY(!saved.first().toMap().contains(QStringLiteral("title")));
+}
+
+void TestPlaylistModel::stationNameShowsInsteadOfUrl()
+{
+    PlaylistModel model;
+    const QString url = QStringLiteral("http://kathy.torontocast.com:3060/");
+    QVariantMap entry;
+    entry["path"] = url;
+    model.appendEntry(entry);
+
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), url);
+
+    model.setStationTitle(url, QStringLiteral("Toronto Cast"));
+
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("Toronto Cast"));
+
+    // The station name is stable, so it is saved like a video title.
+    const QVariantList saved = model.toVariantList();
+    QCOMPARE(saved.first().toMap().value(QStringLiteral("station")).toString(),
+             QStringLiteral("Toronto Cast"));
+
+    PlaylistModel loaded;
+    loaded.setEntries(saved, QString());
+    QCOMPARE(loaded.data(loaded.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("Toronto Cast"));
+}
+
+void TestPlaylistModel::radioShowsStationWhenNotPlaying()
+{
+    PlaylistModel model;
+    const QString url = QStringLiteral("http://kathy.torontocast.com:3060/");
+    QVariantMap entry;
+    entry["path"] = url;
+    model.appendEntry(entry);
+    model.setStationTitle(url, QStringLiteral("Toronto Cast"));
+
+    model.setCurrentIndex(0);
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("▶ Toronto Cast"));
+
+    // While the station plays, its live tag is shown instead.
+    model.setStreamTitle(url, QStringLiteral("Artist - Track"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("▶ Artist - Track"));
+
+    // Once it stops, the playlist goes back to the station name.
+    model.setPlaying(false);
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
+             QStringLiteral("Toronto Cast"));
+
+    // The live tag is never written to disk; the station name is.
+    const QVariantMap saved = model.toVariantList().first().toMap();
+    QCOMPARE(saved.value(QStringLiteral("station")).toString(), QStringLiteral("Toronto Cast"));
+    QVERIFY(!saved.contains(QStringLiteral("title")));
 }
 
 void TestPlaylistModel::videoTitlePersists()

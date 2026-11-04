@@ -8,7 +8,9 @@
 #include "PlaylistModel.hpp"
 
 class ConfigManager;
+class PlaylistSaver;
 class TagScanner;
+class RadioNameResolver;
 
 class PlaylistManager : public QObject {
     Q_OBJECT
@@ -67,7 +69,12 @@ private:
     void loadAll();
     void savePlaylist(const QString &id);
     void loadPlaylist(const QString &id);
+    // Serialises and writes in the background (see PlaylistSaver).
+    void queuePlaylistSave(const QString &id);
     void scanPlaylistTags(const QString &id);
+    // Probes the icy-name of radio links that have no station name yet. Runs
+    // in the background; results are saved to the playlist.
+    void resolveStationNames(PlaylistModel *model);
     void saveOrder();
     // Changes (drag and drop, additions) arrive very often, so writing to disk
     // and the playlistsChanged signal are coalesced via a timer.
@@ -89,6 +96,11 @@ private:
     bool m_loading = false;
     QTimer m_saveTimer;
     TagScanner *m_tagScanner = nullptr;
+    PlaylistSaver *m_saver = nullptr;
+    RadioNameResolver *m_radioNames = nullptr;
+    // Station names learned in this session, so a link added to another
+    // playlist gets its name without probing the stream again.
+    QHash<QString, QString> m_stationNames;
     QSet<QString> m_dirtyIds;
     QSet<QString> m_scannedPlaylists;
     bool m_playlistsChangedPending = false;

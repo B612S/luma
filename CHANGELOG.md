@@ -8,6 +8,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Radio links in playlists now show the station name (the ICY `icy-name` header)
+  instead of the URL while the stream is not playing. The name is fetched in the
+  background when a link is added or a playlist is opened, saved in the playlist, and
+  the live track title is shown while the station plays. The probe runs in its own
+  thread, so the first (slow) network request cannot stall the GUI or drop video
+  frames.
 - “Fit window to video”: `W` or **Playback → Fit window to video** in the context
   menu fits the current window to the video's aspect ratio without exceeding its
   current size, so a 4:3 film in a wide window becomes narrower instead of stretching
@@ -80,6 +86,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Playlists with thousands of entries load faster and save without blocking the UI.
+  The JSON is now converted directly between the entry objects and `QJsonObject`
+  (the `QVariantMap` round trip was the largest part of the load/save time), and
+  autosaves are serialised and written by a background thread. On a 10 000-entry
+  playlist loading dropped from ~44 ms to ~16 ms and the GUI thread now spends no
+  time on a full autosave; the file format stays the same human-editable JSON.
 - The 5-minute stream cache (300 s, 256 MiB) is now enabled only for network video on
   demand. Local files use mpv's default (no demuxer cache), which removes up to 256 MiB
   of unnecessary memory during local playback. Live TV/radio uses a 30 s forward-only
@@ -159,6 +171,11 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- A video started from a playlist stays marked as playing (▶) in that playlist when the
+  user switches tabs while a yt-dlp link is still being resolved. The playing state and
+  the video title were applied to the tab that happened to be active when yt-dlp
+  finished, so the original playlist lost its marker. Playback now remembers the
+  playlist it was started from and re-finds the row after the link resolves.
 - Videos no longer lose one or two frames at the very start. On `fileLoaded` Luma read
   several mpv properties synchronously from the GUI thread, but mpv's core was waiting
   for the first rendered frame, so the reads blocked it for ~200 ms, the first frame

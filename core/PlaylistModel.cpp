@@ -4,6 +4,31 @@
 #include <QUrl>
 #include <QRandomGenerator>
 #include <algorithm>
+#include <utility>
+
+namespace {
+QJsonObject entryToJsonObject(const PlaylistModel::Entry &e)
+{
+    QJsonObject obj;
+    obj["path"] = e.path;
+    obj["kind"] = e.kind;
+    // Don't save the live radio title: it goes stale after a restart.
+    // Save the video title from yt-dlp.
+    if (!e.title.isEmpty()
+            && (!e.path.contains(QStringLiteral("://")) || e.persistTitle))
+        obj["title"] = e.title;
+    // The station name is stable, unlike the live radio tag: save it, so the
+    // playlist shows the station after a restart instead of the URL.
+    if (!e.station.isEmpty()) obj["station"] = e.station;
+    // Empty metadata is not written: a video entry only needs path/kind/title.
+    if (!e.artist.isEmpty()) obj["artist"] = e.artist;
+    if (!e.album.isEmpty()) obj["album"] = e.album;
+    if (e.year > 0) obj["year"] = e.year;
+    // Saved only when set, so ordinary playlists stay unchanged.
+    if (e.unavailable) obj["unavailable"] = true;
+    return obj;
+}
+} // namespace
 
 PlaylistModel::PlaylistModel(QObject *parent) : QAbstractListModel(parent) {}
 
@@ -13,7 +38,23 @@ void PlaylistModel::setStreamTitle(const QString &path, const QString &title) {
         if (m_entries[i].path != path) continue;
         if (m_entries[i].title == title) return;
         m_entries[i].title = title;
+        // The live tag belongs to this moment only; never write it to disk,
+        // even if the entry had a saved title before.
+        m_entries[i].persistTitle = false;
         emit dataChanged(index(i), index(i), {Qt::DisplayRole, Qt::UserRole + 6});
+    }
+}
+
+void PlaylistModel::setStationTitle(const QString &path, const QString &name) {
+    if (name.isEmpty()) return;
+    for (int i = 0; i < m_entries.size(); ++i) {
+        Entry &entry = m_entries[i];
+        if (entry.path != path) continue;
+        if (entry.station == name) return;
+        entry.station = name;
+        emit dataChanged(index(i), index(i), {Qt::DisplayRole, Qt::UserRole + 8});
+        emit modified();
+        return;
     }
 }
 
@@ -146,22 +187,34 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
     const Entry &e = m_entries[index.row()];
     switch (role) {
         case Qt::DisplayRole: {
-            QString name = e.title;
-            if (e.path.contains(QStringLiteral("://"))) {
-                // Until yt-dlp returns a title (or if the link is broken), show
-                // the actual URL — including the query. Dropping it made every
-                // broken YouTube link look like a valid "youtube.com/watch".
-                const QString fileName = QFileInfo(e.path).fileName();
-                if (name.isEmpty() || (!fileName.isEmpty() && name == fileName))
-                    name = e.path;
+            const bool current = m_isPlaying && index.row() == m_currentIndex;
+            QString name;
+            if (!e.station.isEmpty()) {
+                // Radio: the live tag while this station plays, the station
+                // name otherwise (including a stream that was never started).
+                const bool hasLiveTitle = !e.title.isEmpty()
+                                          && e.title != e.path
+                                          && e.title != e.station;
+                name = (current && hasLiveTitle) ? e.title : e.station;
             } else {
-                // Don't show the extension for local files.
-                const QString fileName = QFileInfo(e.path).fileName();
-                if (name.isEmpty() || name == fileName)
-                    name = QFileInfo(e.path).completeBaseName();
+                name = e.title;
+                if (e.path.contains(QStringLiteral("://"))) {
+                    // Until yt-dlp returns a title (or if the link is broken),
+                    // show the actual URL — including the query. Dropping it
+                    // made every broken YouTube link look like a valid
+                    // "youtube.com/watch".
+                    const QString fileName = QFileInfo(e.path).fileName();
+                    if (name.isEmpty() || (!fileName.isEmpty() && name == fileName))
+                        name = e.path;
+                } else {
+                    // Don't show the extension for local files.
+                    const QString fileName = QFileInfo(e.path).fileName();
+                    if (name.isEmpty() || name == fileName)
+                        name = QFileInfo(e.path).completeBaseName();
+                }
+                if (name.isEmpty()) name = e.path;
             }
-            if (name.isEmpty()) name = e.path;
-            if (m_isPlaying && index.row() == m_currentIndex) return "▶ " + name;
+            if (current) return "▶ " + name;
             return name;
         }
         case Qt::UserRole:      return e.path;
@@ -171,6 +224,7 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
         case Qt::UserRole + 4:  return e.album;
         case Qt::UserRole + 6:  return e.title;
         case Qt::UserRole + 7:  return e.unavailable;
+        case Qt::UserRole + 8:  return e.station;
         default: return {};
     }
 }
@@ -184,45 +238,60 @@ QHash<int, QByteArray> PlaylistModel::roleNames() const {
         {Qt::UserRole + 3,   "artist"},
         {Qt::UserRole + 4,   "album"},
         {Qt::UserRole + 6,   "title"},
-        {Qt::UserRole + 7,   "unavailable"}
+        {Qt::UserRole + 7,   "unavailable"},
+        {Qt::UserRole + 8,   "station"}
     };
 }
 
 QVariant PlaylistModel::entryToVariant(const Entry &e) const {
-    QVariantMap m;
-    m["path"] = e.path;
-    m["kind"] = e.kind;
-    // Don't save the live radio title: it goes stale after a restart.
-    // Save the video title from yt-dlp.
-    if (!e.title.isEmpty()
-            && (!e.path.contains(QStringLiteral("://")) || e.persistTitle))
-        m["title"] = e.title;
-    // Empty metadata is not written: a video entry only needs path/kind/title.
-    if (!e.artist.isEmpty()) m["artist"] = e.artist;
-    if (!e.album.isEmpty()) m["album"] = e.album;
-    if (e.year > 0) m["year"] = e.year;
-    // Saved only when set, so ordinary playlists stay unchanged.
-    if (e.unavailable) m["unavailable"] = true;
-    return m;
+    return entryToJsonObject(e).toVariantMap();
 }
 
-PlaylistModel::Entry PlaylistModel::variantToEntry(const QVariantMap &m) const {
+PlaylistModel::Entry PlaylistModel::makeEntry(const QString &path, const QString &kind,
+                                              const QString &title, const QString &station,
+                                              const QString &artist, const QString &album,
+                                              int year, bool unavailable)
+{
     Entry e;
-    e.path = m.value("path").toString();
-    e.kind = m.value("kind").toString();
+    e.path = path;
+    e.kind = kind;
     if (e.kind.isEmpty()) e.kind = "video";
-    e.title = m.value("title").toString();
+    e.title = title;
+    e.station = station;
     // Old playlists stored the file name (with extension) as the title.
     if (!e.path.contains(QStringLiteral("://")) && e.title == QFileInfo(e.path).fileName())
         e.title = QFileInfo(e.path).completeBaseName();
     e.persistTitle = !e.title.isEmpty();
-    e.artist = m.value("artist").toString();
-    e.album = m.value("album").toString();
-    e.year = m.value("year").toInt();
-    e.unavailable = m.value("unavailable").toBool();
+    e.artist = artist;
+    e.album = album;
+    e.year = year;
+    e.unavailable = unavailable;
     if (e.title.isEmpty() && !e.path.contains(QStringLiteral("://")))
         e.title = QFileInfo(e.path).completeBaseName();
     return e;
+}
+
+PlaylistModel::Entry PlaylistModel::entryFromJson(const QJsonObject &obj)
+{
+    return makeEntry(obj.value(QStringLiteral("path")).toString(),
+                     obj.value(QStringLiteral("kind")).toString(),
+                     obj.value(QStringLiteral("title")).toString(),
+                     obj.value(QStringLiteral("station")).toString(),
+                     obj.value(QStringLiteral("artist")).toString(),
+                     obj.value(QStringLiteral("album")).toString(),
+                     obj.value(QStringLiteral("year")).toInt(),
+                     obj.value(QStringLiteral("unavailable")).toBool());
+}
+
+PlaylistModel::Entry PlaylistModel::variantToEntry(const QVariantMap &m) const {
+    return makeEntry(m.value("path").toString(),
+                     m.value("kind").toString(),
+                     m.value("title").toString(),
+                     m.value("station").toString(),
+                     m.value("artist").toString(),
+                     m.value("album").toString(),
+                     m.value("year").toInt(),
+                     m.value("unavailable").toBool());
 }
 
 // ---------------------------------------------------------------------------
@@ -256,16 +325,38 @@ void PlaylistModel::setFiles(const QStringList &files, const QString &current) {
 }
 
 void PlaylistModel::setEntries(const QVariantList &entries, const QString &current) {
-    clearUnavailable();
-    m_droppedUnavailableMarks = false;
-    beginResetModel();
-    m_entries.clear();
-    m_originalPaths.clear();
-    m_paths.clear();
+    QVector<Entry> list;
+    list.reserve(entries.size());
     for (const QVariant &v : entries) {
         Entry e = variantToEntry(v.toMap());
         if (e.path.isEmpty()) continue;
-        m_entries.append(e);
+        list.append(e);
+    }
+    installEntries(std::move(list), current);
+}
+
+void PlaylistModel::setEntriesFromJson(const QJsonArray &entries, const QString &current) {
+    QVector<Entry> list;
+    list.reserve(entries.size());
+    for (const QJsonValue &v : entries) {
+        if (!v.isObject()) continue;
+        Entry e = entryFromJson(v.toObject());
+        if (e.path.isEmpty()) continue;
+        list.append(e);
+    }
+    installEntries(std::move(list), current);
+}
+
+void PlaylistModel::installEntries(QVector<Entry> &&entries, const QString &current) {
+    clearUnavailable();
+    m_droppedUnavailableMarks = false;
+    beginResetModel();
+    m_entries = std::move(entries);
+    m_originalPaths.clear();
+    m_paths.clear();
+    m_originalPaths.reserve(m_entries.size());
+    m_paths.reserve(m_entries.size());
+    for (const Entry &e : m_entries) {
         m_originalPaths << e.path;
         m_paths.insert(e.path);
     }
@@ -361,6 +452,7 @@ void PlaylistModel::sortBy(const QString &key, bool ascending)
         if (key == QLatin1String("artist")) return e.artist;
         if (key == QLatin1String("album")) return e.album;
         QString title = e.title;
+        if (title.isEmpty()) title = e.station;
         if (title.isEmpty()) title = QFileInfo(e.path).completeBaseName();
         return title;
     };
@@ -572,4 +664,15 @@ QVariantList PlaylistModel::toVariantList() const {
         list.append(entryToVariant(e));
     }
     return list;
+}
+
+QJsonArray PlaylistModel::entriesToJson(const QVector<Entry> &entries) {
+    QJsonArray array;
+    for (const Entry &e : entries)
+        array.append(entryToJsonObject(e));
+    return array;
+}
+
+QJsonArray PlaylistModel::toJsonArray() const {
+    return entriesToJson(m_entries);
 }
