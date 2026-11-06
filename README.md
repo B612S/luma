@@ -46,6 +46,12 @@
   fits the window to the video's aspect ratio once, within the size the window already
   has: it becomes narrower or shorter to remove the black bars instead of growing to the
   screen. The aspect is not locked, so the window can be resized freely afterwards.
+- **Resume playback** — local audio/video files and yt-dlp links continue from where
+  they stopped after a restart. Live streams always start at the live edge. The position
+  cache is bounded and can be turned off in **Settings → General**.
+- **Chapters** — previous/next chapter with `PageUp` / `PageDown` or the Playback menu,
+  and chapter ticks on the seek bar (hidden in **Settings → Interface**). Chapters from
+  YouTube links are supported as well.
 - **Shortcut cheat sheet** — hold `?` (`Shift+/`) to see
   all hotkeys while the key is held.
 - **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.
@@ -215,6 +221,7 @@ intentionally fixed.
 | `↑` / `↓` | Volume +5 % / −5 % |
 | `M` | Mute |
 | `Q` / `E` | Previous / next file |
+| `PageUp` / `PageDown` | Previous / next chapter |
 | `S` | Toggle the playlist panel |
 | `I` | Toggle the media information panel |
 | `F` | Toggle fullscreen |
@@ -248,7 +255,8 @@ All per-user files live in `~/.config/luma/`:
 
 Logs are written to `~/.cache/luma/`: `luma.log`, `mpv.log` and `yt-dlp.log`.
 Each component can be set to `off`, `error`, `info` or `debug` on the **Debug**
-page in Settings, or under `[debug]` in `luma.conf`.
+page in Settings, or under `[debug]` in `luma.conf`. Resume positions are kept in
+`~/.cache/luma/playback-positions.json` (the 500 most recent files, at most 90 days).
 
 `luma.conf` sections:
 
@@ -259,10 +267,12 @@ default_volume=80
 volume=80
 language=en              # en, ru
 single_instance=true
+resume_playback=true
 notifications=true
 append_to_playlist=false
 control_bar_mode=float   # hidden, float, pinned
 show_panels_fullscreen=true
+show_chapter_markers=true
 
 [playlist]
 mode=sequential          # Default playlist only: sequential, repeat, shuffle, stop

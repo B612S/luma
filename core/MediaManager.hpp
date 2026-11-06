@@ -5,15 +5,19 @@
 #include <functional>
 #include <QVariantMap>
 #include <QElapsedTimer>
+#include <QPair>
 #include <QPointer>
 #include <QDBusInterface>
 #include "mpvqt/MpvItem.hpp"
+#include "PlaybackPositions.hpp"
 #include "PlaylistModel.hpp"
 
+class AsyncFileWriter;
 class ConfigManager;
 class IcyMetadataReader;
 class PlaylistManager;
 class QProcess;
+class QTemporaryDir;
 class QTimer;
 
 class MediaManager : public QObject {
@@ -61,6 +65,10 @@ public:
     Q_INVOKABLE void addToPlaylist(const QString &path);
     Q_INVOKABLE void playNext();
     Q_INVOKABLE void playPrev();
+    // mpv's chapter navigation works for embedded chapters and for the chapter
+    // file Luma attaches to yt-dlp streams.
+    Q_INVOKABLE void nextChapter();
+    Q_INVOKABLE void previousChapter();
     Q_INVOKABLE void playIndex(int index);
 
     Q_INVOKABLE void openInFileManager(const QString &path);
@@ -138,6 +146,19 @@ private:
     void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
     void clearPendingUrlPlayback();
     void onMpvFileLoaded();
+    // Resume support: save the current position and prepare the next key.
+    void preparePlaybackPosition(const QString &key, bool live);
+    void saveCurrentPosition();
+    void clearPlaybackPosition();
+    QString positionsFilePath() const;
+    // yt-dlp chapters are passed to mpv through an ffmetadata file loaded with
+    // the stream, so chapter navigation and markers work for links as well.
+    struct ChapterInfo {
+        double start = 0.0;
+        double end = 0.0;
+        QString title;
+    };
+    QString writeChaptersFile(const QVector<ChapterInfo> &chapters);
     QString ytdlpLocalDir() const;
     void runPipInstall(const QString &package, const QString &dir,
                        std::function<void(bool, const QString &)> done);
@@ -152,6 +173,17 @@ private:
     // playing marker must stay on the original playlist, not on the tab that
     // happens to be active when playback starts.
     QPointer<PlaylistModel> m_pendingUrlModel;
+    QVector<ChapterInfo> m_resolvedChapters;
+    double m_resolvedDuration = 0.0;
+    QTemporaryDir *m_chaptersDir = nullptr;
+    QString m_pendingChaptersFile;
+    int m_chaptersCounter = 0;
+    // Resume position of the current (non-live) media, cached on disk.
+    PlaybackPositions m_positions;
+    AsyncFileWriter *m_positionWriter = nullptr;
+    QTimer *m_positionTimer = nullptr;
+    QString m_positionKey;
+    double m_resumeTarget = 0.0;
     // Whether that playlist was already marked as playing before the link
     // started loading (then a failure must not clear its marker).
     bool m_pendingUrlWasPlaying = false;

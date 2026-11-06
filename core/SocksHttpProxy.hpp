@@ -40,7 +40,7 @@ private:
     QString socksUser() const { return m_socks.userName(); }
     QString socksPassword() const { return m_socks.password(); }
 
-    QTcpServer m_server;
+    QTcpServer *m_server = nullptr;
     QUrl m_socks;
     QString m_localUrl;
     QString m_lastError;

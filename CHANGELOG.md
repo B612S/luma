@@ -8,6 +8,15 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Chapter navigation and chapter markers on the seek bar. `PageUp` / `PageDown` or
+  **Playback → Previous / Next chapter** jump between chapters, and the seek bar draws a
+  tick for every chapter (can be hidden in **Settings → Interface**). Chapters reported
+  by yt-dlp are passed to mpv as well, so YouTube links get the same navigation.
+- Playback resumes from the previous position for local audio/video files and
+  YouTube/yt-dlp links; live streams are excluded. Positions are stored in
+  `~/.cache/luma/playback-positions.json`, capped at the 500 most recently played files
+  for 90 days, and a file watched to the end loses its entry. The feature can be turned
+  off in **Settings → General**.
 - Radio links in playlists now show the station name (the ICY `icy-name` header)
   instead of the URL while the stream is not playing. The name is fetched in the
   background when a link is added or a playlist is opened, saved in the playlist, and
@@ -132,8 +141,8 @@ All notable changes to Luma are documented here. The format is based on
   for sorting), and empty metadata is omitted: `artist`/`album` are written only when set
   and `year` only when it is not 0, so video entries keep just path, kind and title.
   Existing playlists lose the redundant fields on their next save.
-- New application icon: a flat orange rounded square with a white play button (the vector
-  source is in `assets/luma.svg`).
+- New application icon: a flat orange rounded square with an outlined white play triangle
+  (the vector source is in `assets/luma.svg`).
 - Picture-in-picture is now drawn as a square floating card with a small soft shadow, and
   the window is sized to the video's aspect ratio so it has no letterbox bars. The window
   keeps a transparent margin for the shadow, so KWin on NVIDIA no longer leaves a 1px strip
@@ -171,6 +180,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Returning from fullscreen opened from picture-in-picture now goes back to the PiP
+  window with its previous size instead of a normal window. PiP stays active in
+  fullscreen, so its own controls (including the back button) remain available.
+- Network streams through a SOCKS proxy no longer buffer slowly or stutter: the local
+  SOCKS→HTTP bridge now runs on its own thread, so copying stream data does not compete
+  with video rendering on the GUI thread.
 - A video started from a playlist stays marked as playing (▶) in that playlist when the
   user switches tabs while a yt-dlp link is still being resolved. The playing state and
   the video title were applied to the tab that happened to be active when yt-dlp

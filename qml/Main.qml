@@ -74,6 +74,13 @@ ApplicationWindow {
         else enterPip();
     }
 
+    function toggleFullscreen() {
+        // PiP stays active in fullscreen: its own controls handle this mode,
+        // and leaving fullscreen returns to the PiP window with its geometry.
+        if (root.visibility === Window.FullScreen) root.showNormal();
+        else root.showFullScreen();
+    }
+
     function enterPip() {
         if (pipMode) return;
         pipSavedGeometry = Qt.rect(root.x, root.y, root.width, root.height);
@@ -372,11 +379,8 @@ ApplicationWindow {
                 }
             }
             onDoubleClicked: (mouse) => {
-                if (mouse.button === Qt.LeftButton) {
-                    if (root.pipMode) { root.exitPip(); return; }
-                    if (root.visibility === Window.FullScreen) root.showNormal();
-                    else root.showFullScreen();
-                }
+                if (mouse.button === Qt.LeftButton)
+                    root.toggleFullscreen();
             }
         }
     }
@@ -446,10 +450,7 @@ ApplicationWindow {
         mpv: mpv
         active: root.pipMode
         onCloseRequested: root.exitPip()
-        onFullscreenRequested: {
-            if (root.visibility === Window.FullScreen) root.showNormal();
-            else root.showFullScreen();
-        }
+        onFullscreenRequested: root.toggleFullscreen()
         z: 3
     }
 

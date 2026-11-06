@@ -1,5 +1,9 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" rx="112" fill="#f26b21"/>
-  <polygon points="190,150 360,256 190,362" fill="#ffffff" stroke="#ffffff"
-           stroke-width="38" stroke-linejoin="round"/>
+
+  <!-- Outline play triangle. Its height (256) matches the diameter of the
+       conversion ring in luma-converter.svg (64 of 256), and the stroke
+       width matches that ring's 12 of 256, so the two icons read as a set. -->
+  <polygon points="172.36,128 377.64,256 172.36,384" fill="none"
+           stroke="#ffffff" stroke-width="24" stroke-linejoin="round"/>
 </svg>

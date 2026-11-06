@@ -18,6 +18,8 @@
 <message><source>menu_stats</source><translation>Media information</translation></message>
 <message><source>menu_playback</source><translation>Playback</translation></message>
 <message><source>menu_playback_mode</source><translation>Playback mode</translation></message>
+<message><source>menu_previous_chapter</source><translation>Previous chapter</translation></message>
+<message><source>menu_next_chapter</source><translation>Next chapter</translation></message>
 <message><source>osd_playback_mode</source><translation>Mode: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Aspect ratio</translation></message>
 <message><source>menu_fit_window</source><translation>Fit window to video</translation></message>
@@ -59,6 +61,7 @@
 <message><source>settings_remember_volume</source><translation>Remember volume</translation></message>
 <message><source>settings_default_volume</source><translation>Startup volume</translation></message>
 <message><source>settings_notifications</source><translation>Show notifications</translation></message>
+<message><source>settings_resume_playback</source><translation>Continue from the last position</translation></message>
 <message><source>settings_single_instance</source><translation>Single instance</translation></message>
 <message><source>settings_play_mode</source><translation>Default playlist playback mode</translation></message>
 <message><source>settings_play_mode_hint</source><translation>Used only by the Default playlist. Named playlists keep their own mode (Playback → Playback mode).</translation></message>
@@ -83,6 +86,7 @@
 <message><source>settings_sub_position</source><translation>Vertical position</translation></message>
 <message><source>settings_sub_ignore_file_style</source><translation>Ignore subtitle file styling</translation></message>
 <message><source>settings_show_panels_fullscreen</source><translation>Show the control bar in fullscreen</translation></message>
+<message><source>settings_chapter_markers</source><translation>Show chapter markers on the seek bar</translation></message>
 <message><source>settings_playback</source><translation>Playback</translation></message>
 <message><source>settings_debug</source><translation>Debug</translation></message>
 <message><source>settings_debug_hint</source><translation>Each component writes its own file to ~/.cache/luma/: luma.log, mpv.log and yt-dlp.log.</translation></message>
@@ -384,6 +388,8 @@
 <message><source>shortcut_toggle_mute</source><translation>Mute</translation></message>
 <message><source>shortcut_previous_file</source><translation>Previous file</translation></message>
 <message><source>shortcut_next_file</source><translation>Next file</translation></message>
+<message><source>shortcut_previous_chapter</source><translation>Previous chapter</translation></message>
+<message><source>shortcut_next_chapter</source><translation>Next chapter</translation></message>
 <message><source>shortcut_toggle_playlist</source><translation>Playlist panel</translation></message>
 <message><source>shortcut_toggle_stats</source><translation>Statistics panel</translation></message>
 <message><source>shortcut_toggle_fullscreen</source><translation>Fullscreen</translation></message>

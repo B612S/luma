@@ -313,6 +313,24 @@ void ConfigManager::setNotifications(bool enabled) {
     emit notificationsChanged();
 }
 
+bool ConfigManager::resumePlayback() const {
+    return m_settings->value("ui/resume_playback", true).toBool();
+}
+void ConfigManager::setResumePlayback(bool enabled) {
+    if (resumePlayback() == enabled) return;
+    m_settings->setValue("ui/resume_playback", enabled);
+    emit resumePlaybackChanged();
+}
+
+bool ConfigManager::showChapterMarkers() const {
+    return m_settings->value("ui/show_chapter_markers", true).toBool();
+}
+void ConfigManager::setShowChapterMarkers(bool enabled) {
+    if (showChapterMarkers() == enabled) return;
+    m_settings->setValue("ui/show_chapter_markers", enabled);
+    emit showChapterMarkersChanged();
+}
+
 QString ConfigManager::controlBarMode() const {
     QString mode = m_settings->value("ui/control_bar_mode").toString();
     if (mode.isEmpty()) {

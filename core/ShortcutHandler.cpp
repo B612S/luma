@@ -95,6 +95,9 @@ QString physicalKeyName(quint32 nativeScanCode)
     if (text == QLatin1String("space")) text = QStringLiteral("Space");
     if (text == QLatin1String("Return")) text = QStringLiteral("Enter");
     if (text == QLatin1String("Escape")) text = QStringLiteral("Esc");
+    // XKB calls these Prior/Next; players show them as PageUp/PageDown.
+    if (text == QLatin1String("Prior")) text = QStringLiteral("PageUp");
+    if (text == QLatin1String("Next")) text = QStringLiteral("PageDown");
     if (text.startsWith(QLatin1String("XF86"))) text.remove(0, 4);
     if (text.size() == 1 && text.at(0).isLetter())
         text = text.toUpper();
@@ -714,6 +717,12 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
                 if (m_media) m_media->playPrev();
             }
             break;
+        case ShortcutAction::PreviousChapter:
+            if (!autoRepeat && m_media) m_media->previousChapter();
+            break;
+        case ShortcutAction::NextChapter:
+            if (!autoRepeat && m_media) m_media->nextChapter();
+            break;
         case ShortcutAction::TogglePlaylist:
             if (!autoRepeat) emit togglePlaylist();
             break;
@@ -721,12 +730,10 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
             if (!autoRepeat) emit toggleStats();
             break;
         case ShortcutAction::ToggleFullscreen:
-            if (!autoRepeat && m_window) {
-                // Fullscreen is not wanted in picture-in-picture mode.
-                if (m_window->property("pipMode").toBool()) break;
-                if (m_window->windowStates() & Qt::WindowFullScreen) m_window->showNormal();
-                else m_window->showFullScreen();
-            }
+            // QML owns the PiP window flags; toggleFullscreen() also leaves PiP
+            // before going fullscreen.
+            if (!autoRepeat && m_window)
+                QMetaObject::invokeMethod(m_window, "toggleFullscreen");
             break;
         case ShortcutAction::ToggleTimeOsd:
             if (!autoRepeat && m_osd) m_osd->togglePinTimeOsd();

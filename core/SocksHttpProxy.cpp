@@ -439,7 +439,6 @@ private:
 SocksHttpProxy::SocksHttpProxy(QObject *parent)
     : QObject(parent)
 {
-    connect(&m_server, &QTcpServer::newConnection, this, &SocksHttpProxy::handleNewConnection);
 }
 
 SocksHttpProxy::~SocksHttpProxy()
@@ -456,28 +455,37 @@ bool SocksHttpProxy::start(const QUrl &socksProxy)
         return false;
     }
 
-    if (m_server.isListening() && m_socks == socksProxy)
+    if (m_server && m_server->isListening() && m_socks == socksProxy)
         return true;
 
     stop();
 
     m_socks = socksProxy;
     m_lastError.clear();
-    if (!m_server.listen(QHostAddress::LocalHost, 0)) {
-        m_lastError = m_server.errorString();
+    // Created in the thread that owns this object (the proxy runs on its own
+    // thread, so the sockets never compete with video rendering).
+    m_server = new QTcpServer(this);
+    connect(m_server, &QTcpServer::newConnection, this, &SocksHttpProxy::handleNewConnection);
+    if (!m_server->listen(QHostAddress::LocalHost, 0)) {
+        m_lastError = m_server->errorString();
+        delete m_server;
+        m_server = nullptr;
         m_socks = QUrl();
         emit error(m_lastError);
         return false;
     }
 
-    m_localUrl = QStringLiteral("http://127.0.0.1:%1").arg(m_server.serverPort());
+    m_localUrl = QStringLiteral("http://127.0.0.1:%1").arg(m_server->serverPort());
     return true;
 }
 
 void SocksHttpProxy::stop()
 {
-    if (m_server.isListening())
-        m_server.close();
+    if (m_server) {
+        m_server->close();
+        delete m_server;
+        m_server = nullptr;
+    }
 
     const QList<SocksHttpProxyConnection *> connections = m_connections;
     m_connections.clear();
@@ -490,8 +498,8 @@ void SocksHttpProxy::stop()
 
 void SocksHttpProxy::handleNewConnection()
 {
-    while (m_server.hasPendingConnections()) {
-        QTcpSocket *client = m_server.nextPendingConnection();
+    while (m_server && m_server->hasPendingConnections()) {
+        QTcpSocket *client = m_server->nextPendingConnection();
         if (!client) return;
         if (m_connections.size() >= 128) {
             // Do not let a local process exhaust Luma's memory/socket limit.

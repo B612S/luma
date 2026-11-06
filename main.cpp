@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QThread>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
@@ -185,7 +186,22 @@ int main(int argc, char *argv[]) {
     KWinBridge kwinBridge;
 
     // Local HTTP bridge for SOCKS proxies: mpv/FFmpeg cannot do SOCKS themselves.
-    SocksHttpProxy streamProxy(&app);
+    // It runs on its own thread: otherwise copying the stream competed with
+    // video rendering on the GUI thread and network playback stuttered.
+    QThread streamProxyThread;
+    auto *streamProxy = new SocksHttpProxy;
+    streamProxy->moveToThread(&streamProxyThread);
+    streamProxyThread.setObjectName(QStringLiteral("SocksHttpProxy"));
+    streamProxyThread.start();
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
+        if (!streamProxyThread.isRunning()) return;
+        QThread *mainThread = QThread::currentThread();
+        QMetaObject::invokeMethod(streamProxy, [streamProxy, mainThread]() {
+            streamProxy->stop();
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            streamProxy->moveToThread(mainThread);
+        }, Qt::BlockingQueuedConnection);
+    });
 
 
     // The picture-in-picture window draws its own shadow inside the window.
@@ -283,24 +299,36 @@ int main(int argc, char *argv[]) {
         // yt-dlp gets the proxy on its own, but mpv/FFmpeg cannot do SOCKS. For them
         // we start a local HTTP bridge: mpv downloads the stream through it, so
         // Range requests and seeking work as with plain HTTP.
-        auto applyStreamProxy = [&config, mpv, &streamProxy]() {
+        auto applyStreamProxy = [&config, mpv, streamProxy, &streamProxyThread]() {
+            if (!streamProxyThread.isRunning())
+                return;
             const QString proxy = config.ytdlpProxy();
             const int sep = proxy.indexOf(QStringLiteral("://"));
             const QString scheme = sep > 0 ? proxy.left(sep).toLower() : QString();
 
             if (scheme == QLatin1String("socks5") || scheme == QLatin1String("socks5h")) {
-                if (streamProxy.start(QUrl(proxy))) {
-                    mpv->setProperty("http-proxy", streamProxy.localUrl());
+                QString localUrl;
+                QString error;
+                QMetaObject::invokeMethod(streamProxy, [streamProxy, proxy, &localUrl, &error]() {
+                    if (streamProxy->start(QUrl(proxy)))
+                        localUrl = streamProxy->localUrl();
+                    else
+                        error = streamProxy->lastError();
+                }, Qt::BlockingQueuedConnection);
+                if (!localUrl.isEmpty()) {
+                    mpv->setProperty("http-proxy", localUrl);
                 } else {
-                    qWarning() << "SocksHttpProxy:" << streamProxy.lastError();
+                    qWarning() << "SocksHttpProxy:" << error;
                     mpv->setProperty("http-proxy", QStringLiteral(""));
                 }
             } else if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
                 // FFmpeg understands an HTTP proxy itself, no bridge needed.
-                streamProxy.stop();
+                QMetaObject::invokeMethod(streamProxy, [streamProxy]() { streamProxy->stop(); },
+                                          Qt::BlockingQueuedConnection);
                 mpv->setProperty("http-proxy", proxy);
             } else {
-                streamProxy.stop();
+                QMetaObject::invokeMethod(streamProxy, [streamProxy]() { streamProxy->stop(); },
+                                          Qt::BlockingQueuedConnection);
                 mpv->setProperty("http-proxy", QStringLiteral(""));
             }
         };
@@ -449,9 +477,12 @@ int main(int argc, char *argv[]) {
             mpv->commandBlocking(QStringList() << QStringLiteral("stop"));
             mpv->setPaused(true);
         }
-        streamProxy.stop();
         castManager.stopCast();
     });
 
-    return app.exec();
+    const int exitCode = app.exec();
+    streamProxyThread.quit();
+    streamProxyThread.wait();
+    delete streamProxy;
+    return exitCode;
 }

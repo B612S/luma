@@ -17,6 +17,8 @@ class ConfigManager : public QObject {
     Q_PROPERTY(bool appendToPlaylist READ appendToPlaylist WRITE setAppendToPlaylist NOTIFY appendToPlaylistChanged)
     Q_PROPERTY(bool singleInstance READ singleInstance WRITE setSingleInstance NOTIFY singleInstanceChanged)
     Q_PROPERTY(bool notifications READ notifications WRITE setNotifications NOTIFY notificationsChanged)
+    Q_PROPERTY(bool resumePlayback READ resumePlayback WRITE setResumePlayback NOTIFY resumePlaybackChanged)
+    Q_PROPERTY(bool showChapterMarkers READ showChapterMarkers WRITE setShowChapterMarkers NOTIFY showChapterMarkersChanged)
     Q_PROPERTY(QString controlBarMode READ controlBarMode WRITE setControlBarMode NOTIFY controlBarModeChanged)
     Q_PROPERTY(QString subtitleFont READ subtitleFont WRITE setSubtitleFont NOTIFY subtitlesChanged)
     Q_PROPERTY(int subtitleFontSize READ subtitleFontSize WRITE setSubtitleFontSize NOTIFY subtitlesChanged)
@@ -64,6 +66,12 @@ public:
 
     bool notifications() const;
     void setNotifications(bool enabled);
+
+    bool resumePlayback() const;
+    void setResumePlayback(bool enabled);
+
+    bool showChapterMarkers() const;
+    void setShowChapterMarkers(bool enabled);
 
     // "hidden" | "float" | "pinned"
     QString controlBarMode() const;
@@ -141,6 +149,8 @@ signals:
     void appendToPlaylistChanged();
     void singleInstanceChanged();
     void notificationsChanged();
+    void resumePlaybackChanged();
+    void showChapterMarkersChanged();
     void controlBarModeChanged();
     void subtitlesChanged();
     void showPanelsFullscreenChanged();

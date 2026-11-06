@@ -43,6 +43,8 @@ class MpvItem : public MpvAbstractItem {
     Q_PROPERTY(bool videoDisabled READ videoDisabled NOTIFY videoDisabledChanged)
     Q_PROPERTY(bool deinterlaceEnabled READ deinterlaceEnabled NOTIFY deinterlaceChanged)
     Q_PROPERTY(bool cropEnabled READ cropEnabled NOTIFY cropEnabledChanged)
+    Q_PROPERTY(QVariantList chapterList READ chapterList NOTIFY chapterListChanged)
+    Q_PROPERTY(int chapter READ chapter NOTIFY chapterChanged)
 
     // NEW: Property for passing the cast state from QML to C++
     Q_PROPERTY(bool isCasting READ isCasting WRITE setCastingState NOTIFY isCastingChanged)
@@ -67,12 +69,17 @@ public:
     // audio as separate URLs; this is passed as a file-local option so mpv
     // opens both tracks together instead of adding audio after fileLoaded.
     void setExternalAudio(const QString &url);
+    // OGM chapter file for the next source (yt-dlp links have no embedded
+    // chapters; mpv loads this file as if they were part of the stream).
+    void setChaptersFile(const QString &path);
     // Current stream title (for radio — the ICY StreamTitle).
     QString mediaTitle() const { return m_mediaTitle; }
     bool videoDisabled() const { return m_videoDisabled; }
     bool deinterlaceEnabled() const { return m_deinterlaceEnabled; }
     bool cropEnabled() const { return m_cropEnabled; }
     void setCropEnabled(bool enabled);
+    QVariantList chapterList() const { return m_chapterList; }
+    int chapter() const { return m_chapter; }
 
     // NEW:
     bool isCasting() const { return m_isCasting; }
@@ -109,6 +116,8 @@ signals:
     void fileLoaded();
     void deinterlaceChanged();
     void cropEnabledChanged();
+    void chapterListChanged();
+    void chapterChanged();
     void thumbnailReady(const QString &requestId);
     // Emitted from the mpv worker thread; connected via a queued connection.
     void mpvLogMessage(const QString &prefix, const QString &level, const QString &message);
@@ -125,6 +134,8 @@ private:
 
     QString m_source;
     QString m_externalAudio;
+    QString m_chaptersFile;
+    bool m_chaptersFileSet = false;
     QString m_mediaTitle;
     QHash<QString, QVariant> m_observedValues;
     double m_position = 0.0;
@@ -135,6 +146,8 @@ private:
     bool   m_videoDisabled = false;
     bool   m_deinterlaceEnabled = false;
     bool   m_cropEnabled = false;
+    QVariantList m_chapterList;
+    int    m_chapter = -1;
 
     // NEW:
     bool   m_isCasting = false;

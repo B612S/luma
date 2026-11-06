@@ -169,6 +169,21 @@ LumaMenu {
             width: parent.width
             spacing: 2
 
+            LumaMenuButton {
+                text: qsTr("menu_previous_chapter")
+                isEnabled: menu.mpv !== null && menu.mpv.chapterList !== undefined
+                           && menu.mpv.chapterList.length > 0
+                onClicked: { Media.previousChapter(); menu.close() }
+            }
+            LumaMenuButton {
+                text: qsTr("menu_next_chapter")
+                isEnabled: menu.mpv !== null && menu.mpv.chapterList !== undefined
+                           && menu.mpv.chapterList.length > 0
+                onClicked: { Media.nextChapter(); menu.close() }
+            }
+
+            LumaMenuSeparator {}
+
             LumaMenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.showPage("playback_mode") }
             LumaMenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; isEnabled: menu.hasVideo; onClicked: menu.showPage("aspect_ratio") }
             LumaMenuButton {

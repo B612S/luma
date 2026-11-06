@@ -208,6 +208,13 @@ Dialog {
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.notifications; onToggled: Config.notifications = checked }
                             }
 
+                            Label { text: qsTr("settings_resume_playback"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.resumePlayback; onToggled: Config.resumePlayback = checked }
+                            }
+
                             Label { text: qsTr("settings_single_instance"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth
@@ -351,6 +358,18 @@ Dialog {
                                 Layout.preferredWidth: settingsDialog.controlWidth
                                 Layout.preferredHeight: 40
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.showPanelsFullscreen; onToggled: Config.showPanelsFullscreen = checked }
+                            }
+
+                            Label {
+                                text: qsTr("settings_chapter_markers")
+                                color: Kirigami.Theme.textColor; font.pixelSize: 14
+                                Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                                wrapMode: Text.WordWrap
+                            }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.showChapterMarkers; onToggled: Config.showChapterMarkers = checked }
                             }
                             // ------------------------------------
                         }

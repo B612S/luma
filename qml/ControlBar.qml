@@ -49,6 +49,14 @@ Rectangle {
     readonly property bool showSeekPreview: !CastManager.casting && !root.audioFile
                                             && !root.isLive && !root.networkStream
 
+    // Chapter ticks on the seek bar (embedded chapters and yt-dlp chapters).
+    readonly property bool chapterMarkersVisible: Config.showChapterMarkers
+                                                  && !root.isLive && !CastManager.casting
+                                                  && root.displayDuration > 0
+                                                  && mpv !== null
+                                                  && mpv.chapterList !== undefined
+                                                  && mpv.chapterList.length > 1
+
     // Live stream (online TV/radio): there is no rewind/DVR any more.
     // The control bar only shows a LIVE indicator; if playback falls behind
     // the live edge (network pause, buffering), followLiveEdge() jumps back.
@@ -280,6 +288,20 @@ Rectangle {
                         height: parent.height
                         color: root.hasVideo ? Kirigami.Theme.highlightColor : "transparent"
                         radius: 6
+                    }
+
+                    Repeater {
+                        model: root.chapterMarkersVisible ? mpv.chapterList : []
+                        delegate: Rectangle {
+                            readonly property real chapterTime: Number(modelData.time)
+                            readonly property real total: root.displayDuration
+                            visible: chapterTime > 0 && chapterTime < total - 0.5
+                            x: (chapterTime / total) * (seekSlider.availableWidth - seekSlider.handle.width)
+                               + seekSlider.handle.width / 2 - width / 2
+                            width: 2
+                            height: parent.height
+                            color: Kirigami.Theme.highlightColor
+                        }
                     }
                 }
                 handle: Rectangle {

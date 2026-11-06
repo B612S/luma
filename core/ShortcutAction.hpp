@@ -18,6 +18,8 @@ enum class ShortcutAction {
     ToggleMute,
     NextFile,
     PreviousFile,
+    PreviousChapter,
+    NextChapter,
     // UI
     TogglePlaylist,
     ToggleStats,
@@ -65,6 +67,8 @@ inline const QList<ShortcutActionInfo>& shortcutActions() {
         { ShortcutAction::ToggleMute,        "toggle_mute",        "playback",  "Mute" },
         { ShortcutAction::PreviousFile,      "previous_file",      "playback",  "Previous file" },
         { ShortcutAction::NextFile,          "next_file",          "playback",  "Next file" },
+        { ShortcutAction::PreviousChapter,   "previous_chapter",   "playback",  "Previous chapter" },
+        { ShortcutAction::NextChapter,       "next_chapter",       "playback",  "Next chapter" },
         { ShortcutAction::TogglePlaylist,    "toggle_playlist",    "interface", "Playlist panel" },
         { ShortcutAction::ToggleStats,       "toggle_stats",       "interface", "Statistics panel" },
         { ShortcutAction::ToggleFullscreen,  "toggle_fullscreen",  "interface", "Fullscreen" },
@@ -140,6 +144,8 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::ToggleMute,        "M",      58,  Qt::NoModifier },
         { ShortcutAction::PreviousFile,      "Q",      24,  Qt::NoModifier },
         { ShortcutAction::NextFile,          "E",      26,  Qt::NoModifier },
+        { ShortcutAction::PreviousChapter,   "PageUp", 112, Qt::NoModifier },
+        { ShortcutAction::NextChapter,       "PageDown", 117, Qt::NoModifier },
 
         // ---- UI ----
         { ShortcutAction::TogglePlaylist,    "S",      39,  Qt::NoModifier },

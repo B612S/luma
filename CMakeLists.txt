@@ -53,6 +53,10 @@ qt_add_executable(luma
     core/PlaylistModel.cpp
     core/PlaylistFilterModel.cpp
     core/PlaylistManager.cpp
+    core/AsyncFileWriter.cpp
+    core/AsyncFileWriter.hpp
+    core/PlaybackPositions.cpp
+    core/PlaybackPositions.hpp
     core/PlaylistSaver.cpp
     core/PlaylistSaver.hpp
     core/MediaManager.cpp

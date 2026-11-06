@@ -1,4 +1,5 @@
 #include "MediaManager.hpp"
+#include "AsyncFileWriter.hpp"
 #include "IcyMetadataReader.hpp"
 #include "PlaylistManager.hpp"
 #include "ConfigManager.hpp"
@@ -29,10 +30,13 @@
 #include <QJsonValue>
 #include <QJsonParseError>
 #include <QFutureWatcher>
+#include <QTemporaryDir>
+#include <QTextStream>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QHash>
 #include <QVector>
+#include <algorithm>
 #include <QtConcurrent/QtConcurrentRun>
 
 extern "C" {
@@ -622,9 +626,29 @@ MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
         m_ytdlpTimedOut = true;
         m_ytdlpProcess->kill();
     });
+
+    // Resume positions live in the cache directory and are bounded in size.
+    m_positions.load(positionsFilePath());
+    m_positionWriter = new AsyncFileWriter(this);
+    m_positionTimer = new QTimer(this);
+    m_positionTimer->setInterval(10000);
+    connect(m_positionTimer, &QTimer::timeout, this, [this]() { saveCurrentPosition(); });
+
+    // The QML engine (and with it the MpvItem) is destroyed before this
+    // object, so the final position must be saved while playback is alive.
+    if (QCoreApplication *app = QCoreApplication::instance()) {
+        connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
+            saveCurrentPosition();
+            if (m_positionWriter) m_positionWriter->waitForIdle();
+        });
+    }
 }
 
 MediaManager::~MediaManager() {
+    delete m_chaptersDir;
+    m_chaptersDir = nullptr;
+    if (m_positionWriter) m_positionWriter->waitForIdle();
+    if (m_positionTimer) m_positionTimer->stop();
     if (m_ytdlpTimeout) m_ytdlpTimeout->stop();
     if (m_ytdlpProcess) {
         m_ytdlpProcess->disconnect(this);
@@ -641,7 +665,14 @@ void MediaManager::setMpv(MpvItem *mpv) {
         connect(m_mpv, &MpvItem::mediaTitleChanged, this, &MediaManager::onMediaTitleChanged);
         connect(m_mpv, &MpvItem::sourceChanged, this, [this]() { setLoading(true); });
         connect(m_mpv, &MpvItem::fileLoaded, this, &MediaManager::onMpvFileLoaded);
-        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &) { setLoading(false); });
+        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &) {
+            saveCurrentPosition();
+            setLoading(false);
+        });
+        connect(m_mpv, &MpvItem::pausedChanged, this, [this]() {
+            if (m_mpv && m_mpv->paused()) saveCurrentPosition();
+        });
+        connect(m_mpv, &QObject::destroyed, this, [this]() { m_mpv = nullptr; });
     }
 }
 
@@ -1143,7 +1174,10 @@ bool MediaManager::updateStreamUrl(const QString &oldUrl, const QString &newUrl)
     if (url.startsWith(QStringLiteral("http://")) || url.startsWith(QStringLiteral("https://")))
         m_playlists->fetchUrlTitle(m_playlists->activeId(), url);
 
-    if (wasCurrent && m_mpv) m_mpv->setSource(url, m_liveStream);
+    if (wasCurrent && m_mpv) {
+        preparePlaybackPosition(url, m_liveStream);
+        m_mpv->setSource(url, m_liveStream);
+    }
     return true;
 }
 
@@ -1358,6 +1392,8 @@ void MediaManager::openUrlAsync(const QString &url, bool keepPlaylist) {
     m_resolvedTitle.clear();
     m_resolvedVideoUrl.clear();
     m_resolvedAudioUrl.clear();
+    m_resolvedChapters.clear();
+    m_resolvedDuration = 0.0;
     m_resolvedIsLive = false;
     m_ytdlpStdoutBuffer.clear();
     m_ytdlpStderr.clear();
@@ -1534,6 +1570,45 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
             if (m_resolvedVideoUrl.isEmpty())
                 m_resolvedVideoUrl = muxedUrl;
             if (m_resolvedVideoUrl.isEmpty()) ok = false;
+
+            m_resolvedChapters.clear();
+            m_resolvedDuration = info.value(QStringLiteral("duration")).toDouble(0.0);
+            const QJsonArray chapters = info.value(QStringLiteral("chapters")).toArray();
+            for (const QJsonValue &value : chapters) {
+                const QJsonObject chapter = value.toObject();
+                const double start = chapter.value(QStringLiteral("start_time")).toDouble(-1.0);
+                if (start < 0.0) continue;
+                ChapterInfo entry;
+                entry.start = start;
+                entry.end = chapter.value(QStringLiteral("end_time")).toDouble(0.0);
+                entry.title = chapter.value(QStringLiteral("title")).toString().trimmed();
+                m_resolvedChapters.append(entry);
+            }
+            std::sort(m_resolvedChapters.begin(), m_resolvedChapters.end(),
+                      [](const ChapterInfo &a, const ChapterInfo &b) {
+                          return a.start < b.start;
+                      });
+            // Drop duplicate timestamps (mpv needs strictly increasing starts)
+            // and fill in missing end times from the next chapter / duration.
+            QVector<ChapterInfo> uniqueChapters;
+            for (ChapterInfo chapter : std::as_const(m_resolvedChapters)) {
+                if (!uniqueChapters.isEmpty()
+                        && chapter.start - uniqueChapters.last().start < 0.01)
+                    continue;
+                uniqueChapters.append(chapter);
+            }
+            for (int i = 0; i < uniqueChapters.size(); ++i) {
+                ChapterInfo &chapter = uniqueChapters[i];
+                if (chapter.end > chapter.start)
+                    continue;
+                if (i + 1 < uniqueChapters.size())
+                    chapter.end = uniqueChapters[i + 1].start;
+                else if (m_resolvedDuration > chapter.start)
+                    chapter.end = m_resolvedDuration;
+                else
+                    chapter.end = chapter.start + 1.0;
+            }
+            m_resolvedChapters = uniqueChapters;
         }
     }
 
@@ -1557,6 +1632,7 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
         m_resolvedTitle.clear();
         m_resolvedVideoUrl.clear();
         m_resolvedAudioUrl.clear();
+        m_resolvedChapters.clear();
         m_resolvedIsLive = false;
         // The link failed to resolve: do not leave the loading entry marked as
         // playing. A playlist that was already playing keeps its marker.
@@ -1615,9 +1691,20 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
     m_lastPlayedTimer.start();
     m_lastStreamTitle.clear();
     m_streamFromYtdlp = true;
+    // Save the previous position before m_liveStream describes the new file.
+    preparePlaybackPosition(originalUrl, isLive);
     setLiveStream(isLive);
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
+
+    if (!isLive && !m_resolvedChapters.isEmpty()) {
+        const QString chaptersFile = writeChaptersFile(m_resolvedChapters);
+        if (!chaptersFile.isEmpty()) {
+            m_mpv->setChaptersFile(chaptersFile);
+            m_pendingChaptersFile = chaptersFile;
+        }
+    }
+    m_resolvedChapters.clear();
 
     m_mpv->setExternalAudio(audioUrl);
     setLoading(true);
@@ -1638,6 +1725,21 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
 void MediaManager::onMpvFileLoaded() {
     if (!m_mpv) return;
     setLoading(false);
+    if (!m_pendingChaptersFile.isEmpty()) {
+        QFile::remove(m_pendingChaptersFile);
+        m_pendingChaptersFile.clear();
+    }
+
+    // Continue where the previous session stopped. Seeking right after
+    // fileLoaded is safe: mpv is already playing and the seek is async.
+    if (!m_liveStream && m_resumeTarget > 0.0
+            && (!m_config || m_config->resumePlayback())) {
+        const double target = m_resumeTarget;
+        m_resumeTarget = 0.0;
+        m_mpv->seekExact(target);
+    } else {
+        m_resumeTarget = 0.0;
+    }
 
     // Start the ICY reader only after mpv has opened the stream. Opening a
     // second connection while the radio is still connecting could make some
@@ -1646,6 +1748,97 @@ void MediaManager::onMpvFileLoaded() {
     const QUrl url(m_mpv->source());
     if (isDirectStreamUrl(url) && isLiveStreamUrl(url))
         m_icyReader->start(url);
+}
+
+QString MediaManager::writeChaptersFile(const QVector<ChapterInfo> &chapters)
+{
+    if (chapters.isEmpty())
+        return {};
+    if (!m_chaptersDir)
+        m_chaptersDir = new QTemporaryDir;
+    if (!m_chaptersDir->isValid())
+        return {};
+
+    const QString path = m_chaptersDir->path()
+                         + QStringLiteral("/chapters-%1.txt").arg(++m_chaptersCounter);
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return {};
+
+    // mpv's chapters-file does not accept OGM directly; ffmetadata is parsed
+    // by FFmpeg's ffmetadata demuxer.
+    QTextStream out(&file);
+    out << QStringLiteral(";FFMETADATA1\n");
+    for (const ChapterInfo &chapter : chapters) {
+        const int startMs = qMax(0, static_cast<int>(chapter.start * 1000.0));
+        const int endMs = qMax(startMs + 1, static_cast<int>(chapter.end * 1000.0));
+        QString title = chapter.title;
+        title.replace(QLatin1Char('\n'), QLatin1Char(' '));
+        title.replace(QLatin1Char('\r'), QLatin1Char(' '));
+        title = title.trimmed();
+        out << QStringLiteral("[CHAPTER]\n")
+            << QStringLiteral("TIMEBASE=1/1000\n")
+            << QStringLiteral("START=%1\n").arg(startMs)
+            << QStringLiteral("END=%1\n").arg(endMs);
+        if (!title.isEmpty())
+            out << QStringLiteral("title=%1\n").arg(title);
+    }
+    file.close();
+    return path;
+}
+
+QString MediaManager::positionsFilePath() const
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
+    if (base.isEmpty())
+        base = QDir::homePath() + QStringLiteral("/.cache");
+    return base + QStringLiteral("/luma/playback-positions.json");
+}
+
+void MediaManager::preparePlaybackPosition(const QString &key, bool live)
+{
+    // Store where the previous file stopped before switching the key.
+    saveCurrentPosition();
+    clearPlaybackPosition();
+
+    if (live || key.isEmpty())
+        return;
+    if (m_config && !m_config->resumePlayback())
+        return;
+
+    m_positionKey = key.contains(QStringLiteral("://"))
+                        ? key
+                        : QFileInfo(key).absoluteFilePath();
+    m_resumeTarget = m_positions.positionFor(m_positionKey);
+    if (m_positionTimer)
+        m_positionTimer->start();
+}
+
+void MediaManager::saveCurrentPosition()
+{
+    if (!m_mpv || m_positionKey.isEmpty() || m_liveStream)
+        return;
+    if (m_mpv->isCasting())
+        return;
+    if (m_config && !m_config->resumePlayback())
+        return;
+
+    const double duration = m_mpv->duration();
+    const double position = m_mpv->position();
+    if (duration <= 0.0 || position <= 0.0)
+        return;
+    if (!m_positions.setPosition(m_positionKey, position, duration))
+        return;
+    if (m_positionWriter)
+        m_positionWriter->write(positionsFilePath(), m_positions.serialize());
+}
+
+void MediaManager::clearPlaybackPosition()
+{
+    if (m_positionTimer)
+        m_positionTimer->stop();
+    m_positionKey.clear();
+    m_resumeTarget = 0.0;
 }
 
 void MediaManager::clearPendingUrlPlayback()
@@ -1679,6 +1872,7 @@ void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &pl
     m_lastStreamTitle.clear();
     m_streamFromYtdlp = false;
     const bool live = isLiveStreamUrl(QUrl(originalUrl)) && originalUrl == playUrl;
+    preparePlaybackPosition(originalUrl, live);
     setLiveStream(live);
     setManualSwitch(true);
     QTimer::singleShot(1000, this, [this]() { setManualSwitch(false); });
@@ -1750,6 +1944,7 @@ void MediaManager::playIndex(int index) {
     m_lastStreamTitle.clear();
     m_streamFromYtdlp = false;
     const bool live = isLiveStreamUrl(QUrl(file));
+    preparePlaybackPosition(file, live);
     setLiveStream(live);
 
     setManualSwitch(true);
@@ -1804,6 +1999,8 @@ void MediaManager::playNext() {
 
 void MediaManager::stopPlayback() {
     if (!m_mpv) return;
+    saveCurrentPosition();
+    clearPlaybackPosition();
     clearPendingUrlPlayback();
     // Unload the file so the video area goes black and the control bar returns
     // to 00:00 instead of leaving the last frame of the finished playlist on
@@ -1811,6 +2008,20 @@ void MediaManager::stopPlayback() {
     m_mpv->stopPlayback();
     setLiveStream(false);
     setLoading(false);
+}
+
+void MediaManager::nextChapter()
+{
+    if (!m_mpv || m_mpv->isCasting()) return;
+    m_mpv->command(QStringList() << QStringLiteral("add")
+                                 << QStringLiteral("chapter") << QStringLiteral("1"));
+}
+
+void MediaManager::previousChapter()
+{
+    if (!m_mpv || m_mpv->isCasting()) return;
+    m_mpv->command(QStringList() << QStringLiteral("add")
+                                 << QStringLiteral("chapter") << QStringLiteral("-1"));
 }
 
 void MediaManager::playPrev() {

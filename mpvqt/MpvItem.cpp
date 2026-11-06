@@ -71,6 +71,10 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
         emit mutedChanged();
         emit pausedChanged();
         emit deinterlaceChanged();
+        if (m_chapter != -1) {
+            m_chapter = -1;
+            emit chapterChanged();
+        }
         emit fileLoaded();
     });
 
@@ -98,6 +102,8 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     observeProperty("deinterlace", MPV_FORMAT_STRING);
     observeProperty("media-title", MPV_FORMAT_STRING);
     observeProperty("metadata", MPV_FORMAT_NODE);
+    observeProperty("chapter-list", MPV_FORMAT_NODE);
+    observeProperty("chapter", MPV_FORMAT_INT64);
     // Display aspect ratio of the video: includes the pixel aspect ratio and the
     // Playback → Aspect ratio override. Used to fit the window to the picture.
     observeProperty("video-params/aspect", MPV_FORMAT_DOUBLE);
@@ -259,7 +265,9 @@ void MpvItem::setSource(const QString &src, bool live) {
     // file-local loadfile option: both tracks are then opened together and
     // playback starts with sound. Adding it in fileLoaded() instead made the
     // first seconds of audio play before the external track was attached.
-    QStringList loadCommand{QStringLiteral("loadfile"), src};
+    // The chapter file (when yt-dlp provided chapters) is a file-local option
+    // as well, so mpv exposes the chapters through its normal chapter-list.
+    QStringList loadOptions;
     if (!m_externalAudio.isEmpty()) {
         // loadfile() option values are comma-separated, so quote the URL:
         // googlevideo URLs contain commas (e.g. in sparams) and would
@@ -267,15 +275,36 @@ void MpvItem::setSource(const QString &src, bool live) {
         QString audio = m_externalAudio;
         audio.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
         audio.replace(QLatin1Char('"'), QStringLiteral("\\\""));
-        loadCommand << QStringLiteral("replace") << QStringLiteral("-1")
-                    << QStringLiteral("audio-file=\"%1\"").arg(audio);
+        loadOptions << QStringLiteral("audio-file=\"%1\"").arg(audio);
     }
     m_externalAudio.clear();
+    const QString chaptersFile = m_chaptersFile;
+    m_chaptersFile.clear();
+
+    // chapters-file is not a file-local loadfile option; set it as a property
+    // before loading the next file. Clear it after a chapters file was used,
+    // but do not override a chapters-file from the user's mpv.conf otherwise.
+    if (!chaptersFile.isEmpty()) {
+        setProperty("chapters-file", chaptersFile);
+        m_chaptersFileSet = true;
+    } else if (m_chaptersFileSet) {
+        setProperty("chapters-file", QString());
+        m_chaptersFileSet = false;
+    }
+
+    QStringList loadCommand{QStringLiteral("loadfile"), src};
+    if (!loadOptions.isEmpty())
+        loadCommand << QStringLiteral("replace") << QStringLiteral("-1")
+                    << loadOptions.join(QLatin1Char(','));
 
     emit sourceChanged();
     // Start loading after QML closes the menu and repaints the frame:
     // mpv briefly stops video output when switching files.
     QTimer::singleShot(0, this, [this, loadCommand]() { command(loadCommand); });
+}
+
+void MpvItem::setChaptersFile(const QString &path) {
+    m_chaptersFile = path;
 }
 
 void MpvItem::setCropEnabled(bool enabled) {
@@ -422,6 +451,20 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
         if (m_mediaTitle != title) {
             m_mediaTitle = title;
             emit mediaTitleChanged();
+        }
+    }
+    else if (property == "chapter-list") {
+        const QVariantList chapters = value.toList();
+        if (chapters != m_chapterList) {
+            m_chapterList = chapters;
+            emit chapterListChanged();
+        }
+    }
+    else if (property == "chapter") {
+        const int chapter = value.toInt();
+        if (chapter != m_chapter) {
+            m_chapter = chapter;
+            emit chapterChanged();
         }
     }
     else if (property == "deinterlace") {

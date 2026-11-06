@@ -18,6 +18,8 @@
 <message><source>menu_stats</source><translation>Сведения о файле</translation></message>
 <message><source>menu_playback</source><translation>Воспроизведение</translation></message>
 <message><source>menu_playback_mode</source><translation>Режим воспроизведения</translation></message>
+<message><source>menu_previous_chapter</source><translation>Предыдущая глава</translation></message>
+<message><source>menu_next_chapter</source><translation>Следующая глава</translation></message>
 <message><source>osd_playback_mode</source><translation>Режим: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Соотношение сторон</translation></message>
 <message><source>menu_fit_window</source><translation>Подогнать окно под видео</translation></message>
@@ -59,6 +61,7 @@
 <message><source>settings_remember_volume</source><translation>Запоминать громкость</translation></message>
 <message><source>settings_default_volume</source><translation>Громкость при запуске</translation></message>
 <message><source>settings_notifications</source><translation>Показывать уведомления</translation></message>
+<message><source>settings_resume_playback</source><translation>Продолжать с последней позиции</translation></message>
 <message><source>settings_single_instance</source><translation>Один экземпляр</translation></message>
 <message><source>settings_play_mode</source><translation>Режим воспроизведения плейлиста «По умолчанию»</translation></message>
 <message><source>settings_play_mode_hint</source><translation>Действует только для плейлиста «По умолчанию». У остальных плейлистов свой режим — его можно изменить в «Воспроизведение» → «Режим воспроизведения».</translation></message>
@@ -83,6 +86,7 @@
 <message><source>settings_sub_position</source><translation>Положение по вертикали</translation></message>
 <message><source>settings_sub_ignore_file_style</source><translation>Игнорировать оформление из файла субтитров</translation></message>
 <message><source>settings_show_panels_fullscreen</source><translation>Показывать панель управления в полноэкранном режиме</translation></message>
+<message><source>settings_chapter_markers</source><translation>Показывать маркеры глав на полосе перемотки</translation></message>
 <message><source>settings_playback</source><translation>Воспроизведение</translation></message>
 <message><source>settings_debug</source><translation>Отладка</translation></message>
 <message><source>settings_debug_hint</source><translation>Каждый компонент пишет свой файл в ~/.cache/luma/: luma.log, mpv.log и yt-dlp.log.</translation></message>
@@ -384,6 +388,8 @@
 <message><source>shortcut_toggle_mute</source><translation>Без звука</translation></message>
 <message><source>shortcut_previous_file</source><translation>Предыдущий файл</translation></message>
 <message><source>shortcut_next_file</source><translation>Следующий файл</translation></message>
+<message><source>shortcut_previous_chapter</source><translation>Предыдущая глава</translation></message>
+<message><source>shortcut_next_chapter</source><translation>Следующая глава</translation></message>
 <message><source>shortcut_toggle_playlist</source><translation>Панель плейлиста</translation></message>
 <message><source>shortcut_toggle_stats</source><translation>Панель статистики</translation></message>
 <message><source>shortcut_toggle_fullscreen</source><translation>Полный экран</translation></message>

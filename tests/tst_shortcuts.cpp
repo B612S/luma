@@ -20,6 +20,7 @@ private slots:
     void mapsSeekAndLongSeek();
     void mapsFrameStepping();
     void mapsPip();
+    void mapsChapters();
     void mapsFitWindowToVideo();
     void removedCoversKeyDoesNothing();
     void unknownKeyGivesNone();
@@ -93,6 +94,15 @@ void TestShortcuts::mapsPip()
 {
     QCOMPARE(static_cast<int>(actionFor(33, Qt::NoModifier)),
              static_cast<int>(ShortcutAction::TogglePip));
+}
+
+void TestShortcuts::mapsChapters()
+{
+    // PageUp / PageDown: evdev KEY_PAGEUP (104) and KEY_PAGEDOWN (109) + 8.
+    QCOMPARE(static_cast<int>(actionFor(112, Qt::NoModifier)),
+             static_cast<int>(ShortcutAction::PreviousChapter));
+    QCOMPARE(static_cast<int>(actionFor(117, Qt::NoModifier)),
+             static_cast<int>(ShortcutAction::NextChapter));
 }
 
 void TestShortcuts::mapsFitWindowToVideo()
