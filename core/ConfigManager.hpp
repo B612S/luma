@@ -54,6 +54,10 @@ public:
 
     QString language() const;
     void setLanguage(const QString &lang);
+    // Resolves a stored value ("auto"/"en"/"ru") to a compiled translation.
+    // "auto" follows the first two letters of systemLocale; unsupported
+    // languages and locales fall back to English.
+    static QString resolveLanguage(const QString &requested, const QString &systemLocale);
 
     QString playlistMode() const;
     void setPlaylistMode(const QString &mode);

@@ -80,7 +80,7 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
             out << "remember_volume=true\n";
             out << "default_volume=80\n";
             out << "volume=80\n";
-            out << "language=en\n";
+            out << "language=auto\n";
             out << "single_instance=true\n";
             out << "notifications=true\n";
             out << "append_to_playlist=false\n";
@@ -267,14 +267,22 @@ void ConfigManager::setVolume(int v) {
 }
 
 QString ConfigManager::language() const {
-    const QString lang = m_settings->value("ui/language", "en").toString();
-    // Only languages with a compiled translation are supported.
+    const QString lang = m_settings->value("ui/language", "auto").toString();
+    // "auto" follows the system locale; only languages with a compiled
+    // translation are supported.
+    if (lang == "auto") return lang;
     return lang == "ru" ? "ru" : "en";
 }
 void ConfigManager::setLanguage(const QString &lang) {
     if (language() == lang) return;
     m_settings->setValue("ui/language", lang);
     emit languageChanged();
+}
+
+QString ConfigManager::resolveLanguage(const QString &requested, const QString &systemLocale) {
+    if (requested == "en" || requested == "ru") return requested;
+    if (requested != "auto") return "en";
+    return systemLocale.left(2) == "ru" ? "ru" : "en";
 }
 
 QString ConfigManager::playlistMode() const {

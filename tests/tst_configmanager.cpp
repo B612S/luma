@@ -26,6 +26,7 @@ private slots:
     void controlBarModePersists();
     void legacyPinControlsMigrates();
     void unsupportedLanguageFallsBack();
+    void languageResolution();
     void reloadsExternalChanges();
     void ytdlpQualityAndProxy();
     void ytdlpProxyTypeAndAddress();
@@ -54,7 +55,7 @@ void TestConfigManager::defaults()
     QVERIFY(config.rememberVolume());
     QCOMPARE(config.defaultVolume(), 80);
     QCOMPARE(config.volume(), 80);
-    QCOMPARE(config.language(), QStringLiteral("en"));
+    QCOMPARE(config.language(), QStringLiteral("auto"));
     QCOMPARE(config.playlistMode(), QStringLiteral("sequential"));
     QVERIFY(config.notifications());
     QVERIFY(config.showPanelsFullscreen());
@@ -76,6 +77,7 @@ void TestConfigManager::defaults()
     const QString lumaContent = QString::fromUtf8(luma.readAll());
     luma.close();
     QVERIFY(!lumaContent.contains(QStringLiteral("[playback]")));
+    QVERIFY(lumaContent.contains(QStringLiteral("language=auto")));
 }
 
 void TestConfigManager::loggingModes()
@@ -295,11 +297,33 @@ void TestConfigManager::legacyPinControlsMigrates()
 void TestConfigManager::unsupportedLanguageFallsBack()
 {
     ConfigManager config;
+    QCOMPARE(config.language(), QStringLiteral("auto"));
+
     config.setLanguage("ja");
     QCOMPARE(config.language(), QStringLiteral("en"));
 
+    config.setLanguage("auto");
+    QCOMPARE(config.language(), QStringLiteral("auto"));
+
     config.setLanguage("ru");
     QCOMPARE(config.language(), QStringLiteral("ru"));
+}
+
+void TestConfigManager::languageResolution()
+{
+    // An explicit choice wins regardless of the system locale.
+    QCOMPARE(ConfigManager::resolveLanguage("en", "ru_RU"), QStringLiteral("en"));
+    QCOMPARE(ConfigManager::resolveLanguage("ru", "en_US"), QStringLiteral("ru"));
+
+    // "auto" follows the system locale; only Russian has a translation.
+    QCOMPARE(ConfigManager::resolveLanguage("auto", "ru_RU"), QStringLiteral("ru"));
+    QCOMPARE(ConfigManager::resolveLanguage("auto", "ru_UA"), QStringLiteral("ru"));
+    QCOMPARE(ConfigManager::resolveLanguage("auto", "en_US"), QStringLiteral("en"));
+    QCOMPARE(ConfigManager::resolveLanguage("auto", "ja_JP"), QStringLiteral("en"));
+    QCOMPARE(ConfigManager::resolveLanguage("auto", "C"), QStringLiteral("en"));
+
+    // Unknown stored values never leave the UI untranslated.
+    QCOMPARE(ConfigManager::resolveLanguage("ja", "ru_RU"), QStringLiteral("en"));
 }
 
 void TestConfigManager::reloadsExternalChanges()

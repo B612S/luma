@@ -103,7 +103,7 @@ cmake --build build -j$(nproc)          # single-target: --target luma
 
 ## Conventions
 
-- Code comments are in English; user-visible strings are `tr()`/`qsTr()`-wrapped.
+- Code comments and commit messages are written in English; user-visible strings are `tr()`/`qsTr()`-wrapped.
 - Keep [`CHANGELOG.md`](CHANGELOG.md) up to date. Every user-visible change (feature,
   behaviour change, fix, translation, packaging) goes under `## [Unreleased]` in the
   matching Keep a Changelog section (`Added`/`Changed`/`Fixed`/`Removed`). When `VERSION`

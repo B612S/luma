@@ -10,7 +10,8 @@ public:
     explicit CastStreamServer(QObject *parent = nullptr);
     ~CastStreamServer();
 
-    bool start(const QString &inputFile, const QString &targetIP);
+    bool start(const QString &inputFile, const QString &targetIP,
+               const QString &audioFilter = {});
     void stop();
 
     QString url() const;

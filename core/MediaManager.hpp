@@ -30,6 +30,13 @@ class MediaManager : public QObject {
     Q_PROPERTY(bool liveStream READ liveStream NOTIFY liveStreamChanged)
     // A new source is being resolved/opened; stats must not read mpv synchronously.
     Q_PROPERTY(bool isLoading READ isLoading NOTIFY loadingChanged)
+    // Resolved in the background; the playlist menu shows the fallback until
+    // the first xdg-mime query returns.
+    Q_PROPERTY(QString defaultFileManagerName READ defaultFileManagerName
+               NOTIFY defaultFileManagerNameChanged)
+    // Something is loaded or playing. False before the first file and after the
+    // playlist stopped, so the UI can hide the media information panel.
+    Q_PROPERTY(bool hasMedia READ hasMedia NOTIFY hasMediaChanged)
 
 public:
     explicit MediaManager(MpvItem *mpv = nullptr, QObject *parent = nullptr);
@@ -52,6 +59,8 @@ public:
     Q_INVOKABLE bool hasVideo() const;
     bool liveStream() const { return m_liveStream; }
     bool isLoading() const { return m_loading; }
+    bool hasMedia() const { return m_hasMedia; }
+    QString defaultFileManagerName() const { return m_defaultFileManagerName; }
 
     // Runtime requirements for YouTube's JavaScript challenge. The ejs
     // package can be installed into ~/.local/share/luma without touching the
@@ -88,6 +97,8 @@ public:
     // Audio file tags: read and written in the file itself (via TagLib).
     Q_INVOKABLE QVariantMap readTags(const QString &path);
     Q_INVOKABLE bool saveTags(const QString &path, const QVariantMap &tags);
+    // Non-blocking tag write for the info dialog: TagLib works on a worker.
+    Q_INVOKABLE void requestSaveTags(const QString &path, const QVariantMap &tags);
     // Edit the URL of a streaming playlist entry.
     Q_INVOKABLE bool updateStreamUrl(const QString &oldUrl, const QString &newUrl);
 
@@ -110,6 +121,8 @@ signals:
     void isManualSwitchChanged();
     void playlistChanged();
     void liveStreamChanged();
+    void hasMediaChanged();
+    void defaultFileManagerNameChanged();
     void ytdlpInstallFinished(bool success, const QString &message);
     void ytdlpEjsInstallFinished(bool success, const QString &message);
     // Result of refreshYtdlpRuntime(), including the asynchronous ejs probe.
@@ -119,6 +132,7 @@ signals:
     void downloadStatus(const QString &message);
     // Result of the asynchronous file-properties request.
     void fileInfoReady(const QString &path, const QVariantMap &info);
+    void tagsSaved(const QString &path, bool success);
     // Result of requestLiveBitrate(): average over the sampled window.
     void liveBitrateReady(const QString &path, double position,
                           qint64 videoBps, qint64 audioBps);
@@ -140,12 +154,16 @@ private:
     // yt-dlp returns direct URLs; mpv plays them through the local SOCKS bridge.
     void openUrlAsync(const QString &url, bool keepPlaylist = false);
     void finishUrlResolution(const QString &url, bool keepPlaylist, bool ok);
+    void playIndexInModel(PlaylistModel *model, int index);
     void playStream(const QString &originalUrl, const QString &videoUrl,
                     const QString &audioUrl, const QString &title, bool keepPlaylist,
                     bool isLive);
     void playResolvedUrl(const QString &originalUrl, const QString &playUrl);
     void clearPendingUrlPlayback();
     void onMpvFileLoaded();
+    // Fills the Default playlist with the rest of the folder after the file
+    // has already started playing. The generation discards stale results.
+    void scanFolderForPlaylist(const QString &filePath, quint64 generation);
     // Resume support: save the current position and prepare the next key.
     void preparePlaybackPosition(const QString &key, bool live);
     void saveCurrentPosition();
@@ -195,8 +213,10 @@ private:
     QString m_lastStreamTitle;
     bool m_liveStream = false;
     bool m_loading = false;
+    bool m_hasMedia = false;
     void setLoading(bool loading);
     void setLiveStream(bool live);
+    void setHasMedia(bool hasMedia);
 
     QDBusInterface *m_notifyInterface = nullptr;
     QProcess *m_ytdlpProcess = nullptr;
@@ -206,12 +226,15 @@ private:
     QString m_pendingIcyTitle;
     QByteArray m_ytdlpStdoutBuffer;
     QString m_ytdlpStderr;
-    QString m_defaultFileManagerName;
+    QString m_defaultFileManagerName = QStringLiteral("File Manager");
+    bool m_fileManagerLookupStarted = false;
+    void resolveDefaultFileManagerName();
     // Last result of refreshYtdlpRuntime(); keeps the settings page stable
     // while the background ejs probe runs.
     QVariantMap m_ytdlpRuntime;
     // Discards notifications from a file that was already replaced.
     quint64 m_notifyGeneration = 0;
+    quint64 m_folderScanGeneration = 0;
     QString m_resolvedTitle;
     QString m_resolvedVideoUrl;
     QString m_resolvedAudioUrl;

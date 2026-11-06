@@ -85,7 +85,7 @@ LumaMenu {
             }
 
             LumaMenuButton {
-                text: qsTranslate("PlaylistPanel", "playlist_open_folder").arg(Media.getDefaultFileManagerName())
+                text: qsTranslate("PlaylistPanel", "playlist_open_folder").arg(Media.defaultFileManagerName)
                 onClicked: {
                     const path = trackContextMenu.trackPath();
                     if (!path) return;

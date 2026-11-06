@@ -15,6 +15,7 @@
 <message><source>menu_subtitles</source><translation>Субтитры</translation></message>
 <message><source>menu_open_sub_file</source><translation>Загрузить файл субтитров…</translation></message>
 <message><source>menu_open_audio_file</source><translation>Загрузить аудиофайл…</translation></message>
+<message><source>menu_equalizer</source><translation>Эквалайзер</translation></message>
 <message><source>menu_stats</source><translation>Сведения о файле</translation></message>
 <message><source>menu_playback</source><translation>Воспроизведение</translation></message>
 <message><source>menu_playback_mode</source><translation>Режим воспроизведения</translation></message>
@@ -23,7 +24,7 @@
 <message><source>osd_playback_mode</source><translation>Режим: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Соотношение сторон</translation></message>
 <message><source>menu_fit_window</source><translation>Подогнать окно под видео</translation></message>
-<message><source>menu_crop</source><translation>Убрать чёрные поля</translation></message>
+<message><source>menu_crop</source><translation>Обрезка</translation></message>
 <message><source>playback_sequential</source><translation>По порядку</translation></message>
 <message><source>playback_repeat</source><translation>Повторять файл</translation></message>
 <message><source>playback_shuffle</source><translation>Вперемешку</translation></message>
@@ -33,7 +34,7 @@
 <message><source>osd_aspect</source><translation>Соотношение сторон: %1</translation></message>
 <message><source>menu_playlist</source><translation>Плейлист</translation></message>
 <message><source>menu_pip</source><translation>Картинка в картинке</translation></message>
-<message><source>menu_renderer</source><translation>Устройство вывода</translation></message>
+<message><source>menu_renderer</source><translation>Chromecast</translation></message>
 <message><source>menu_searching_devices</source><translation>Поиск устройств…</translation></message>
 <message><source>menu_refresh_devices</source><translation>Найти устройства</translation></message>
 <message><source>menu_stop_cast</source><translation>Прекратить трансляцию</translation></message>
@@ -42,6 +43,35 @@
 <message><source>osd_cast_started</source><translation>Трансляция на %1</translation></message>
 <message><source>osd_cast_stopped</source><translation>Трансляция остановлена</translation></message>
 <message><source>osd_cast_no_file</source><translation>Сначала откройте файл</translation></message>
+</context>
+
+<context>
+<name>EqualizerDialog</name>
+<message><source>eq_title</source><translation>Эквалайзер</translation></message>
+<message><source>eq_enabled</source><translation>Включён</translation></message>
+<message><source>eq_preset</source><translation>Пресет</translation></message>
+<message><source>eq_preset_custom</source><translation>Свой</translation></message>
+<message><source>eq_save_preset</source><translation>Сохранить как пресет</translation></message>
+<message><source>eq_preset_name</source><translation>Название пресета</translation></message>
+<message><source>eq_preset_placeholder</source><translation>Мой пресет</translation></message>
+<message><source>eq_save</source><translation>Сохранить</translation></message>
+<message><source>eq_cancel</source><translation>Отмена</translation></message>
+<message><source>eq_reset_custom</source><translation>Сбросить свои пресеты</translation></message>
+<message><source>eq_reset_confirm</source><translation>Удалить все свои пресеты? Встроенные пресеты останутся.</translation></message>
+<message><source>eq_reset</source><translation>Сбросить</translation></message>
+<message><source>eq_20_bands</source><translation>20 полос</translation></message>
+<message><source>eq_preamp</source><translation>Усиление</translation></message>
+<message><source>eq_close</source><translation>Закрыть</translation></message>
+<message><source>eq_preset_flat</source><translation>Ровный</translation></message>
+<message><source>eq_preset_rock</source><translation>Рок</translation></message>
+<message><source>eq_preset_pop</source><translation>Поп</translation></message>
+<message><source>eq_preset_jazz</source><translation>Джаз</translation></message>
+<message><source>eq_preset_classical</source><translation>Классика</translation></message>
+<message><source>eq_preset_electronic</source><translation>Электроника</translation></message>
+<message><source>eq_preset_hiphop</source><translation>Хип-хоп</translation></message>
+<message><source>eq_preset_vocal</source><translation>Вокал</translation></message>
+<message><source>eq_preset_bass</source><translation>Усиление баса</translation></message>
+<message><source>eq_preset_treble</source><translation>Усиление высоких</translation></message>
 </context>
 
 <context>
@@ -58,6 +88,7 @@
 <message><source>settings_interface</source><translation>Интерфейс</translation></message>
 <message><source>settings_subtitles</source><translation>Субтитры</translation></message>
 <message><source>settings_language</source><translation>Язык</translation></message>
+<message><source>language_auto</source><translation>Системный</translation></message>
 <message><source>settings_remember_volume</source><translation>Запоминать громкость</translation></message>
 <message><source>settings_default_volume</source><translation>Громкость при запуске</translation></message>
 <message><source>settings_notifications</source><translation>Показывать уведомления</translation></message>

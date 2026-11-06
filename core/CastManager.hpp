@@ -5,6 +5,7 @@
 #include "CastStreamServer.hpp"
 #include "CastV2Client.hpp"
 
+class Equalizer;
 class QTimer;
 
 class CastManager : public QObject {
@@ -30,6 +31,9 @@ public:
     Q_INVOKABLE void castTo(const QString &address, quint16 port, const QString &filePath, const QString &title = {});
     Q_INVOKABLE void stopCast();
 
+    // The current equalizer curve is baked into the HLS re-encode.
+    void setEqualizer(Equalizer *equalizer) { m_equalizer = equalizer; }
+
     // Remote playback control
     Q_INVOKABLE void play() { m_client->play(); }
     Q_INVOKABLE void pause() { m_client->pause(); }
@@ -48,6 +52,7 @@ private:
     CastDiscovery *m_discovery;
     CastStreamServer *m_server;
     CastV2Client *m_client;
+    Equalizer *m_equalizer = nullptr;
     bool m_casting = false;
     // Only the current "wait for FFmpeg to finish encoding" timer; stopped and
     // deleted when the cast is cancelled or replaced.

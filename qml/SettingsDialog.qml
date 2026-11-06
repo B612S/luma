@@ -8,8 +8,19 @@ Dialog {
     title: qsTr("settings_title")
     modal: true
     focus: true
-    width: 800
-    height: 600
+    // Keep the whole dialog inside the player window. A fixed 800x600 card
+    // was clipped when the window was smaller; the content area already has a
+    // Flickable, so only the outer size has to adapt.
+    readonly property real maxDialogWidth: {
+        const w = Overlay.overlay ? Overlay.overlay.width : 0;
+        return Math.max(360, (w > 0 ? w : 800) - 32);
+    }
+    readonly property real maxDialogHeight: {
+        const h = Overlay.overlay ? Overlay.overlay.height : 0;
+        return Math.max(280, (h > 0 ? h : 600) - 32);
+    }
+    width: Math.min(800, maxDialogWidth)
+    height: Math.min(600, maxDialogHeight)
     padding: 0
 
     anchors.centerIn: Overlay.overlay
@@ -86,7 +97,9 @@ Dialog {
         }
 
         Rectangle {
-            Layout.preferredWidth: 200
+            // Give the content more room on a narrow window; the category names
+            // still fit at this width.
+            Layout.preferredWidth: settingsDialog.width < 700 ? 160 : 200
             Layout.fillHeight: true
             color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                            Kirigami.Theme.backgroundColor.g,
@@ -304,8 +317,10 @@ Dialog {
                                     id: langCombo
                                     anchors.fill: parent
                                     font.pixelSize: 14
-                                    // Use native language names (endonyms)
+                                    // "System" is translated; language names are
+                                    // native endonyms.
                                     model: [
+                                        { value: "auto", text: qsTr("language_auto") },
                                         { value: "en", text: "English" },
                                         { value: "ru", text: "Русский" }
                                     ]
@@ -902,20 +917,23 @@ Dialog {
                             spacing: 8
                             Label {
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 text: qsTr("shortcuts_action")
                                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
                                                Kirigami.Theme.textColor.b, 0.65)
                                 font.pixelSize: 13
                             }
                             Label {
-                                Layout.preferredWidth: 160
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 text: qsTr("shortcuts_local")
                                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
                                                Kirigami.Theme.textColor.b, 0.65)
                                 font.pixelSize: 13
                             }
                             Label {
-                                Layout.preferredWidth: 160
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 text: qsTr("shortcuts_global")
                                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
                                                Kirigami.Theme.textColor.b, 0.65)
@@ -931,6 +949,7 @@ Dialog {
 
                                 Label {
                                     Layout.fillWidth: true
+                                    Layout.preferredWidth: 1
                                     text: qsTranslate("Shortcuts", "shortcut_" + modelData.id)
                                     color: Kirigami.Theme.textColor
                                     font.pixelSize: 14
@@ -938,14 +957,16 @@ Dialog {
                                     elide: Text.ElideRight
                                 }
                                 ShortcutField {
-                                    Layout.preferredWidth: 160
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 1
                                     text: modelData.localText
                                     onCaptured: (keycode, key, modifiers, text) =>
                                         shortcuts.setShortcut(modelData.id, keycode, modifiers, text, false)
                                     onCleared: shortcuts.clearShortcut(modelData.id, false)
                                 }
                                 ShortcutField {
-                                    Layout.preferredWidth: 160
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 1
                                     text: modelData.globalText
                                     enabled: shortcuts.globalShortcutsAllowed
                                     isGlobal: true
@@ -1200,8 +1221,8 @@ Dialog {
         title: qsTr("settings_sub_font")
         modal: true
         focus: true
-        width: 420
-        height: 520
+        width: Math.min(420, settingsDialog.maxDialogWidth)
+        height: Math.min(520, settingsDialog.maxDialogHeight)
         padding: 12
         anchors.centerIn: Overlay.overlay
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside

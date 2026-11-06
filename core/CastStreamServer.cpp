@@ -52,7 +52,8 @@ QString CastStreamServer::playlistPath() const {
     return m_tempDir->path() + "/playlist.m3u8";
 }
 
-bool CastStreamServer::start(const QString &inputFile, const QString &targetIP) {
+bool CastStreamServer::start(const QString &inputFile, const QString &targetIP,
+                             const QString &audioFilter) {
     stop();
 
     m_localIP = detectLocalIP(targetIP);
@@ -94,8 +95,12 @@ bool CastStreamServer::start(const QString &inputFile, const QString &targetIP) 
     << "-c:v" << "libx264" << "-preset" << "ultrafast" << "-tune" << "zerolatency"
     << "-profile:v" << "main" << "-pix_fmt" << "yuv420p"
     << "-g" << "48" << "-keyint_min" << "48" << "-sc_threshold" << "0"
-    << "-c:a" << "aac" << "-b:a" << "128k" << "-ac" << "2" << "-ar" << "48000"
-    << "-f" << "hls"
+    << "-c:a" << "aac" << "-b:a" << "128k" << "-ac" << "2" << "-ar" << "48000";
+    // The equalizer is baked into the cast stream: the TV receives the same
+    // curve (including the preamp) that mpv applies locally.
+    if (!audioFilter.isEmpty())
+        args << "-af" << audioFilter;
+    args << "-f" << "hls"
     << "-hls_time" << "2"
     << "-hls_list_size" << "0"
     << "-hls_playlist_type" << "vod"

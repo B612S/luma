@@ -616,6 +616,7 @@ MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
     m_ytdlpTimeout->setSingleShot(true);
     m_ytdlpTimeout->setInterval(30000);
     m_icyReader = new IcyMetadataReader(this);
+    resolveDefaultFileManagerName();
     connect(m_icyReader, &IcyMetadataReader::titleChanged,
             this, &MediaManager::onIcyTitleChanged);
     m_icyTitleTimer = new QTimer(this);
@@ -801,6 +802,12 @@ void MediaManager::setLoading(bool loading) {
     if (m_loading == loading) return;
     m_loading = loading;
     emit loadingChanged();
+}
+
+void MediaManager::setHasMedia(bool hasMedia) {
+    if (m_hasMedia == hasMedia) return;
+    m_hasMedia = hasMedia;
+    emit hasMediaChanged();
 }
 
 void MediaManager::onMediaTitleChanged() {
@@ -1057,11 +1064,12 @@ void MediaManager::_notifyForFile(const QString &path) {
     }));
 }
 
-QString MediaManager::getDefaultFileManagerName() {
-    // Called from QML whenever the track menu is built. Cache the result: the
-    // synchronous xdg-mime query used to stall the GUI thread on every menu.
-    if (!m_defaultFileManagerName.isEmpty()) return m_defaultFileManagerName;
-
+namespace {
+// Runs on a worker thread: xdg-mime can wait for the desktop database and the
+// first call used to stall the GUI for up to a second when the track menu was
+// built.
+QString lookupDefaultFileManagerName()
+{
     QProcess process;
     process.start("xdg-mime", QStringList() << "query" << "default" << "inode/directory");
     process.waitForFinished(1000);
@@ -1093,9 +1101,31 @@ QString MediaManager::getDefaultFileManagerName() {
         }
         if (result.isEmpty()) result = QString(desktopFile).remove(".desktop");
     }
-
-    m_defaultFileManagerName = result;
     return result;
+}
+} // namespace
+
+void MediaManager::resolveDefaultFileManagerName()
+{
+    if (m_fileManagerLookupStarted) return;
+    m_fileManagerLookupStarted = true;
+
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        const QString name = watcher->result();
+        watcher->deleteLater();
+        if (name.isEmpty() || name == m_defaultFileManagerName) return;
+        m_defaultFileManagerName = name;
+        emit defaultFileManagerNameChanged();
+    });
+    watcher->setFuture(QtConcurrent::run(&lookupDefaultFileManagerName));
+}
+
+QString MediaManager::getDefaultFileManagerName() {
+    // Compatibility for callers that use the invokable; the playlist menu uses
+    // the property and therefore never starts a query synchronously.
+    resolveDefaultFileManagerName();
+    return m_defaultFileManagerName;
 }
 
 QVariantMap MediaManager::getFileInfo(const QString &path) {
@@ -1136,6 +1166,23 @@ QVariantMap MediaManager::readTags(const QString &path) {
 bool MediaManager::saveTags(const QString &path, const QVariantMap &tags) {
     if (path.isEmpty()) return false;
     return TagManager::write(path, tags);
+}
+
+void MediaManager::requestSaveTags(const QString &path, const QVariantMap &tags) {
+    if (path.isEmpty()) {
+        emit tagsSaved(path, false);
+        return;
+    }
+
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher, path]() {
+        const bool success = watcher->result();
+        watcher->deleteLater();
+        emit tagsSaved(path, success);
+    });
+    watcher->setFuture(QtConcurrent::run([path, tags]() {
+        return TagManager::write(path, tags);
+    }));
 }
 
 bool MediaManager::updateStreamUrl(const QString &oldUrl, const QString &newUrl) {
@@ -1263,6 +1310,7 @@ void MediaManager::openFile(const QString &path) {
 
     // URLs go to Default
     if (path.startsWith("http://") || path.startsWith("https://")) {
+        ++m_folderScanGeneration;
         clearPendingUrlPlayback();
         if (isDirectStreamUrl(QUrl(path))) playResolvedUrl(path, path);
         else openUrlAsync(path);
@@ -1300,26 +1348,72 @@ void MediaManager::openFile(const QString &path) {
         return;
     }
 
-    QStringList files;
-    QDir dir(fi.absolutePath());
-    for (const QString &f : dir.entryList({"*.mp4", "*.mkv", "*.avi", "*.webm"}, QDir::Files, QDir::Name)) {
-        files << dir.absoluteFilePath(f);
-    }
-    if (!files.contains(cleanPath)) files.prepend(cleanPath);
-
-    def->setFiles(files, cleanPath);
-    if (m_playlists) m_playlists->scanAudioPaths(files);
+    // Play the opened file immediately. The other videos in its folder are
+    // scanned on a worker thread and merged into the playlist afterwards, so
+    // a folder with thousands of files cannot delay the first frame.
+    const quint64 generation = ++m_folderScanGeneration;
+    def->setFiles({cleanPath}, cleanPath);
+    if (m_playlists) m_playlists->scanAudioPaths({cleanPath});
     if (m_playMode == "shuffle") def->setShuffle(true);
 
     if (m_playlists->activeId() != PlaylistManager::DEFAULT_ID)
         m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
 
     playIndex(def->currentIndex());
+    scanFolderForPlaylist(cleanPath, generation);
+}
+
+void MediaManager::scanFolderForPlaylist(const QString &filePath, quint64 generation)
+{
+    auto *watcher = new QFutureWatcher<QVector<PlaylistModel::Entry>>(this);
+    connect(watcher, &QFutureWatcher<QVector<PlaylistModel::Entry>>::finished, this,
+            [this, watcher, filePath, generation]() {
+        QVector<PlaylistModel::Entry> entries = watcher->result();
+        watcher->deleteLater();
+        if (generation != m_folderScanGeneration || !m_playlists)
+            return;
+
+        PlaylistModel *def = m_playlists->defaultModel();
+        // Do not touch the playlist if the user changed it while the scan was
+        // running; merging then could discard those changes.
+        if (!def || def->count() != 1 || def->fileAt(0) != filePath)
+            return;
+        if (entries.size() < 2)
+            return;
+
+        def->setPreparedEntries(std::move(entries), filePath);
+        if (m_playMode == "shuffle")
+            def->setShuffle(true);
+        m_playlists->scanAudioPaths({filePath});
+    });
+
+    watcher->setFuture(QtConcurrent::run([filePath]() {
+        QVector<PlaylistModel::Entry> entries;
+        const QFileInfo fi(filePath);
+        QDir dir(fi.absolutePath());
+        QStringList paths;
+        for (const QString &f : dir.entryList({"*.mp4", "*.mkv", "*.avi", "*.webm"},
+                                              QDir::Files, QDir::Name)) {
+            paths << dir.absoluteFilePath(f);
+        }
+        if (!paths.contains(filePath)) paths.prepend(filePath);
+
+        entries.reserve(paths.size());
+        for (const QString &path : paths) {
+            PlaylistModel::Entry entry;
+            entry.path = path;
+            entry.kind = QStringLiteral("video");
+            entry.title = QFileInfo(path).completeBaseName();
+            entries.append(entry);
+        }
+        return entries;
+    }));
 }
 
 void MediaManager::openFolder(const QString &folder) {
     if (!m_mpv || !m_playlists) return;
 
+    ++m_folderScanGeneration;
     QDir dir(folder);
     QStringList files;
     // Audio formats added
@@ -1708,6 +1802,7 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
 
     m_mpv->setExternalAudio(audioUrl);
     setLoading(true);
+    setHasMedia(true);
     m_mpv->setSource(videoUrl, isLive);
     m_mpv->setPaused(false);
 
@@ -1880,6 +1975,7 @@ void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &pl
     m_playlists->setPlayingModel(def);
     def->setCurrentIndex(existingIndex >= 0 ? existingIndex : 0);
     setLoading(true);
+    setHasMedia(true);
     m_mpv->setSource(playUrl, live);
     m_mpv->setPaused(false);
 
@@ -1897,11 +1993,15 @@ void MediaManager::playResolvedUrl(const QString &originalUrl, const QString &pl
 }
 
 void MediaManager::playIndex(int index) {
+    if (!m_playlists) return;
+    playIndexInModel(m_playlists->activeModel(), index);
+}
+
+void MediaManager::playIndexInModel(PlaylistModel *model, int index) {
     if (!m_mpv || !m_playlists) return;
     if (m_icyReader) m_icyReader->stop();
     if (m_icyTitleTimer) m_icyTitleTimer->stop();
     m_pendingIcyTitle.clear();
-    PlaylistModel *model = m_playlists->activeModel();
     if (!model) return;
 
     QString file = model->fileAt(index);
@@ -1952,6 +2052,7 @@ void MediaManager::playIndex(int index) {
 
     m_playlists->setPlayingModel(model);
     model->setCurrentIndex(index);
+    setHasMedia(true);
     m_mpv->setSource(file, live);
     m_mpv->setPaused(false);
 
@@ -1966,31 +2067,35 @@ void MediaManager::playIndex(int index) {
 
 void MediaManager::playNext() {
     if (!m_mpv || !m_playlists) return;
-    PlaylistModel *model = m_playlists->activeModel();
+    // Navigation must follow the playlist that is actually playing, not the
+    // tab the user happens to be viewing.
+    PlaylistModel *model = m_playlists->playingModel();
+    if (!model) model = m_playlists->activeModel();
     if (!model) return;
 
     int current = model->currentIndex();
     int count = model->rowCount();
     if (count == 0) return;
 
-    if (m_playMode == "repeat") {
-        if (current >= 0) playIndex(current);
+    const QString mode = m_playlists->playlistModeFor(model);
+    if (mode == "repeat") {
+        if (current >= 0) playIndexInModel(model, current);
     }
-    else if (m_playMode == "shuffle") {
+    else if (mode == "shuffle") {
         int next = current + 1;
         if (next >= count) {
             model->setShuffle(true);
             next = 0;
         }
-        playIndex(next);
+        playIndexInModel(model, next);
     }
-    else if (m_playMode == "stop") {
+    else if (mode == "stop") {
         stopPlayback();
     }
     else {
         int next = current + 1;
         if (next < count) {
-            playIndex(next);
+            playIndexInModel(model, next);
         } else {
             stopPlayback();
         }
@@ -2006,6 +2111,9 @@ void MediaManager::stopPlayback() {
     // to 00:00 instead of leaving the last frame of the finished playlist on
     // screen.
     m_mpv->stopPlayback();
+    if (m_playlists)
+        m_playlists->setPlayingModel(nullptr);
+    setHasMedia(false);
     setLiveStream(false);
     setLoading(false);
 }
@@ -2026,7 +2134,8 @@ void MediaManager::previousChapter()
 
 void MediaManager::playPrev() {
     if (!m_mpv || !m_playlists) return;
-    PlaylistModel *model = m_playlists->activeModel();
+    PlaylistModel *model = m_playlists->playingModel();
+    if (!model) model = m_playlists->activeModel();
     if (!model) return;
 
     int current = model->currentIndex();
@@ -2039,7 +2148,7 @@ void MediaManager::playPrev() {
     }
 
     int prev = current - 1;
-    if (prev >= 0) playIndex(prev);
+    if (prev >= 0) playIndexInModel(model, prev);
 }
 
 void MediaManager::openFileDialog() {

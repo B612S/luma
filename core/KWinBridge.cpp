@@ -3,7 +3,6 @@
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
-#include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDir>
 #include <QFile>
@@ -19,6 +18,10 @@ constexpr auto kScriptInterface = "org.kde.kwin.Script";
 // Title of the window while picture-in-picture is active (see Main.qml). The
 // KWin script uses it to distinguish the PiP window from the normal one.
 constexpr auto kPipTitle = "Luma PiP";
+// KWin's scripting calls normally return in well under a millisecond. A stale
+// or hung compositor must not freeze the GUI on a PiP transition (the D-Bus
+// default timeout is 25 s), so every call is bounded.
+constexpr int kDbusTimeoutMs = 500;
 
 constexpr auto kWatcherScript = R"(
 function isLumaWindow(window) {
@@ -65,17 +68,24 @@ QString writeScript(const QString &name, const QString &source)
     return path;
 }
 
+QDBusMessage callKWin(const QString &path, const QString &interface,
+                     const QString &method, const QVariantList &arguments = {})
+{
+    QDBusMessage message = QDBusMessage::createMethodCall(
+        QString::fromLatin1(kService), path, interface, method);
+    message.setArguments(arguments);
+    return QDBusConnection::sessionBus().call(message, QDBus::Block, kDbusTimeoutMs);
+}
+
 int loadScript(const QString &path, const QString &name)
 {
-    QDBusInterface scripting(QString::fromLatin1(kService),
-                             QString::fromLatin1(kScriptingPath),
-                             QString::fromLatin1(kScriptingInterface));
-    if (!scripting.isValid())
-        return -1;
     // A previous run may have left a script with this name loaded; KWin refuses
     // to load a second one under the same name.
-    scripting.call(QStringLiteral("unloadScript"), name);
-    const QDBusMessage reply = scripting.call(QStringLiteral("loadScript"), path, name);
+    callKWin(QString::fromLatin1(kScriptingPath), QString::fromLatin1(kScriptingInterface),
+             QStringLiteral("unloadScript"), {name});
+    const QDBusMessage reply = callKWin(QString::fromLatin1(kScriptingPath),
+                                       QString::fromLatin1(kScriptingInterface),
+                                       QStringLiteral("loadScript"), {path, name});
     if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty())
         return -1;
     bool ok = false;
@@ -85,21 +95,16 @@ int loadScript(const QString &path, const QString &name)
 
 bool runScript(int id)
 {
-    QDBusInterface script(QString::fromLatin1(kService),
-                          QStringLiteral("/Scripting/Script") + QString::number(id),
-                          QString::fromLatin1(kScriptInterface));
-    if (!script.isValid())
-        return false;
-    return script.call(QStringLiteral("run")).type() != QDBusMessage::ErrorMessage;
+    const QDBusMessage reply = callKWin(
+        QStringLiteral("/Scripting/Script") + QString::number(id),
+        QString::fromLatin1(kScriptInterface), QStringLiteral("run"));
+    return reply.type() != QDBusMessage::ErrorMessage;
 }
 
 void unloadScript(const QString &name)
 {
-    QDBusInterface scripting(QString::fromLatin1(kService),
-                             QString::fromLatin1(kScriptingPath),
-                             QString::fromLatin1(kScriptingInterface));
-    if (scripting.isValid())
-        scripting.call(QStringLiteral("unloadScript"), name);
+    callKWin(QString::fromLatin1(kScriptingPath), QString::fromLatin1(kScriptingInterface),
+             QStringLiteral("unloadScript"), {name});
 }
 
 } // namespace
@@ -126,12 +131,7 @@ bool KWinBridge::available() const
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (!bus.isConnected() || !bus.interface())
         return false;
-    if (!bus.interface()->isServiceRegistered(QString::fromLatin1(kService)))
-        return false;
-    QDBusInterface scripting(QString::fromLatin1(kService),
-                             QString::fromLatin1(kScriptingPath),
-                             QString::fromLatin1(kScriptingInterface));
-    return scripting.isValid();
+    return bus.interface()->isServiceRegistered(QString::fromLatin1(kService));
 }
 
 void KWinBridge::setPipActive(bool active)

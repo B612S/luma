@@ -3,9 +3,16 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 
-IcyMetadataReader::IcyMetadataReader(QObject *parent) : QObject(parent) {}
+IcyMetadataWorker::IcyMetadataWorker(QObject *parent) : QObject(parent) {}
 
-void IcyMetadataReader::start(const QUrl &url)
+QNetworkAccessManager *IcyMetadataWorker::manager()
+{
+    if (!m_manager)
+        m_manager = new QNetworkAccessManager(this);
+    return m_manager;
+}
+
+void IcyMetadataWorker::start(const QUrl &url)
 {
     stop();
     if (!url.isValid() || (url.scheme() != QLatin1String("http")
@@ -22,8 +29,8 @@ void IcyMetadataReader::start(const QUrl &url)
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    m_reply = m_manager.get(request);
-    connect(m_reply, &QNetworkReply::readyRead, this, &IcyMetadataReader::onReadyRead);
+    m_reply = manager()->get(request);
+    connect(m_reply, &QNetworkReply::readyRead, this, &IcyMetadataWorker::onReadyRead);
     connect(m_reply, &QNetworkReply::finished, this, [this]() {
         if (m_reply) {
             m_reply->deleteLater();
@@ -32,7 +39,7 @@ void IcyMetadataReader::start(const QUrl &url)
     });
 }
 
-void IcyMetadataReader::stop()
+void IcyMetadataWorker::stop()
 {
     if (!m_reply) return;
     m_reply->disconnect(this);
@@ -43,7 +50,7 @@ void IcyMetadataReader::stop()
     m_metaint = 0;
 }
 
-void IcyMetadataReader::onReadyRead()
+void IcyMetadataWorker::onReadyRead()
 {
     if (!m_reply) return;
 
@@ -70,7 +77,7 @@ void IcyMetadataReader::onReadyRead()
     }
 }
 
-void IcyMetadataReader::parse()
+void IcyMetadataWorker::parse()
 {
     if (m_metaint <= 0) return;
 
@@ -94,4 +101,32 @@ void IcyMetadataReader::parse()
         m_lastTitle = title;
         emit titleChanged(title);
     }
+}
+
+IcyMetadataReader::IcyMetadataReader(QObject *parent) : QObject(parent)
+{
+    m_worker = new IcyMetadataWorker;
+    m_worker->moveToThread(&m_thread);
+    connect(&m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
+    connect(m_worker, &IcyMetadataWorker::titleChanged,
+            this, &IcyMetadataReader::titleChanged);
+    m_thread.setObjectName(QStringLiteral("IcyMetadataReader"));
+    m_thread.start();
+}
+
+IcyMetadataReader::~IcyMetadataReader()
+{
+    m_thread.quit();
+    m_thread.wait();
+}
+
+void IcyMetadataReader::start(const QUrl &url)
+{
+    QMetaObject::invokeMethod(m_worker, "start", Qt::QueuedConnection,
+                              Q_ARG(QUrl, url));
+}
+
+void IcyMetadataReader::stop()
+{
+    QMetaObject::invokeMethod(m_worker, "stop", Qt::QueuedConnection);
 }

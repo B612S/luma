@@ -22,6 +22,8 @@ add_library(luma_testcore STATIC
     ${CMAKE_SOURCE_DIR}/core/AsyncFileWriter.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaybackPositions.cpp
     ${CMAKE_SOURCE_DIR}/core/PlaybackPositions.hpp
+    ${CMAKE_SOURCE_DIR}/core/Equalizer.cpp
+    ${CMAKE_SOURCE_DIR}/core/Equalizer.hpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.cpp
     ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.hpp
     ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.cpp
@@ -57,6 +59,7 @@ set(LUMA_TESTS
     tst_configmanager
     tst_playlistmanager
     tst_playbackpositions
+    tst_equalizer
     tst_logger
 )
 

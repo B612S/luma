@@ -358,6 +358,8 @@ void PlaylistManager::deletePlaylist(const QString &id) {
 
     QFile::remove(playlistFilePath(id));
     PlaylistModel *model = m_models.take(id);
+    if (model && m_playingModel == model)
+        m_playingModel = nullptr;
     if (model) {
         model->disconnect(this);
         model->deleteLater();
@@ -478,10 +480,19 @@ void PlaylistManager::addFilesToPlaylist(const QString &id, const QStringList &p
 }
 
 void PlaylistManager::setPlayingModel(PlaylistModel *model) {
+    m_playingModel = model;
     for (PlaylistModel *candidate : m_models) {
         if (candidate)
             candidate->setPlaying(candidate == model);
     }
+}
+
+QString PlaylistManager::playlistModeFor(PlaylistModel *model) const {
+    for (auto it = m_models.cbegin(); it != m_models.cend(); ++it) {
+        if (it.value() == model)
+            return playlistMode(it.key());
+    }
+    return QStringLiteral("sequential");
 }
 
 void PlaylistManager::scanAudioPaths(const QStringList &paths) {

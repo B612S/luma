@@ -8,6 +8,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <utility>
+
 class QFileSystemWatcher;
 
 class PlaylistModel : public QAbstractListModel {
@@ -44,6 +46,12 @@ public:
     // --- Loading (does not emit modified, so nothing is saved when reading from disk) ---
     Q_INVOKABLE void setFiles(const QStringList &files, const QString &current);
     Q_INVOKABLE void setEntries(const QVariantList &entries, const QString &current);
+    // Installs entries prepared on a worker thread. Same as setFiles(), but
+    // titles and file information are already resolved off the GUI thread.
+    void setPreparedEntries(QVector<Entry> entries, const QString &current)
+    {
+        installEntries(std::move(entries), current);
+    }
     // Same as setEntries(), but reads the objects directly from the playlist
     // file: the QVariantMap round trip was a large part of the load time.
     void setEntriesFromJson(const QJsonArray &entries, const QString &current);

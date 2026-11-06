@@ -25,6 +25,9 @@ ApplicationWindow {
     color: "transparent"
 
     property bool controlsVisible: true
+
+    // Playlist and statistics panels share the same top/bottom bounds, so they
+    // stay the same height at every window size.
     signal toggleCropRequested()
 
     readonly property int bottomZoneHeight: 70
@@ -225,6 +228,7 @@ ApplicationWindow {
     }
 
     property bool isDialogOpen: settingsDialog.visible ||
+    equalizerDialog.visible ||
     playlistPanel.hasOpenDialog ||
     infoDialog.visible ||
     fileUnavailableDialog.visible ||
@@ -425,7 +429,8 @@ ApplicationWindow {
     StatsPanel {
         id: statsPanel; objectName: "statsPanel"
         anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 20
-        width: 300; maxHeight: root.height - controlBar.height - 60; mpv: mpv; isOpen: false; z: 5
+        // The statistics panel fills exactly the playlist panel's height.
+        width: 300; maxHeight: playlistPanel.height; mpv: mpv; isOpen: false; z: 5
     }
 
     OsdToast {
@@ -483,6 +488,7 @@ ApplicationWindow {
         onTogglePipRequested: root.togglePip()
         onFitWindowRequested: root.fitWindowToVideo()
         onOpenUrlRequested: root.openUrlDialog()
+        onOpenEqualizerRequested: equalizerDialog.open()
         onTogglePlaylistRequested: { playlistPanel.isOpen = !playlistPanel.isOpen; idleTimer.restart(); }
         property bool cursorWasVisible: true
 
@@ -516,6 +522,7 @@ ApplicationWindow {
     }
 
     SettingsDialog { id: settingsDialog }
+    EqualizerDialog { id: equalizerDialog }
     MediaInfoDialog { id: infoDialog }
     FileUnavailableDialog { id: fileUnavailableDialog }
 

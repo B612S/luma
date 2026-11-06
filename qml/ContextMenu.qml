@@ -20,6 +20,10 @@ LumaMenu {
     signal togglePipRequested()
     signal fitWindowRequested()
     signal openUrlRequested()
+    signal openEqualizerRequested()
+
+    readonly property bool hasChapters: mpv !== null && mpv.chapterList !== undefined
+                                        && mpv.chapterList.length > 1
 
     onOpened: {
         hasVideo = Media.hasVideo();
@@ -87,11 +91,14 @@ LumaMenu {
 
             LumaMenuButton {
                 text: qsTr("menu_pip")
+                // Album art is shown in PiP as well, so keep the entry for any
+                // loaded media and hide it only in the idle state.
+                visible: Media.hasMedia
                 isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false
                 onClicked: { menu.togglePipRequested(); menu.close() }
             }
 
-            LumaMenuButton { text: qsTr("menu_stats"); onClicked: { statsPanel.isOpen = !statsPanel.isOpen; menu.close() } }
+            LumaMenuButton { text: qsTr("menu_stats"); visible: Media.hasMedia; onClicked: { statsPanel.isOpen = !statsPanel.isOpen; menu.close() } }
 
             LumaMenuSeparator {}
 
@@ -170,28 +177,30 @@ LumaMenu {
             spacing: 2
 
             LumaMenuButton {
+                visible: menu.hasChapters
                 text: qsTr("menu_previous_chapter")
-                isEnabled: menu.mpv !== null && menu.mpv.chapterList !== undefined
-                           && menu.mpv.chapterList.length > 0
                 onClicked: { Media.previousChapter(); menu.close() }
             }
             LumaMenuButton {
+                visible: menu.hasChapters
                 text: qsTr("menu_next_chapter")
-                isEnabled: menu.mpv !== null && menu.mpv.chapterList !== undefined
-                           && menu.mpv.chapterList.length > 0
                 onClicked: { Media.nextChapter(); menu.close() }
             }
 
-            LumaMenuSeparator {}
+            LumaMenuSeparator { visible: menu.hasChapters }
 
             LumaMenuButton { text: qsTr("menu_playback_mode"); hasArrow: true; onClicked: menu.showPage("playback_mode") }
+            LumaMenuButton {
+                text: qsTr("menu_equalizer")
+                onClicked: { menu.close(); menu.openEqualizerRequested() }
+            }
+            LumaMenuButton { text: qsTr("menu_renderer"); hasArrow: true; onClicked: menu.showPage("renderer") }
             LumaMenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; isEnabled: menu.hasVideo; onClicked: menu.showPage("aspect_ratio") }
             LumaMenuButton {
                 text: qsTr("menu_fit_window")
                 isEnabled: menu.hasVideo
                 onClicked: { menu.fitWindowRequested(); menu.close() }
             }
-            LumaMenuButton { text: qsTr("menu_renderer"); hasArrow: true; onClicked: menu.showPage("renderer") }
 
             LumaMenuButton {
                 text: (menu.mpv && menu.mpv.cropEnabled ? "✓ " : "") + qsTr("menu_crop")

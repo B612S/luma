@@ -39,6 +39,10 @@
   bypasses the proxy.
 - **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`,
   HLS re-encode via `ffmpeg`).
+- **10/20-band equalizer** — graphic EQ with a preamp, builtin curves and your own
+  presets (only the custom ones can be reset). Right-click a slider to reset it to
+  0 dB. It applies to everything mpv plays (files, links and radio) and is also applied
+  to Chromecast casts. Opened from Playback in the player menu.
 - **Picture in picture** — `P` or the context menu turns the window into a small
   frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
   On KDE Plasma the PiP window stays above the other windows.
@@ -56,7 +60,7 @@
   all hotkeys while the key is held.
 - **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.
 - **MPRIS2** — control from the desktop's media widget and media keys.
-- **English and Russian UI** — switchable at runtime.
+- **English and Russian UI** — switchable at runtime or follows the system language.
 
 ## Screenshots
 
@@ -265,7 +269,7 @@ page in Settings, or under `[debug]` in `luma.conf`. Resume positions are kept i
 remember_volume=true
 default_volume=80
 volume=80
-language=en              # en, ru
+language=auto            # auto, en, ru
 single_instance=true
 resume_playback=true
 notifications=true
@@ -335,7 +339,8 @@ licenses (yt-dlp: Unlicense; yt-dlp-ejs: Unlicense/MIT/ISC).
 Source strings are in Qt `.ts` files under `locales/` (`en`, `ru`). Japanese and Chinese
 are temporarily disabled. To add a language: create `locales/<lang>.ts`, add it to
 `qt_add_translations(...)` and the `install(FILES ...)` list in `CMakeLists.txt`, and add
-the language to the list in `qml/SettingsDialog.qml`.
+the language to the list in `qml/SettingsDialog.qml` and to `resolveLanguage()` in
+`main.cpp`.
 
 Translations of this README live in [`docs/readme/`](docs/readme/).
 

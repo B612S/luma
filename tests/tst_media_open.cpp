@@ -21,6 +21,8 @@ private slots:
     void cleanupTestCase();
     void openAudio();
     void openVideo();
+    void folderScanMergesSiblings();
+    void nextFollowsPlayingPlaylist();
     void externalAudioStartsWithFile();
     void endOfPlaylistStopsPlayback();
     void missingFileReportsUnavailable();
@@ -82,6 +84,7 @@ void TestMediaOpen::initTestCase()
     m_media->setPlaylistManager(m_playlists);
     m_media->setConfig(m_config);
     m_oldPath = qgetenv("PATH");
+    QVERIFY(!m_media->hasMedia());
 }
 
 void TestMediaOpen::cleanupTestCase()
@@ -112,6 +115,7 @@ void TestMediaOpen::openAudio()
 
     QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
     QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
+    QVERIFY(m_media->hasMedia());
     QTRY_VERIFY_WITH_TIMEOUT(
         m_mpv->property("audio-codec").toString().contains("PCM", Qt::CaseInsensitive),
         5000);
@@ -121,6 +125,67 @@ void TestMediaOpen::openAudio()
     QVERIFY(!m_media->hasVideo());
 }
 
+void TestMediaOpen::folderScanMergesSiblings()
+{
+    // Opening a file must start it immediately and add the rest of the folder
+    // only after the background scan, without replacing the current entry.
+    const QString folder = m_temp.path() + "/folder-scan";
+    QVERIFY(QDir().mkpath(folder));
+    const QString audio = folder + "/test_audio.wav";
+    const QString video = folder + "/test_video.mp4";
+    QVERIFY(QFile::copy(QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav"), audio));
+    QVERIFY(QFile::copy(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"), video));
+
+    stopPlayback();
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->openFile(audio);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QCOMPARE(m_media->playlist()->currentFile(), audio);
+    QVERIFY(m_media->hasMedia());
+
+    PlaylistModel *def = m_playlists->defaultModel();
+    QVERIFY(def);
+    QTRY_VERIFY_WITH_TIMEOUT(def->contains(video), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(def->count() >= 2, 5000);
+    QCOMPARE(def->currentFile(), audio);
+}
+
+void TestMediaOpen::nextFollowsPlayingPlaylist()
+{
+    // Play from Default, switch the visible tab to another playlist, then move
+    // to the next file: it must come from the playlist that is playing.
+    stopPlayback();
+    const QString audio = QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav");
+    const QString video = QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4");
+    const QString viewFile = m_temp.path() + "/view-playlist-file.mp4";
+    QVERIFY(QFile::copy(video, viewFile));
+
+    PlaylistModel *def = m_playlists->defaultModel();
+    QVERIFY(def);
+    def->setFiles({audio, video}, audio);
+    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
+
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playIndex(0);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QCOMPARE(m_mpv->source(), audio);
+
+    const QString viewId = m_playlists->createPlaylist(QStringLiteral("View"));
+    PlaylistModel *view = m_playlists->modelById(viewId);
+    QVERIFY(view);
+    view->setFiles({viewFile}, viewFile);
+    m_playlists->setActiveId(viewId);
+    QCOMPARE(m_playlists->activeId(), viewId);
+
+    QSignalSpy nextLoaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playNext();
+    QTRY_VERIFY_WITH_TIMEOUT(nextLoaded.count() > 0, 10000);
+    QCOMPARE(m_mpv->source(), video);
+    QCOMPARE(m_playlists->activeId(), viewId);
+
+    m_playlists->deletePlaylist(viewId);
+}
+
 void TestMediaOpen::openVideo()
 {
     stopPlayback();
@@ -128,6 +193,7 @@ void TestMediaOpen::openVideo()
     m_media->openFile(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"));
 
     QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QVERIFY(m_media->hasMedia());
     QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
     QTRY_VERIFY_WITH_TIMEOUT(
         m_mpv->property("video-codec").toString().contains("264", Qt::CaseInsensitive),
@@ -218,6 +284,7 @@ void TestMediaOpen::endOfPlaylistStopsPlayback()
     QCOMPARE(m_mpv->position(), 0.0);
     QTRY_VERIFY_WITH_TIMEOUT(m_mpv->paused(), 2000);
     QVERIFY(!m_media->isLoading());
+    QVERIFY(!m_media->hasMedia());
 }
 
 // A playlist entry whose file was deleted must not be handed to mpv silently:

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
@@ -53,10 +54,38 @@ Rectangle {
     readonly property bool hasVideo: _staticWidth > 0 && _staticHeight > 0
                                      && !_staticImageTrack
 
-    height: Math.min(contentColumn.implicitHeight + 32, maxHeight)
+    // Size to the content; maxHeight is the playlist panel's height, so when
+    // the statistics are long they stop at the same bottom line and scroll
+    // instead of growing past the playlist.
+    readonly property real contentHeight: contentColumn.implicitHeight + 32
+    height: Math.min(contentHeight, maxHeight)
+
+    // The height animation is enabled only during the loading window (opening
+    // the panel or switching the source). Resizing the window/panel cancels it
+    // so the new size is applied immediately.
+    property bool animateHeight: false
     Behavior on height {
+        enabled: statsPanel.animateHeight
         NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
     }
+
+    Timer {
+        id: heightAnimationTimer
+        interval: 2000
+        onTriggered: statsPanel.animateHeight = false
+    }
+
+    function startHeightAnimation() {
+        statsPanel.animateHeight = true;
+        heightAnimationTimer.restart();
+    }
+
+    function cancelHeightAnimation() {
+        heightAnimationTimer.stop();
+        statsPanel.animateHeight = false;
+    }
+
+    onMaxHeightChanged: cancelHeightAnimation()
 
     visible: opacity > 0
     opacity: 0.0
@@ -66,8 +95,16 @@ Rectangle {
     }
 
     onIsOpenChanged: {
+        // Statistics only make sense while something is loaded; the menu and
+        // the shortcut do not offer it otherwise.
+        if (isOpen && typeof Media !== "undefined" && !Media.hasMedia) {
+            isOpen = false;
+            return;
+        }
         if (isOpen) {
             statsPanel.opacity = 1.0
+            flickable.contentY = 0
+            startHeightAnimation()
             resetStaticCache()
             // Sample the current window at once, so the first refresh already
             // has it instead of mpv's last-GOP estimate.
@@ -83,12 +120,24 @@ Rectangle {
     Connections {
         target: mpv
         function onSourceChanged() {
+            flickable.contentY = 0
+            startHeightAnimation()
             resetStaticCache()
         }
     }
 
     Connections {
+        target: Window.window
+        function onWidthChanged() { statsPanel.cancelHeightAnimation() }
+        function onHeightChanged() { statsPanel.cancelHeightAnimation() }
+    }
+
+    Connections {
         target: Media
+        function onHasMediaChanged() {
+            if (!Media.hasMedia) statsPanel.isOpen = false;
+        }
+
         function onFileInfoReady(path, info) {
             // MediaManager reads TagLib/FFmpeg tags off the GUI thread. Only
             // local audio files need this extra source; radio tags come from
@@ -272,7 +321,8 @@ Rectangle {
             lines.push(qsTr("stats_aud_bitrate") + ": " + formatBitrate(audBitrate));
             lines.push(qsTr("stats_ao") + ": " + safeString(aoDriver));
             lines.push(qsTr("stats_audio_device") + ": " + safeString(statsProperty("audio-device")));
-            lines.push(qsTr("stats_avsync") + ": " + safeNumber(statsProperty("avsync"), 3) + " s");
+            if (video)
+                lines.push(qsTr("stats_avsync") + ": " + safeNumber(statsProperty("avsync"), 3) + " s");
             lines.push(qsTr("stats_cache") + ": " + safeNumber(statsProperty("demuxer-cache-duration"), 1) + " s");
             statLines = lines;
         }
@@ -387,7 +437,7 @@ Rectangle {
 
             Rectangle { width: parent.width; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
 
-            Label { id: avsyncLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+            Label { id: avsyncLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
             Label { id: cacheLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
         }
     }

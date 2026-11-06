@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 #include <QStyleFactory>
 #include <QTranslator>
+#include <QLocale>
 #include <QLocalSocket>
 #include <QLocalServer>
 #include <QProcess>
@@ -26,6 +27,7 @@
 #include <memory>
 
 #include "core/ConfigManager.hpp"
+#include "core/Equalizer.hpp"
 #include "core/PlaylistManager.hpp"
 #include "core/MprisManager.hpp"
 #include "core/MediaManager.hpp"
@@ -143,16 +145,20 @@ int main(int argc, char *argv[]) {
 
     if (!isPrimaryInstance) return 0;
 
+    // ---- Equalizer ----
+    Equalizer equalizer(&config);
+
     // ---- Translations ----
     QTranslator *translator = new QTranslator(&app);
 
-    auto loadLanguage = [&](const QString &lang) {
+    auto loadLanguage = [&](const QString &requested) {
         app.removeTranslator(translator);
+        const QString language = ConfigManager::resolveLanguage(requested, QLocale::system().name());
         // Translations are embedded in the binary (qt_add_translations), so the
         // resource is tried first: it always matches this build.
-        const QString resourcePath = QStringLiteral(":/i18n/") + lang + ".qm";
-        const QString sysPath = "/usr/share/luma/translations/" + lang + ".qm";
-        const QString localPath = QCoreApplication::applicationDirPath() + "/" + lang + ".qm";
+        const QString resourcePath = QStringLiteral(":/i18n/") + language + ".qm";
+        const QString sysPath = "/usr/share/luma/translations/" + language + ".qm";
+        const QString localPath = QCoreApplication::applicationDirPath() + "/" + language + ".qm";
 
         if (translator->load(resourcePath)
                 || translator->load(sysPath)
@@ -181,6 +187,7 @@ int main(int argc, char *argv[]) {
     OsdManager osd(nullptr, &app);
 
     CastManager castManager;
+    castManager.setEqualizer(&equalizer);
 
     // Keeps the picture-in-picture window above the others on KDE Plasma.
     KWinBridge kwinBridge;
@@ -214,6 +221,7 @@ int main(int argc, char *argv[]) {
     engine.addImageProvider("thumbnail", new ThumbnailProvider());
 
     engine.rootContext()->setContextProperty("Config", &config);
+    engine.rootContext()->setContextProperty("Equalizer", &equalizer);
     engine.rootContext()->setContextProperty("Media", &media);
     engine.rootContext()->setContextProperty("Playlists", &playlists);
     engine.rootContext()->setContextProperty("Osd", &osd);
@@ -254,6 +262,11 @@ int main(int argc, char *argv[]) {
     if (mpv) {
         media.setMpv(mpv);
         osd.setMpv(mpv);
+        QObject::connect(&equalizer, &Equalizer::filterRequested, mpv,
+                         [mpv](const QString &filter) {
+                             mpv->setProperty(QStringLiteral("af"), filter);
+                         });
+        equalizer.applyNow();
 
         // ---- Logging (each component writes its own file) ----
         QObject::connect(mpv, &MpvItem::mpvLogMessage, &app,
@@ -364,12 +377,15 @@ int main(int argc, char *argv[]) {
             auto *panel = root->findChild<QObject*>("playlistPanel");
             if (panel) panel->setProperty("isOpen", !panel->property("isOpen").toBool());
         });
-            QObject::connect(shortcuts, &ShortcutHandler::toggleStats, root, [root]() {
-                if (root->property("pipMode").toBool()) return;
+            QObject::connect(shortcuts, &ShortcutHandler::toggleStats, root, [root, &media]() {
+                if (root->property("pipMode").toBool() || !media.hasMedia()) return;
                 auto *panel = root->findChild<QObject*>("statsPanel");
                 if (panel) panel->setProperty("isOpen", !panel->property("isOpen").toBool());
             });
-                QObject::connect(shortcuts, &ShortcutHandler::togglePip, root, [root]() {
+                QObject::connect(shortcuts, &ShortcutHandler::togglePip, root, [root, &media]() {
+                    // The menu entry is hidden when nothing is loaded; keep the
+                    // shortcut consistent, but still allow leaving PiP.
+                    if (!root->property("pipMode").toBool() && !media.hasMedia()) return;
                     QMetaObject::invokeMethod(root, "togglePip");
                 });
                 QObject::connect(shortcuts, &ShortcutHandler::fitWindowToVideo, root, [root]() {

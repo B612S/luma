@@ -8,6 +8,15 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- A 10/20-band graphic equalizer with a preamp, builtin presets (Flat, Rock, Pop, Jazz,
+  Classical, Electronic, Hip-Hop, Vocal, Bass, Treble) and user presets that can be
+  saved and reset; right-clicking a slider resets it to 0 dB. It has an on/off switch,
+  applies to everything mpv plays (files, links and radio) and is also applied to
+  Chromecast casts; it is opened from the Playback menu and stores its settings in
+  `luma.conf`.
+- The interface language can follow the system locale. The Language list in Settings
+  now offers **System** (the default for new configurations), which picks Russian for
+  Russian system locales and English otherwise; an explicit language choice is kept.
 - Chapter navigation and chapter markers on the seek bar. `PageUp` / `PageDown` or
   **Playback → Previous / Next chapter** jump between chapters, and the seek bar draws a
   tick for every chapter (can be hidden in **Settings → Interface**). Chapters reported
@@ -95,6 +104,33 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- The statistics panel hides and omits the A/V sync line for audio/radio (it is
+  only meaningful with a video track). Its height animates while statistics load
+  (opening the panel or switching the source, capped by the playlist panel's
+  height), but snaps immediately when the window or panel is resized. The
+  statistics scroll position also returns to the top for a new source.
+- Opening a single file starts playback immediately; the other videos in its
+  folder are listed and prepared on a worker thread and merged into the default
+  playlist when the scan finishes. A folder with thousands of files no longer
+  delays the first frame or blocks the UI; the merge is skipped if the playlist
+  was changed or another file was opened in the meantime.
+- Saving tags from the media information dialog now runs TagLib on a worker
+  thread; the dialog stays responsive and its fields are disabled until the write
+  finishes.
+- Picture-in-picture keep-above setup calls KWin over D-Bus with a 500 ms timeout
+  instead of the 25 s D-Bus default, so a busy compositor cannot freeze the PiP
+  transition.
+- The audio/subtitle cycle shortcuts use the track list observed by `MpvItem`
+  instead of a blocking mpv property read on the GUI thread.
+- The file manager name in the playlist menu is resolved in the background; the
+  first menu no longer waits up to a second for the `xdg-mime` query.
+- Equalizer changes are written to `luma.conf` once a slider drag settles instead
+  of rewriting the file on every 0.5 dB step.
+- “Remove black bars” is now **Crop**, and “Output device” is now **Chromecast** and is
+  listed above the aspect-ratio, fit-window and crop items.
+- **Media information** is not offered while nothing is loaded and closes when playback
+  stops; the previous/next chapter menu items are hidden unless the media has more than
+  one chapter, and **Picture in picture** is hidden while nothing is loaded.
 - Playlists with thousands of entries load faster and save without blocking the UI.
   The JSON is now converted directly between the entry objects and `QJsonObject`
   (the `QVariantMap` round trip was the largest part of the load/save time), and
@@ -180,6 +216,26 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Pressing next/previous (or reaching the end of a file) while another playlist
+  tab is open now continues in the playlist that is actually playing instead of
+  playing a file from the viewed playlist; the playback mode is taken from the
+  playing playlist too. After playback stops the last playing model is released.
+- The Shortcuts settings page lays its action/local/global columns out
+  proportionally, so the key text no longer runs into the action labels on a
+  narrow window.
+- The statistics panel now uses the playlist panel's height as its maximum, so
+  long statistics stop at the same bottom line and scroll; short statistics
+  still size to their content instead of leaving a full-height empty panel.
+- The mouse wheel over an open dialog now scrolls its Flickable (for example the
+  media information page) instead of changing the player volume.
+- The Settings, Equalizer and media information dialogs now fit inside the
+  player window instead of being clipped when the window is smaller than their
+  fixed size; the settings/equalizer content keeps working, and the information
+  dialog scrolls when needed. The nested font picker follows the same limit.
+- Opening the menu while a radio stream was still loading could freeze the interface:
+  the ICY `StreamTitle` reader started right after the stream opened and made its
+  first network request (proxy detection, TLS/CA setup) on the GUI thread. It now
+  runs in its own thread, like the radio-name probe.
 - Returning from fullscreen opened from picture-in-picture now goes back to the PiP
   window with its previous size instead of a normal window. PiP stays active in
   fullscreen, so its own controls (including the back button) remain available.

@@ -825,7 +825,10 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
         }
 
         if (key->key() == Qt::Key_Escape && !key->isAutoRepeat()) {
-            if (m_window && (m_window->windowStates() & Qt::WindowFullScreen)) {
+            // With an in-app dialog open, Escape belongs to the dialog (close
+            // it) even when the player window is fullscreen.
+            const bool dialogOpen = m_window && m_window->property("isDialogOpen").toBool();
+            if (!dialogOpen && m_window && (m_window->windowStates() & Qt::WindowFullScreen)) {
                 m_window->showNormal();
                 return true;
             }
@@ -880,6 +883,9 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 
         if (m_helpVisible) return false;
         if (isCursorOverQmlPanel()) return false;
+        // A dialog has its own Flickables (settings, media information); the
+        // wheel must scroll them instead of changing the player volume.
+        if (m_window && m_window->property("isDialogOpen").toBool()) return false;
         QWheelEvent *wheel = static_cast<QWheelEvent*>(event);
         if (!m_mpv) return false;
 
@@ -1022,7 +1028,9 @@ void ShortcutHandler::cycleSubtitles() {
     if (!m_mpv) return;
     if (m_castManager && m_castManager->casting()) return;
 
-    QVariantList tracks = m_mpv->getProperty("track-list").toList();
+    // Read the cached observations instead of blocking the GUI thread while
+    // the mpv core may be opening or buffering a file.
+    QVariantList tracks = m_mpv->observedProperty("track-list").toList();
     QList<int> subIds;
     for (const QVariant &t : tracks) {
         QVariantMap map = t.toMap();
@@ -1032,7 +1040,7 @@ void ShortcutHandler::cycleSubtitles() {
         if (m_osd) m_osd->showInfo(tr("osd_no_subtitles"));
         return;
     }
-    int currentId = m_mpv->getProperty("sid").toInt();
+    int currentId = m_mpv->observedProperty("sid").toInt();
     int nextIndex = 0;
     if (currentId > 0) {
         int idx = subIds.indexOf(currentId);
@@ -1051,7 +1059,9 @@ void ShortcutHandler::cycleAudio() {
     if (!m_mpv) return;
     if (m_castManager && m_castManager->casting()) return;
 
-    QVariantList tracks = m_mpv->getProperty("track-list").toList();
+    // Read the cached observations instead of blocking the GUI thread while
+    // the mpv core may be opening or buffering a file.
+    QVariantList tracks = m_mpv->observedProperty("track-list").toList();
     QList<int> audioIds;
     for (const QVariant &t : tracks) {
         QVariantMap map = t.toMap();
@@ -1061,7 +1071,7 @@ void ShortcutHandler::cycleAudio() {
         if (m_osd) m_osd->showInfo(tr("osd_no_audio"));
         return;
     }
-    int currentId = m_mpv->getProperty("aid").toInt();
+    int currentId = m_mpv->observedProperty("aid").toInt();
     int nextIndex = 0;
     if (currentId > 0) {
         int idx = audioIds.indexOf(currentId);

@@ -1,4 +1,5 @@
 #include "CastManager.hpp"
+#include "Equalizer.hpp"
 #include <QFileInfo>
 #include <QTimer>
 #include <QElapsedTimer>
@@ -37,7 +38,8 @@ void CastManager::castTo(const QString &address, quint16 port,
         return;
     }
 
-    if (!m_server->start(fi.absoluteFilePath(), address)) {
+    const QString audioFilter = m_equalizer ? m_equalizer->ffmpegFilter() : QString();
+    if (!m_server->start(fi.absoluteFilePath(), address, audioFilter)) {
         emit castFailed("Failed to start HLS stream (FFmpeg error)");
         return;
     }

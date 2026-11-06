@@ -8,7 +8,16 @@ Dialog {
     title: qsTranslate("MediaInfoDialog", "info_title")
     modal: true
     focus: true
-    width: 480
+    readonly property real maxDialogWidth: {
+        const w = Overlay.overlay ? Overlay.overlay.width : 0;
+        return Math.max(360, (w > 0 ? w : 480) - 32);
+    }
+    readonly property real maxDialogHeight: {
+        const h = Overlay.overlay ? Overlay.overlay.height : 0;
+        return Math.max(280, (h > 0 ? h : 620) - 32);
+    }
+    width: Math.min(480, maxDialogWidth)
+    height: Math.min(implicitHeight, maxDialogHeight)
     padding: 0
 
     anchors.centerIn: Overlay.overlay
@@ -19,6 +28,8 @@ Dialog {
     property var tagValues: ({})
     property var originalTags: ({})
     property bool tagsDirty: false
+    property bool tagsSaving: false
+    property var pendingTags: ({})
     property string saveMessage: ""
 
     readonly property bool isAudio: dialog.fileInfo.isAudio === true
@@ -53,7 +64,12 @@ Dialog {
     }
 
     onOpened: dialog.reloadTags()
-    onClosed: { dialog.tagsDirty = false; dialog.urlDirty = false; dialog.saveMessage = ""; }
+    onClosed: {
+        dialog.tagsDirty = false;
+        dialog.urlDirty = false;
+        dialog.tagsSaving = false;
+        dialog.saveMessage = "";
+    }
     // The information is collected asynchronously; refresh the fields when it
     // arrives instead of leaving the dialog empty.
     onFileInfoChanged: if (dialog.visible) dialog.reloadTags()
@@ -66,6 +82,8 @@ Dialog {
         dialog.originalTags = original;
         dialog.tagValues = edited;
         dialog.tagsDirty = false;
+        dialog.tagsSaving = false;
+        dialog.pendingTags = ({});
         dialog.originalUrl = dialog.fileInfo.path || "";
         dialog.urlValue = dialog.originalUrl;
         dialog.urlDirty = false;
@@ -99,15 +117,27 @@ Dialog {
             return;
         }
         const path = dialog.fileInfo.path || "";
-        if (path.length === 0) return;
-        if (Media.saveTags(path, dialog.tagValues)) {
-            const saved = {};
-            for (const key in dialog.tagValues) saved[key] = dialog.tagValues[key];
-            dialog.originalTags = saved;
-            dialog.tagsDirty = false;
-            dialog.saveMessage = qsTranslate("MediaInfoDialog", "tags_saved");
-        } else {
-            dialog.saveMessage = qsTranslate("MediaInfoDialog", "tags_save_failed");
+        if (path.length === 0 || dialog.tagsSaving) return;
+
+        const snapshot = {};
+        for (const key in dialog.tagValues) snapshot[key] = dialog.tagValues[key];
+        dialog.pendingTags = snapshot;
+        dialog.tagsSaving = true;
+        Media.requestSaveTags(path, snapshot);
+    }
+
+    Connections {
+        target: Media
+        function onTagsSaved(path, success) {
+            dialog.tagsSaving = false;
+            if (path !== (dialog.fileInfo.path || "")) return;
+            if (success) {
+                dialog.originalTags = dialog.pendingTags;
+                dialog.tagsDirty = dialog.isDirty();
+                dialog.saveMessage = qsTranslate("MediaInfoDialog", "tags_saved");
+            } else {
+                dialog.saveMessage = qsTranslate("MediaInfoDialog", "tags_save_failed");
+            }
         }
     }
 
@@ -118,7 +148,7 @@ Dialog {
             anchors.fill: parent
             anchors.margins: 20
             clip: true
-            enabled: !dialog.loading
+            enabled: !dialog.loading && !dialog.tagsSaving
             contentWidth: width
             contentHeight: column.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
@@ -307,6 +337,7 @@ Dialog {
         Button {
             text: qsTranslate("MediaInfoDialog", "tags_save")
             visible: dialog.dirty
+            enabled: !dialog.tagsSaving
             DialogButtonBox.buttonRole: DialogButtonBox.ActionRole
             onClicked: dialog.saveChanges()
         }

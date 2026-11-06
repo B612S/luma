@@ -15,6 +15,7 @@
 <message><source>menu_subtitles</source><translation>Subtitles</translation></message>
 <message><source>menu_open_sub_file</source><translation>Load subtitle file…</translation></message>
 <message><source>menu_open_audio_file</source><translation>Load audio file…</translation></message>
+<message><source>menu_equalizer</source><translation>Equalizer</translation></message>
 <message><source>menu_stats</source><translation>Media information</translation></message>
 <message><source>menu_playback</source><translation>Playback</translation></message>
 <message><source>menu_playback_mode</source><translation>Playback mode</translation></message>
@@ -23,7 +24,7 @@
 <message><source>osd_playback_mode</source><translation>Mode: %1</translation></message>
 <message><source>menu_aspect_ratio</source><translation>Aspect ratio</translation></message>
 <message><source>menu_fit_window</source><translation>Fit window to video</translation></message>
-<message><source>menu_crop</source><translation>Remove black bars</translation></message>
+<message><source>menu_crop</source><translation>Crop</translation></message>
 <message><source>playback_sequential</source><translation>Play in order</translation></message>
 <message><source>playback_repeat</source><translation>Repeat current file</translation></message>
 <message><source>playback_shuffle</source><translation>Shuffle</translation></message>
@@ -33,7 +34,7 @@
 <message><source>osd_aspect</source><translation>Aspect ratio: %1</translation></message>
 <message><source>menu_playlist</source><translation>Playlist</translation></message>
 <message><source>menu_pip</source><translation>Picture in picture</translation></message>
-<message><source>menu_renderer</source><translation>Output device</translation></message>
+<message><source>menu_renderer</source><translation>Chromecast</translation></message>
 <message><source>menu_searching_devices</source><translation>Searching for devices…</translation></message>
 <message><source>menu_refresh_devices</source><translation>Search for devices</translation></message>
 <message><source>menu_stop_cast</source><translation>Stop casting</translation></message>
@@ -42,6 +43,35 @@
 <message><source>osd_cast_started</source><translation>Casting to %1</translation></message>
 <message><source>osd_cast_stopped</source><translation>Casting stopped</translation></message>
 <message><source>osd_cast_no_file</source><translation>Open a file first</translation></message>
+</context>
+
+<context>
+<name>EqualizerDialog</name>
+<message><source>eq_title</source><translation>Equalizer</translation></message>
+<message><source>eq_enabled</source><translation>Enabled</translation></message>
+<message><source>eq_preset</source><translation>Preset</translation></message>
+<message><source>eq_preset_custom</source><translation>Custom</translation></message>
+<message><source>eq_save_preset</source><translation>Save as preset</translation></message>
+<message><source>eq_preset_name</source><translation>Preset name</translation></message>
+<message><source>eq_preset_placeholder</source><translation>My preset</translation></message>
+<message><source>eq_save</source><translation>Save</translation></message>
+<message><source>eq_cancel</source><translation>Cancel</translation></message>
+<message><source>eq_reset_custom</source><translation>Reset custom presets</translation></message>
+<message><source>eq_reset_confirm</source><translation>Delete all custom presets? The builtin presets are kept.</translation></message>
+<message><source>eq_reset</source><translation>Reset</translation></message>
+<message><source>eq_20_bands</source><translation>20 bands</translation></message>
+<message><source>eq_preamp</source><translation>Preamp</translation></message>
+<message><source>eq_close</source><translation>Close</translation></message>
+<message><source>eq_preset_flat</source><translation>Flat</translation></message>
+<message><source>eq_preset_rock</source><translation>Rock</translation></message>
+<message><source>eq_preset_pop</source><translation>Pop</translation></message>
+<message><source>eq_preset_jazz</source><translation>Jazz</translation></message>
+<message><source>eq_preset_classical</source><translation>Classical</translation></message>
+<message><source>eq_preset_electronic</source><translation>Electronic</translation></message>
+<message><source>eq_preset_hiphop</source><translation>Hip-Hop</translation></message>
+<message><source>eq_preset_vocal</source><translation>Vocal</translation></message>
+<message><source>eq_preset_bass</source><translation>Bass boost</translation></message>
+<message><source>eq_preset_treble</source><translation>Treble boost</translation></message>
 </context>
 
 <context>
@@ -58,6 +88,7 @@
 <message><source>settings_interface</source><translation>Interface</translation></message>
 <message><source>settings_subtitles</source><translation>Subtitles</translation></message>
 <message><source>settings_language</source><translation>Language</translation></message>
+<message><source>language_auto</source><translation>System</translation></message>
 <message><source>settings_remember_volume</source><translation>Remember volume</translation></message>
 <message><source>settings_default_volume</source><translation>Startup volume</translation></message>
 <message><source>settings_notifications</source><translation>Show notifications</translation></message>

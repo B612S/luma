@@ -31,6 +31,9 @@ public:
 
     PlaylistModel* activeModel() const;
     PlaylistModel* defaultModel() const { return m_defaultModel; }
+    // Model that owns the current playback; the active (viewed) model can be
+    // a different tab after the user switches playlists.
+    PlaylistModel* playingModel() const { return m_playingModel; }
     Q_INVOKABLE PlaylistModel* modelById(const QString &id) const;
 
     Q_INVOKABLE QString createPlaylist(const QString &name);
@@ -55,6 +58,8 @@ public:
     // named playlists keep their own mode in the playlist file.
     Q_INVOKABLE QString playlistMode(const QString &id) const;
     Q_INVOKABLE void setPlaylistMode(const QString &id, const QString &mode);
+    // Playback mode of the playlist that owns a model.
+    QString playlistModeFor(PlaylistModel *model) const;
     // Re-emits the translated playlist list after a language change.
     void retranslate();
     // Fetches the title of a link via yt-dlp (also used when the URL is edited).
@@ -93,6 +98,7 @@ private:
     QHash<QString, QString> m_modes;
     QStringList m_order;
     QString m_activeId = DEFAULT_ID;
+    PlaylistModel *m_playingModel = nullptr;
     bool m_loading = false;
     QTimer m_saveTimer;
     TagScanner *m_tagScanner = nullptr;

@@ -57,6 +57,8 @@ qt_add_executable(luma
     core/AsyncFileWriter.hpp
     core/PlaybackPositions.cpp
     core/PlaybackPositions.hpp
+    core/Equalizer.cpp
+    core/Equalizer.hpp
     core/PlaylistSaver.cpp
     core/PlaylistSaver.hpp
     core/MediaManager.cpp
@@ -107,6 +109,7 @@ qt_add_qml_module(luma
         qml/LumaMenuSeparator.qml
         qml/StatsPanel.qml
         qml/SettingsDialog.qml
+        qml/EqualizerDialog.qml
         qml/MediaInfoDialog.qml
         qml/FileUnavailableDialog.qml
     SOURCES
@@ -120,6 +123,7 @@ qt_add_qml_module(luma
         core/PlaylistModel.hpp
         core/PlaylistFilterModel.hpp
         core/PlaylistManager.hpp
+        core/Equalizer.hpp
         core/MediaManager.hpp
         core/OsdManager.hpp
         core/KWinBridge.hpp
