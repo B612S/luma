@@ -17,6 +17,9 @@
 #include <QLocalSocket>
 #include <QLocalServer>
 #include <QProcess>
+#include <QSettings>
+#include <QFont>
+#include <QStyle>
 #include <QRect>
 #include <QSize>
 #include <QUrl>
@@ -47,6 +50,107 @@
 namespace {
 // A command line with a few paths is tiny; cap the single-instance handshake.
 constexpr qsizetype kMaxInstanceArgs = 64 * 1024;
+
+QString configHome()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+}
+
+QString kdeIconTheme()
+{
+    QSettings kde(configHome() + QStringLiteral("/kdeglobals"), QSettings::IniFormat);
+    return kde.value(QStringLiteral("Icons/Theme")).toString().trimmed();
+}
+
+QString gtkIconTheme()
+{
+    // Both GTK 3 and 4 use the same key; newer desktops may only write one.
+    for (const QString &name : {QStringLiteral("gtk-3.0"), QStringLiteral("gtk-4.0")}) {
+        QSettings settings(configHome() + QLatin1Char('/') + name
+                               + QStringLiteral("/settings.ini"),
+                           QSettings::IniFormat);
+        const QString theme = settings.value(QStringLiteral("Settings/gtk-icon-theme-name"))
+                                  .toString().trimmed();
+        if (!theme.isEmpty())
+            return theme;
+    }
+    return {};
+}
+
+QString gnomeIconTheme()
+{
+    QProcess process;
+    process.start(QStringLiteral("gsettings"),
+                  {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.interface"),
+                   QStringLiteral("icon-theme")});
+    if (!process.waitForStarted(200))
+        return {};
+    if (!process.waitForFinished(400)) {
+        process.kill();
+        return {};
+    }
+    QString theme = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+    if (theme.size() >= 2
+            && ((theme.startsWith(QLatin1Char('\'')) && theme.endsWith(QLatin1Char('\'')))
+                || (theme.startsWith(QLatin1Char('"')) && theme.endsWith(QLatin1Char('"'))))) {
+        theme = theme.mid(1, theme.size() - 2);
+    }
+    return theme;
+}
+
+bool iconThemeExists(const QString &theme)
+{
+    if (theme.isEmpty())
+        return false;
+    if (theme == QLatin1String("hicolor"))
+        return true;
+    const QString relative = QStringLiteral("icons/") + theme
+                             + QStringLiteral("/index.theme");
+    return !QStandardPaths::locateAll(QStandardPaths::GenericDataLocation,
+                                      relative, QStandardPaths::LocateFile).isEmpty();
+}
+
+QString systemIconTheme()
+{
+    const QString desktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP").toLower();
+    const bool kde = desktop.contains(QStringLiteral("kde"))
+                     || desktop.contains(QStringLiteral("plasma"));
+    const bool gtk = desktop.contains(QStringLiteral("gnome"))
+                     || desktop.contains(QStringLiteral("unity"))
+                     || desktop.contains(QStringLiteral("pantheon"))
+                     || desktop.contains(QStringLiteral("budgie"))
+                     || desktop.contains(QStringLiteral("xfce"))
+                     || desktop.contains(QStringLiteral("cinnamon"))
+                     || desktop.contains(QStringLiteral("mate"));
+
+    QString theme;
+    if (kde)
+        theme = kdeIconTheme();
+    if (theme.isEmpty() && gtk)
+        theme = gtkIconTheme();
+    if (theme.isEmpty() && (gtk || desktop.isEmpty()))
+        theme = gnomeIconTheme();
+    if (theme.isEmpty() && !kde)
+        theme = kdeIconTheme();
+    if (theme.isEmpty() && !gtk && !desktop.isEmpty())
+        theme = gtkIconTheme();
+
+    if (!theme.isEmpty()) {
+        if (iconThemeExists(theme))
+            return theme;
+        // Configured theme is not installed (for example a custom theme that
+        // was removed); fall back to the desktop's usual theme below.
+    }
+
+    const QStringList candidates = kde
+        ? QStringList{QStringLiteral("breeze"), QStringLiteral("Adwaita")}
+        : QStringList{QStringLiteral("Adwaita"), QStringLiteral("breeze")};
+    for (const QString &candidate : candidates) {
+        if (iconThemeExists(candidate))
+            return candidate;
+    }
+    return {};
+}
 }
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
@@ -99,10 +203,33 @@ int main(int argc, char *argv[]) {
             QApplication::setStyle(breeze);
         break;
     }
-    // The AppImage bundles a small hicolor icon set; use it there so the
-    // controls do not depend on a KDE icon theme being installed.
-    if (qEnvironmentVariableIsSet("LUMA_APPIMAGE"))
-        QIcon::setThemeName(QStringLiteral("hicolor"));
+    // Use the desktop's icon theme. The AppImage ships a small hicolor
+    // fallback for names the theme does not provide; it must not override the
+    // user's theme (the old code forced hicolor in the AppImage).
+    // The bundled KDE platform theme should provide the system font, but older
+    // Plasma integration builds do not always apply it inside an AppImage.
+    // Read the same kdeglobals value the package's platform theme uses.
+    if (qEnvironmentVariableIsSet("LUMA_APPIMAGE")) {
+        QSettings kde(configHome() + QStringLiteral("/kdeglobals"), QSettings::IniFormat);
+        const QString fontSpec = kde.value(QStringLiteral("General/font")).toString().trimmed();
+        if (!fontSpec.isEmpty()) {
+            QFont font;
+            if (font.fromString(fontSpec))
+                QApplication::setFont(font);
+        }
+    }
+    QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
+    // The KDE/GTK platform theme, when available, is the source of truth for
+    // the icon theme. The AppImage now bundles the KDE platform theme, so do
+    // not override its choice from kdeglobals here. Only fall back to explicit
+    // detection when the platform theme left Qt with hicolor/nothing.
+    const QString currentIconTheme = QIcon::themeName();
+    if (currentIconTheme.isEmpty()
+            || currentIconTheme == QLatin1String("hicolor")) {
+        const QString iconTheme = systemIconTheme();
+        if (!iconTheme.isEmpty())
+            QIcon::setThemeName(iconTheme);
+    }
     app.setApplicationName("luma");
     app.setApplicationVersion(QString::fromLatin1(LUMA_VERSION));
     QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
@@ -118,12 +245,10 @@ int main(int argc, char *argv[]) {
     QString serverName = "luma_single_instance_server";
     QLocalSocket socket;
     QLocalServer *server = nullptr;
-    bool isPrimaryInstance = true;
 
     if (config.singleInstance()) {
         socket.connectToServer(serverName);
         if (socket.waitForConnected(500)) {
-            isPrimaryInstance = false;
             QTextStream stream(&socket);
             for (const QString &arg : app.arguments()) {
                 stream << arg << "\n";
@@ -142,8 +267,6 @@ int main(int argc, char *argv[]) {
             qWarning() << "Failed to start local server:" << server->errorString();
         }
     }
-
-    if (!isPrimaryInstance) return 0;
 
     // ---- Equalizer ----
     Equalizer equalizer(&config);
@@ -262,10 +385,22 @@ int main(int argc, char *argv[]) {
     if (mpv) {
         media.setMpv(mpv);
         osd.setMpv(mpv);
+        // The equalizer and the music crossfade both live in mpv's single "af"
+        // property, so build the combined chain in one place.
+        auto applyAudioFilters = [mpv, &equalizer, &media]() {
+            QStringList filters;
+            const QString equalizerFilter = equalizer.audioFilter();
+            if (!equalizerFilter.isEmpty())
+                filters << equalizerFilter;
+            const QString crossfade = media.crossfadeFilter();
+            if (!crossfade.isEmpty())
+                filters << crossfade;
+            mpv->setProperty(QStringLiteral("af"), filters.join(QLatin1Char(',')));
+        };
         QObject::connect(&equalizer, &Equalizer::filterRequested, mpv,
-                         [mpv](const QString &filter) {
-                             mpv->setProperty(QStringLiteral("af"), filter);
-                         });
+                         [applyAudioFilters](const QString &) { applyAudioFilters(); });
+        QObject::connect(&media, &MediaManager::crossfadeFilterChanged,
+                         mpv, applyAudioFilters);
         equalizer.applyNow();
 
         // ---- Logging (each component writes its own file) ----

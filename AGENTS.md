@@ -32,6 +32,9 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   `LUMA_TEST_YOUTUBE_URL` is set; the default YouTube path uses a fake `yt-dlp`.
 - The binary is `build/bin/luma` (`CMAKE_RUNTIME_OUTPUT_DIRECTORY`), not `build/luma`.
   `README.md` is the English user documentation; other languages live in `docs/readme/`.
+- **Do not rebuild the AppImage on every change.** Normal verification is the CMake
+  build and the tests above. Run `build-appimage.sh` (and produce `dist/*.AppImage`)
+  only when the user explicitly asks for a new AppImage.
 - Dependencies come from `find_package(Qt6 ...)` plus `pkg_check_modules` for `mpv`,
   `libavformat`, `libavcodec`, `libswscale`, `libavutil`, `wayland-client` and
   `xkbcommon`. `Qt6::Concurrent` is used for background file/tag reads. Global

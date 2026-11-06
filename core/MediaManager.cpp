@@ -2,6 +2,7 @@
 #include "AsyncFileWriter.hpp"
 #include "IcyMetadataReader.hpp"
 #include "PlaylistManager.hpp"
+#include "MediaPaths.hpp"
 #include "ConfigManager.hpp"
 #include "TagManager.hpp"
 #include "Logger.hpp"
@@ -37,6 +38,7 @@
 #include <QHash>
 #include <QVector>
 #include <algorithm>
+#include <cmath>
 #include <QtConcurrent/QtConcurrentRun>
 
 extern "C" {
@@ -597,6 +599,202 @@ QVariantMap buildFileInfo(const QString &path) {
     return info;
 }
 
+// Decode roughly the last 30 seconds of an audio file and return the position
+// after which only silence remains, or -1 when there is no meaningful silent
+// tail. This runs in a worker thread: decoding must not block the GUI.
+double detectTrailingSilenceEnd(const QString &path)
+{
+    if (path.isEmpty() || path.contains(QStringLiteral("://")))
+        return -1.0;
+
+    AVFormatContext *fmt = nullptr;
+    if (avformat_open_input(&fmt, path.toUtf8().constData(), nullptr, nullptr) < 0)
+        return -1.0;
+    if (avformat_find_stream_info(fmt, nullptr) < 0) {
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+
+    const int audioIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+    if (audioIndex < 0) {
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+    AVStream *stream = fmt->streams[audioIndex];
+    double duration = fmt->duration > 0
+        ? fmt->duration / static_cast<double>(AV_TIME_BASE) : 0.0;
+    if (duration <= 0.0 && stream->duration > 0)
+        duration = stream->duration * av_q2d(stream->time_base);
+    if (duration < 1.0) {
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+
+    constexpr double scanSeconds = 30.0;
+    const double windowStart = std::max(0.0, duration - scanSeconds);
+    const int64_t seekTarget = static_cast<int64_t>(windowStart / av_q2d(stream->time_base));
+    if (av_seek_frame(fmt, audioIndex, seekTarget, AVSEEK_FLAG_BACKWARD) < 0) {
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+
+    const AVCodec *decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+    if (!decoder) {
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+    AVCodecContext *codec = avcodec_alloc_context3(decoder);
+    if (!codec) {
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+    if (avcodec_parameters_to_context(codec, stream->codecpar) < 0
+            || avcodec_open2(codec, decoder, nullptr) < 0) {
+        avcodec_free_context(&codec);
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+    avcodec_flush_buffers(codec);
+
+    // Anything at or below this level (-50 dBFS) counts as silence.
+    const double linearThreshold = 0.0031622776601683794;
+    auto thresholdFor = [linearThreshold](AVSampleFormat format) -> double {
+        switch (av_get_packed_sample_fmt(format)) {
+        case AV_SAMPLE_FMT_U8:  return 128.0 * linearThreshold;
+        case AV_SAMPLE_FMT_S16: return 32768.0 * linearThreshold;
+        case AV_SAMPLE_FMT_S32: return 2147483648.0 * linearThreshold;
+        case AV_SAMPLE_FMT_S64: return 9.2233720368547758e18 * linearThreshold;
+        case AV_SAMPLE_FMT_FLT:
+        case AV_SAMPLE_FMT_DBL: return linearThreshold;
+        default: return -1.0;
+        }
+    };
+
+    AVPacket *packet = av_packet_alloc();
+    AVFrame *frame = av_frame_alloc();
+    if (!packet || !frame) {
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+        avcodec_free_context(&codec);
+        avformat_close_input(&fmt);
+        return -1.0;
+    }
+
+    double lastEnd = windowStart;
+    double lastAudible = -1.0;
+    bool hasAudible = false;
+
+    auto processFrame = [&](AVFrame *decoded) {
+        const int channels = decoded->ch_layout.nb_channels > 0
+            ? decoded->ch_layout.nb_channels : 1;
+        const int samples = decoded->nb_samples;
+        const int sampleRate = decoded->sample_rate > 0
+            ? decoded->sample_rate : stream->codecpar->sample_rate;
+        if (samples <= 0 || sampleRate <= 0)
+            return;
+
+        int64_t timestamp = decoded->best_effort_timestamp;
+        if (timestamp == AV_NOPTS_VALUE)
+            timestamp = decoded->pts;
+        double start = timestamp != AV_NOPTS_VALUE
+            ? timestamp * av_q2d(stream->time_base) : lastEnd;
+        if (start < 0.0)
+            start = 0.0;
+        const double end = start + samples / static_cast<double>(sampleRate);
+        lastEnd = std::max(lastEnd, end);
+
+        const AVSampleFormat format = static_cast<AVSampleFormat>(decoded->format);
+        const double threshold = thresholdFor(format);
+        if (threshold < 0.0) {
+            // Unknown sample format: do not risk cutting real audio.
+            hasAudible = true;
+            lastAudible = std::max(lastAudible, end);
+            return;
+        }
+
+        const int bytes = av_get_bytes_per_sample(format);
+        const bool planar = av_sample_fmt_is_planar(format) != 0;
+        const int planes = planar ? channels : 1;
+        const int count = planar ? samples : samples * channels;
+        bool audible = false;
+        for (int plane = 0; plane < planes && !audible; ++plane) {
+            const uint8_t *data = decoded->data[plane];
+            if (!data)
+                continue;
+            for (int i = 0; i < count; ++i) {
+                const uint8_t *sample = data + i * bytes;
+                double value = 0.0;
+                switch (av_get_packed_sample_fmt(format)) {
+                case AV_SAMPLE_FMT_U8: {
+                    uint8_t v; memcpy(&v, sample, 1); value = double(v) - 128.0; break;
+                }
+                case AV_SAMPLE_FMT_S16: {
+                    int16_t v; memcpy(&v, sample, 2); value = v; break;
+                }
+                case AV_SAMPLE_FMT_S32: {
+                    int32_t v; memcpy(&v, sample, 4); value = v; break;
+                }
+                case AV_SAMPLE_FMT_S64: {
+                    int64_t v; memcpy(&v, sample, 8); value = double(v); break;
+                }
+                case AV_SAMPLE_FMT_FLT: {
+                    float v; memcpy(&v, sample, 4); value = v; break;
+                }
+                case AV_SAMPLE_FMT_DBL: {
+                    double v; memcpy(&v, sample, 8); value = v; break;
+                }
+                default:
+                    value = 1.0;
+                    break;
+                }
+                if (std::abs(value) > threshold) {
+                    audible = true;
+                    break;
+                }
+            }
+        }
+        if (audible) {
+            hasAudible = true;
+            lastAudible = std::max(lastAudible, end);
+        }
+    };
+
+    while (av_read_frame(fmt, packet) >= 0) {
+        if (packet->stream_index == audioIndex) {
+            if (avcodec_send_packet(codec, packet) >= 0) {
+                while (avcodec_receive_frame(codec, frame) >= 0) {
+                    processFrame(frame);
+                    av_frame_unref(frame);
+                }
+            }
+        }
+        av_packet_unref(packet);
+    }
+    if (avcodec_send_packet(codec, nullptr) >= 0) {
+        while (avcodec_receive_frame(codec, frame) >= 0) {
+            processFrame(frame);
+            av_frame_unref(frame);
+        }
+    }
+
+    double effectiveEnd = -1.0;
+    if (hasAudible) {
+        constexpr double minTrailingSilence = 5.0;
+        // +0.15 is the safety margin that will be kept audible; a tail a little
+        // under five seconds should still count as five.
+        if (lastAudible >= 0.5
+                && duration - lastAudible + 0.15 >= minTrailingSilence) {
+            effectiveEnd = std::min(duration, lastAudible + 0.15);
+        }
+    }
+
+    av_packet_free(&packet);
+    av_frame_free(&frame);
+    avcodec_free_context(&codec);
+    avformat_close_input(&fmt);
+    return effectiveEnd;
+}
+
 } // namespace
 
 MediaManager::MediaManager(MpvItem *mpv, QObject *parent)
@@ -658,6 +856,135 @@ MediaManager::~MediaManager() {
     }
 }
 
+void MediaManager::setConfig(ConfigManager *config) {
+    m_config = config;
+    if (config) {
+        connect(config, &ConfigManager::musicCrossfadeChanged,
+                this, &MediaManager::updateCrossfade, Qt::UniqueConnection);
+    }
+    updateCrossfade();
+}
+
+void MediaManager::setCrossfadeFilter(const QString &filter) {
+    if (m_crossfadeFilter == filter) return;
+    m_crossfadeFilter = filter;
+    emit crossfadeFilterChanged();
+}
+
+void MediaManager::updateCrossfade() {
+    const int fade = m_config ? m_config->musicCrossfade() : 0;
+    const QString source = m_mpv ? m_mpv->source() : QString();
+    if (!m_mpv || !m_config || !m_playlists || fade <= 0
+            || source.isEmpty() || source.contains(QStringLiteral("://"))
+            || !isAudioFilePath(source)) {
+        m_crossfadeFadeInCurrent = false;
+        m_pendingCrossfadeIn = false;
+        m_crossfadeOutScheduled = false;
+        setCrossfadeFilter(QString());
+        return;
+    }
+
+    QStringList filters;
+    if (m_crossfadeFadeInCurrent)
+        filters << QStringLiteral("afade=t=in:st=0:d=%1").arg(fade);
+
+    m_crossfadeOutScheduled = false;
+    const double duration = m_mpv->duration();
+    PlaylistModel *model = m_playlists->playingModel();
+    int next = -1;
+    if (model) {
+        const int current = model->currentIndex();
+        const QString mode = m_playlists->playlistModeFor(model);
+        if (mode == QLatin1String("repeat")) {
+            next = current;
+        } else if (mode != QLatin1String("stop")) {
+            next = current + 1;
+            if (next >= model->rowCount())
+                next = -1;
+        }
+    }
+    const QString nextPath = next >= 0 ? model->fileAt(next) : QString();
+    const bool nextIsMusic = !nextPath.isEmpty()
+            && !nextPath.contains(QStringLiteral("://"))
+            && isAudioFilePath(nextPath)
+            && QFileInfo::exists(nextPath);
+    if (nextIsMusic) {
+        if (m_silenceSource != source) {
+            m_silenceSource = source;
+            m_silenceEffectiveEnd = -1.0;
+            m_silenceTransitionTriggered = false;
+            startSilenceScan(source);
+        }
+        // A detected silent tail shortens the fade and the effective end, so
+        // the next track starts at the last audible sample.
+        const double effectiveEnd = m_silenceEffectiveEnd > 0.0
+            ? qMin(m_silenceEffectiveEnd, duration) : duration;
+        if (effectiveEnd > fade + 0.25) {
+            const double start = effectiveEnd - fade;
+            filters << QStringLiteral("afade=t=out:st=%1:d=%2")
+                           .arg(QString::number(start, 'f', 3))
+                           .arg(fade);
+            m_crossfadeOutScheduled = true;
+        }
+    }
+
+    setCrossfadeFilter(filters.join(QLatin1Char(',')));
+}
+
+void MediaManager::resetSilenceState() {
+    ++m_silenceGeneration;
+    m_silenceSource.clear();
+    m_silenceEffectiveEnd = -1.0;
+    m_silenceTransitionTriggered = false;
+    m_silenceLoadTimer.invalidate();
+}
+
+void MediaManager::startSilenceScan(const QString &path) {
+    if (path.isEmpty())
+        return;
+    const quint64 generation = m_silenceGeneration;
+    auto *watcher = new QFutureWatcher<double>(this);
+    connect(watcher, &QFutureWatcher<double>::finished, this,
+            [this, watcher, path, generation]() {
+        const double end = watcher->result();
+        watcher->deleteLater();
+        if (generation != m_silenceGeneration)
+            return;
+        if (!m_mpv || m_mpv->source() != path)
+            return;
+        m_silenceEffectiveEnd = end;
+        updateCrossfade();
+        // Do not advance from here: right after a source change mpv's position
+        // can still be the previous file's position, which would immediately
+        // skip the new track. positionChanged() below sees the new position.
+    });
+    watcher->setFuture(QtConcurrent::run([path]() {
+        return detectTrailingSilenceEnd(path);
+    }));
+}
+
+void MediaManager::maybeAdvancePastSilence(double position) {
+    if (m_silenceEffectiveEnd <= 0.0 || m_silenceTransitionTriggered)
+        return;
+    if (!m_mpv || !m_config || m_config->musicCrossfade() <= 0)
+        return;
+    if (m_mpv->paused() || m_silenceSource != m_mpv->source())
+        return;
+    if (!m_silenceLoadTimer.isValid() || m_silenceLoadTimer.elapsed() < 500)
+        return;
+    if (!m_crossfadeOutScheduled)
+        return;
+    const double end = qMin(m_silenceEffectiveEnd, m_mpv->duration());
+    if (end <= 0.0 || position < end - 0.02)
+        return;
+
+    // The trailing silence is what the user wants to skip: advance at the last
+    // audible position, carrying the fade-in flag to the next music track.
+    m_silenceTransitionTriggered = true;
+    m_pendingCrossfadeIn = true;
+    playNext();
+}
+
 void MediaManager::setMpv(MpvItem *mpv) {
     if (m_mpv == mpv) return;
     if (m_mpv) disconnect(m_mpv, nullptr, this, nullptr);
@@ -666,9 +993,16 @@ void MediaManager::setMpv(MpvItem *mpv) {
         connect(m_mpv, &MpvItem::mediaTitleChanged, this, &MediaManager::onMediaTitleChanged);
         connect(m_mpv, &MpvItem::sourceChanged, this, [this]() { setLoading(true); });
         connect(m_mpv, &MpvItem::fileLoaded, this, &MediaManager::onMpvFileLoaded);
-        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &) {
+        connect(m_mpv, &MpvItem::fileEnded, this, [this](const QString &reason) {
             saveCurrentPosition();
             setLoading(false);
+            if (reason == QLatin1String("eof") && m_crossfadeOutScheduled)
+                m_pendingCrossfadeIn = true;
+        });
+        connect(m_mpv, &MpvItem::durationChanged, this, [this]() { updateCrossfade(); });
+        connect(m_mpv, &MpvItem::positionChanged, this, [this]() {
+            if (m_mpv)
+                maybeAdvancePastSilence(m_mpv->position());
         });
         connect(m_mpv, &MpvItem::pausedChanged, this, [this]() {
             if (m_mpv && m_mpv->paused()) saveCurrentPosition();
@@ -1119,19 +1453,6 @@ void MediaManager::resolveDefaultFileManagerName()
         emit defaultFileManagerNameChanged();
     });
     watcher->setFuture(QtConcurrent::run(&lookupDefaultFileManagerName));
-}
-
-QString MediaManager::getDefaultFileManagerName() {
-    // Compatibility for callers that use the invokable; the playlist menu uses
-    // the property and therefore never starts a query synchronously.
-    resolveDefaultFileManagerName();
-    return m_defaultFileManagerName;
-}
-
-QVariantMap MediaManager::getFileInfo(const QString &path) {
-    // Kept for callers that explicitly need a blocking result; the UI uses
-    // requestFileInfo() so the FFmpeg work happens on a worker thread.
-    return buildFileInfo(path);
 }
 
 void MediaManager::requestFileInfo(const QString &path) {
@@ -1745,6 +2066,11 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
                               const QString &audioUrl, const QString &title, bool keepPlaylist,
                               bool isLive) {
     if (!m_mpv || !m_playlists) return;
+    m_crossfadeFadeInCurrent = false;
+    m_pendingCrossfadeIn = false;
+    m_crossfadeOutScheduled = false;
+    setCrossfadeFilter(QString());
+    resetSilenceState();
     if (m_icyReader) m_icyReader->stop();
     if (m_icyTitleTimer) m_icyTitleTimer->stop();
     m_pendingIcyTitle.clear();
@@ -1819,6 +2145,7 @@ void MediaManager::playStream(const QString &originalUrl, const QString &videoUr
 
 void MediaManager::onMpvFileLoaded() {
     if (!m_mpv) return;
+    m_silenceLoadTimer.start();
     setLoading(false);
     if (!m_pendingChaptersFile.isEmpty()) {
         QFile::remove(m_pendingChaptersFile);
@@ -1835,6 +2162,8 @@ void MediaManager::onMpvFileLoaded() {
     } else {
         m_resumeTarget = 0.0;
     }
+
+    updateCrossfade();
 
     // Start the ICY reader only after mpv has opened the stream. Opening a
     // second connection while the radio is still connecting could make some
@@ -2025,6 +2354,7 @@ void MediaManager::playIndexInModel(PlaylistModel *model, int index) {
     }
     m_lastPlayedFile = file;
     m_lastPlayedTimer.start();
+    resetSilenceState();
 
     // Resolve playlist URLs through yt-dlp so the proxy works.
     if ((file.startsWith(QStringLiteral("http://")) || file.startsWith(QStringLiteral("https://")))
@@ -2040,6 +2370,16 @@ void MediaManager::playIndexInModel(PlaylistModel *model, int index) {
         return;
     }
     clearPendingUrlPlayback();
+
+    if (!file.contains(QStringLiteral("://"))) {
+        m_crossfadeFadeInCurrent = m_pendingCrossfadeIn;
+        m_pendingCrossfadeIn = false;
+    } else {
+        m_crossfadeFadeInCurrent = false;
+        m_pendingCrossfadeIn = false;
+    }
+    m_crossfadeOutScheduled = false;
+    setCrossfadeFilter(QString());
 
     m_lastStreamTitle.clear();
     m_streamFromYtdlp = false;
@@ -2111,6 +2451,11 @@ void MediaManager::stopPlayback() {
     // to 00:00 instead of leaving the last frame of the finished playlist on
     // screen.
     m_mpv->stopPlayback();
+    m_crossfadeFadeInCurrent = false;
+    m_pendingCrossfadeIn = false;
+    m_crossfadeOutScheduled = false;
+    setCrossfadeFilter(QString());
+    resetSilenceState();
     if (m_playlists)
         m_playlists->setPlayingModel(nullptr);
     setHasMedia(false);

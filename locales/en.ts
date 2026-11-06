@@ -143,6 +143,10 @@
 <message><source>settings_audio</source><translation>Audio</translation></message>
 <message><source>settings_audio_output</source><translation>Audio output</translation></message>
 <message><source>settings_audio_auto</source><translation>Automatic</translation></message>
+<message><source>settings_music</source><translation>Music</translation></message>
+<message><source>settings_crossfade</source><translation>Crossfade</translation></message>
+<message><source>settings_crossfade_off</source><translation>Off</translation></message>
+<message><source>settings_crossfade_hint</source><translation>Fades the current local music track out and the next one in; trailing silence of 5 s or more is skipped. Set to 0 to disable.</translation></message>
 <message><source>settings_video_acceleration</source><translation>Video acceleration</translation></message>
 <message><source>settings_hwdec</source><translation>Hardware decoding</translation></message>
 <message><source>settings_hwdec_auto</source><translation>Automatic (best available)</translation></message>
@@ -218,8 +222,6 @@
 <message><source>tabs_clear</source><translation>Clear playlist</translation></message>
 <message><source>tabs_rename</source><translation>Rename</translation></message>
 <message><source>tabs_delete</source><translation>Delete</translation></message>
-<message><source>tabs_new</source><translation>New playlist</translation></message>
-<message><source>tabs_all</source><translation>All playlists</translation></message>
 </context>
 
 <context>

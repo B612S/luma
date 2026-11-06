@@ -428,6 +428,51 @@ Dialog {
 
                         Rectangle { Layout.fillWidth: true; height: 1; Layout.topMargin: 4; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.13) }
 
+                        Label { text: qsTr("settings_music"); font.pixelSize: 15; font.weight: Font.Bold; color: Kirigami.Theme.textColor; Layout.topMargin: 2 }
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 16
+                            rowSpacing: 16
+                            Layout.fillWidth: true
+
+                            Label { text: qsTr("settings_crossfade"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 8
+                                    Slider {
+                                        Layout.fillWidth: true
+                                        from: 0; to: 12; stepSize: 1
+                                        value: Config.musicCrossfade
+                                        onMoved: Config.musicCrossfade = value
+                                    }
+                                    Label {
+                                        Layout.preferredWidth: 52
+                                        horizontalAlignment: Text.AlignRight
+                                        color: Kirigami.Theme.textColor
+                                        font.pixelSize: 14
+                                        text: Config.musicCrossfade === 0
+                                              ? qsTr("settings_crossfade_off")
+                                              : Config.musicCrossfade + " s"
+                                    }
+                                }
+                            }
+
+                            Label {
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                text: qsTr("settings_crossfade_hint")
+                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+
+                        Rectangle { Layout.fillWidth: true; height: 1; Layout.topMargin: 4; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.13) }
+
                         Label { text: qsTr("settings_video_acceleration"); font.pixelSize: 15; font.weight: Font.Bold; color: Kirigami.Theme.textColor; Layout.topMargin: 2 }
 
                         GridLayout {

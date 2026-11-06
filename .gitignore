@@ -29,8 +29,6 @@ ui_*.h
 *.log
 /luma
 *.zsync
-*.flatpak
-.flatpak-builder
 .cache/
 .clangd/
 .idea/

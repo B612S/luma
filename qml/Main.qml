@@ -355,7 +355,6 @@ ApplicationWindow {
                 root.lastMouseY = mouse.y;
                 const globalPos = mapToItem(null, mouse.x, mouse.y);
                 root.cursorY = globalPos.y;
-                if (contextMenu.visible && !contextMenu.cursorWasVisible) return;
                 root.onCursorMoved();
             }
 
@@ -490,8 +489,6 @@ ApplicationWindow {
         onOpenUrlRequested: root.openUrlDialog()
         onOpenEqualizerRequested: equalizerDialog.open()
         onTogglePlaylistRequested: { playlistPanel.isOpen = !playlistPanel.isOpen; idleTimer.restart(); }
-        property bool cursorWasVisible: true
-
         onOpened: {
             // Close the playlist menus (tracks and tabs) and the stats menu.
             if (typeof playlistPanel !== "undefined" && playlistPanel !== null) {
@@ -499,15 +496,11 @@ ApplicationWindow {
             }
             if (typeof statsPanel !== "undefined" && statsPanel !== null)
                 statsPanel.closeContextMenu();
-            cursorWasVisible = root.cursorVisible;
             root.cursorY = -1;
             idleTimer.restart();
-            // Register in the global variable
-            root.currentOpenMenu = contextMenu;
         }
         onClosed: {
             idleTimer.restart();
-            if (root.currentOpenMenu === contextMenu) root.currentOpenMenu = null;
         }
     }
 

@@ -8,6 +8,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- A music crossfade option in **Settings → Playback → Music**. For consecutive
+  local audio files it fades the current track out and the next one in; the duration
+  is configurable from 1 to 12 seconds and `0` disables it. A trailing silent tail of
+  about 5 s or more is detected in the background and skipped, so the next track starts at
+  the last audible sample. It is a boundary fade (mpv plays one file at a time), so
+  tracks do not overlap; the setting is stored in `luma.conf`.
 - A 10/20-band graphic equalizer with a preamp, builtin presets (Flat, Rock, Pop, Jazz,
   Classical, Electronic, Hip-Hop, Vocal, Bass, Treble) and user presets that can be
   saved and reset; right-clicking a slider resets it to 0 dB. It has an on/off switch,
@@ -104,6 +110,20 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Removed the “All playlists” and “New playlist” tooltips from the playlist
+  tab bar, and slightly reduced the playlist search font.
+- The AppImage now applies the KDE `kdeglobals` font explicitly when the
+  bundled Plasma platform theme does not propagate it, matching the packaged build's
+  font family and weight.
+- The AppImage loads the bundled KDE platform theme on Plasma, inheriting the
+  system font, palette and widget style; icons come from the system theme (with a small
+  hicolor fallback), and the playlist tab uses the standard `view-list-symbolic` name.
+- The information dialog no longer shows a double separator for video files.
+- The AppImage now follows the current system icon theme (KDE/GTK/GNOME settings)
+  instead of forcing the bundled hicolor/Breeze fallback; the small Breeze set is used
+  only for icon names the system theme does not provide.
+- The AppImage now bundles `ffmpeg` and `avahi-browse`, so HLS casting and
+  Chromecast discovery work without installing them on the host.
 - The statistics panel hides and omits the A/V sync line for audio/radio (it is
   only meaningful with a video track). Its height animates while statistics load
   (opening the panel or switching the source, capped by the playlist panel's
@@ -216,6 +236,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Context menus now reveal the cursor even if the idle timer had hidden it, so
+  the pointer is visible outside the menu again.
+- The playlist panel button and the all-playlists dropdown use distinct icons from
+  the system theme (`view-media-playlist` and `view-list-symbolic`).
+- The seek time OSD is guaranteed to stay visible for a full 2.5 s; a hide timer
+  left over from another OSD can no longer shorten it.
 - Pressing next/previous (or reaching the end of a file) while another playlist
   tab is open now continues in the playlist that is actually playing instead of
   playing a file from the viewed playlist; the playback mode is taken from the
@@ -407,6 +433,7 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Removed
 
+- The unfinished Flatpak packaging; portable builds are handled by the AppImage script.
 - The unofficial X11/xcb fallback. X11 is not supported and support is not planned.
 - The “Close” button in the keyboard shortcuts help; the help still hides as soon as `?`
   is released or the window loses focus.

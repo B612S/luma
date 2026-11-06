@@ -1,4 +1,5 @@
 #include "PlaylistManager.hpp"
+#include "MediaPaths.hpp"
 #include "ConfigManager.hpp"
 #include "Logger.hpp"
 #include "TagScanner.hpp"
@@ -19,20 +20,6 @@
 #include <memory>
 
 const QString PlaylistManager::DEFAULT_ID = "__default__";
-
-static const QStringList &audioExtensions()
-{
-    static const QStringList extensions = {
-        "mp3", "flac", "aac", "wav", "ogg", "m4a", "opus", "wma",
-        "m4b", "wv", "ape", "aiff", "caf"
-    };
-    return extensions;
-}
-
-static bool isAudioPath(const QString &path)
-{
-    return audioExtensions().contains(QFileInfo(path).suffix().toLower());
-}
 
 static bool isPlaylistMode(const QString &mode)
 {
@@ -308,7 +295,7 @@ void PlaylistManager::scanPlaylistTags(const QString &id) {
     m_scannedPlaylists.insert(id);
 
     for (const PlaylistModel::Entry &entry : model->entries()) {
-        if (!entry.path.contains(QStringLiteral("://")) && isAudioPath(entry.path))
+        if (!entry.path.contains(QStringLiteral("://")) && isAudioFilePath(entry.path))
             m_tagScanner->enqueue(entry.path);
     }
 }
@@ -434,7 +421,7 @@ bool PlaylistManager::playlistHasAudio(const QString &id) const {
     PlaylistModel *model = m_models.value(id, nullptr);
     if (!model) return false;
     for (const PlaylistModel::Entry &entry : model->entries()) {
-        if (isAudioPath(entry.path))
+        if (isAudioFilePath(entry.path))
             return true;
     }
     return false;
@@ -453,7 +440,7 @@ QVariantMap PlaylistManager::buildEntry(const QString &path) const {
     QVariantMap entry;
     QFileInfo fi(path);
     entry["path"] = fi.absoluteFilePath();
-    entry["kind"] = isAudioPath(path) ? "audio" : "video";
+    entry["kind"] = isAudioFilePath(path) ? "audio" : "video";
     // Tags are read by TagScanner in the background.
     entry["title"] = fi.completeBaseName().isEmpty() ? fi.fileName() : fi.completeBaseName();
     return entry;
@@ -498,7 +485,7 @@ QString PlaylistManager::playlistModeFor(PlaylistModel *model) const {
 void PlaylistManager::scanAudioPaths(const QStringList &paths) {
     if (!m_tagScanner) return;
     for (const QString &path : paths) {
-        if (!path.contains(QStringLiteral("://")) && isAudioPath(path))
+        if (!path.contains(QStringLiteral("://")) && isAudioFilePath(path))
             m_tagScanner->enqueue(path);
     }
 }

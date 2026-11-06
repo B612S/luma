@@ -114,6 +114,10 @@ Popup {
         if (win.currentOpenMenu && win.currentOpenMenu !== menu)
             win.currentOpenMenu.close();
         win.currentOpenMenu = menu;
+        // A menu can be opened while the idle timer has hidden the cursor.
+        // Show it again; the menu itself must not leave a blank cursor around.
+        if (typeof win.wakeCursor === "function")
+            win.wakeCursor();
         positionAtAnchor();
     }
 

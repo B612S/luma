@@ -563,7 +563,7 @@ Rectangle {
             }
             Kirigami.Icon {
                 anchors.centerIn: parent
-                source: "view-list-symbolic"
+                source: "view-media-playlist"
                 color: Kirigami.Theme.textColor
                 width: 22
                 height: 22

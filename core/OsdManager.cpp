@@ -1,11 +1,21 @@
 #include "OsdManager.hpp"
-#include <QDebug>
+
+namespace {
+constexpr int kTemporaryOsdMs = 2500;
+}
 
 OsdManager::OsdManager(MpvItem *mpv, QObject *parent) : QObject(parent), m_mpv(mpv) {
     m_hideTimer = new QTimer(this);
     m_hideTimer->setSingleShot(true);
-    m_hideTimer->setInterval(2500);
+    m_hideTimer->setInterval(kTemporaryOsdMs);
     connect(m_hideTimer, &QTimer::timeout, this, [this]() {
+        if (m_state == StateTimeTemporary && m_seekOsdShown.isValid()) {
+            const qint64 elapsed = m_seekOsdShown.elapsed();
+            if (elapsed < kTemporaryOsdMs) {
+                m_hideTimer->start(int(kTemporaryOsdMs - elapsed));
+                return;
+            }
+        }
         if (m_state == StateTimeTemporary || m_state == StateOverlayVolume || m_state == StateOverlayInfo) {
             restoreTimeMode();
         }
@@ -74,6 +84,7 @@ void OsdManager::requestTimeOsd() {
     m_visible = true;
     emit messageChanged();
     emit visibleChanged();
+    m_seekOsdShown.start();
     m_hideTimer->start();
     if (!m_updateTimer->isActive()) m_updateTimer->start();
 }
@@ -86,6 +97,7 @@ void OsdManager::requestTimeOsd(double pos, double dur) {
     m_visible = true;
     emit messageChanged();
     emit visibleChanged();
+    m_seekOsdShown.start();
     m_hideTimer->start();
     if (!m_updateTimer->isActive()) m_updateTimer->start();
 }
@@ -95,6 +107,7 @@ void OsdManager::requestSeekOsd(double pos, double dur) {
 
     // Seeking always shows the time temporarily
     m_state = StateTimeTemporary;
+    m_seekOsdShown.start();
     m_hideTimer->start();
 
     if (m_seekTarget < 0.0) m_seekStartPos = m_mpv->position();
@@ -130,7 +143,10 @@ void OsdManager::togglePinTimeOsd() {
 void OsdManager::endTemporaryOsd() {
     // Called when the user releases the seek key
     if (m_state == StateTimeTemporary) {
-        m_hideTimer->start(2500); // Wait 2.5 s, then return to T (or hide)
+        // Restart the full interval from the release; the elapsed-time guard
+        // above also prevents an older timer from shortening it.
+        m_seekOsdShown.start();
+        m_hideTimer->start(kTemporaryOsdMs);
     }
 }
 
@@ -140,6 +156,7 @@ void OsdManager::hideOsd() {
     m_seekTarget = -1.0;
     m_updateTimer->stop();
     m_hideTimer->stop();
+    m_seekOsdShown.invalidate();
     hideOsdInternal();
 }
 

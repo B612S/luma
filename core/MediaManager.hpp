@@ -46,7 +46,11 @@ public:
     void setPlaylistManager(PlaylistManager *pm);
     PlaylistManager* playlistManager() const { return m_playlists; }
     void setMpv(MpvItem *mpv);
-    void setConfig(ConfigManager *config) { m_config = config; }
+    void setConfig(ConfigManager *config);
+
+    // Extra mpv audio filter for the music crossfade (empty when inactive).
+    // The equalizer and this filter are combined by main.cpp before setting af.
+    QString crossfadeFilter() const { return m_crossfadeFilter; }
 
     bool isManualSwitch() const { return m_isManualSwitch; }
     void setManualSwitch(bool val);
@@ -83,12 +87,9 @@ public:
     Q_INVOKABLE void openInFileManager(const QString &path);
     Q_INVOKABLE void copyToClipboard(const QString &text);
     Q_INVOKABLE void removeFromPlaylist(int index);
-    Q_INVOKABLE QString getDefaultFileManagerName();
     // Used by the playlist context menu: file-only actions (Information) are
     // hidden for entries whose file has been deleted or moved.
     Q_INVOKABLE bool isFileAvailable(const QString &path) const;
-    // Blocking variant (kept for API compatibility); the UI uses the async one.
-    Q_INVOKABLE QVariantMap getFileInfo(const QString &path);
     Q_INVOKABLE void requestFileInfo(const QString &path);
     // Bitrate of a short window around the playback position. The statistics
     // panel uses it for video, where mpv's value is a last-GOP average that
@@ -119,6 +120,7 @@ signals:
     void fileChanged(const QString &path);
     void playModeChanged();
     void isManualSwitchChanged();
+    void crossfadeFilterChanged();
     void playlistChanged();
     void liveStreamChanged();
     void hasMediaChanged();
@@ -207,6 +209,22 @@ private:
     bool m_pendingUrlWasPlaying = false;
     QString m_playMode = "sequential";
     bool m_isManualSwitch = false;
+    // Crossfade only applies to local music. File-ended state carries the
+    // fade-in flag over to the next track.
+    QString m_crossfadeFilter;
+    bool m_crossfadeFadeInCurrent = false;
+    bool m_pendingCrossfadeIn = false;
+    bool m_crossfadeOutScheduled = false;
+    // Trailing-silence detection runs on a worker. The effective end is the
+    // position where the next track should start (0/-1 means "use duration").
+    quint64 m_silenceGeneration = 0;
+    QString m_silenceSource;
+    double m_silenceEffectiveEnd = -1.0;
+    bool m_silenceTransitionTriggered = false;
+    QElapsedTimer m_silenceLoadTimer;
+    void resetSilenceState();
+    void startSilenceScan(const QString &path);
+    void maybeAdvancePastSilence(double position);
 
     QString m_lastPlayedFile;
     QElapsedTimer m_lastPlayedTimer;
@@ -217,6 +235,8 @@ private:
     void setLoading(bool loading);
     void setLiveStream(bool live);
     void setHasMedia(bool hasMedia);
+    void updateCrossfade();
+    void setCrossfadeFilter(const QString &filter);
 
     QDBusInterface *m_notifyInterface = nullptr;
     QProcess *m_ytdlpProcess = nullptr;

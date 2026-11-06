@@ -27,6 +27,7 @@ private slots:
     void legacyPinControlsMigrates();
     void unsupportedLanguageFallsBack();
     void languageResolution();
+    void musicCrossfade();
     void reloadsExternalChanges();
     void ytdlpQualityAndProxy();
     void ytdlpProxyTypeAndAddress();
@@ -324,6 +325,28 @@ void TestConfigManager::languageResolution()
 
     // Unknown stored values never leave the UI untranslated.
     QCOMPARE(ConfigManager::resolveLanguage("ja", "ru_RU"), QStringLiteral("en"));
+}
+
+void TestConfigManager::musicCrossfade()
+{
+    ConfigManager config;
+    QCOMPARE(config.musicCrossfade(), 0);
+
+    QSignalSpy spy(&config, &ConfigManager::musicCrossfadeChanged);
+    config.setMusicCrossfade(5);
+    QCOMPARE(config.musicCrossfade(), 5);
+    QCOMPARE(spy.count(), 1);
+
+    config.setMusicCrossfade(5);
+    QCOMPARE(spy.count(), 1);
+    config.setMusicCrossfade(20);
+    QCOMPARE(config.musicCrossfade(), 12);
+    config.setMusicCrossfade(-4);
+    QCOMPARE(config.musicCrossfade(), 0);
+
+    config.setMusicCrossfade(4);
+    ConfigManager reloaded;
+    QCOMPARE(reloaded.musicCrossfade(), 4);
 }
 
 void TestConfigManager::reloadsExternalChanges()

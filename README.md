@@ -43,6 +43,11 @@
   presets (only the custom ones can be reset). Right-click a slider to reset it to
   0 dB. It applies to everything mpv plays (files, links and radio) and is also applied
   to Chromecast casts. Opened from Playback in the player menu.
+- **Music crossfade** — **Settings → Playback → Music** fades consecutive local
+  audio tracks out and in (0–12 s; `0` disables it). A trailing silent tail of 5 s
+  or more is detected and skipped, so the next track starts at the last audible
+  sample. mpv plays one file at a time, so this is a smooth boundary fade rather than
+  overlapping the two tracks.
 - **Picture in picture** — `P` or the context menu turns the window into a small
   frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
   On KDE Plasma the PiP window stays above the other windows.
@@ -149,11 +154,12 @@ Build a portable AppImage with:
 
 The script builds a Release AppDir and bundles Qt/QML (including Kirigami and
 `qqc2-desktop-style`), libmpv, FFmpeg, TagLib and the Wayland platform plugins; the
-resulting image is Wayland-only. The Breeze widget style and the small set of Breeze
-icons used by the controls are included as well, so scrollbars and icons do not depend
-on the host's KDE setup. On first use it downloads `linuxdeploy`, its Qt plugin and
-`appimagetool` into `.appimage-tools/`. `ffmpeg` and `avahi-browse` are not bundled;
-install them on the system for HLS casting and Chromecast discovery. `yt-dlp` and
+resulting image is Wayland-only. On Plasma it loads the bundled KDE platform theme, so
+the AppImage inherits the system font, colour scheme, widget style and icon theme; on
+other desktops it falls back to the Breeze style. A small Breeze set is shipped only as
+a hicolor fallback for icon names the system theme lacks. On first use it downloads
+`linuxdeploy`, its Qt plugin and `appimagetool` into `.appimage-tools/`. `ffmpeg` and
+`avahi-browse` are bundled for HLS casting and Chromecast discovery. `yt-dlp` and
 `yt-dlp-ejs` can be installed from *Settings → Playback → Internet playback* without
 packaging them; install Deno on the system to solve YouTube's JavaScript challenge
 without reading browser cookies.

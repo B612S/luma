@@ -143,6 +143,10 @@
 <message><source>settings_audio</source><translation>Звук</translation></message>
 <message><source>settings_audio_output</source><translation>Аудиовыход</translation></message>
 <message><source>settings_audio_auto</source><translation>Автоматически</translation></message>
+<message><source>settings_music</source><translation>Музыка</translation></message>
+<message><source>settings_crossfade</source><translation>Кроссфейд</translation></message>
+<message><source>settings_crossfade_off</source><translation>Выкл.</translation></message>
+<message><source>settings_crossfade_hint</source><translation>Плавно затухает текущий локальный музыкальный трек и появляется следующий; завершающая тишина от 5 с пропускается. 0 — выключено.</translation></message>
 <message><source>settings_video_acceleration</source><translation>Видеоускорение</translation></message>
 <message><source>settings_hwdec</source><translation>Аппаратное декодирование</translation></message>
 <message><source>settings_hwdec_auto</source><translation>Автоматически (лучший доступный)</translation></message>
@@ -218,8 +222,6 @@
 <message><source>tabs_clear</source><translation>Очистить плейлист</translation></message>
 <message><source>tabs_rename</source><translation>Переименовать</translation></message>
 <message><source>tabs_delete</source><translation>Удалить</translation></message>
-<message><source>tabs_new</source><translation>Новый плейлист</translation></message>
-<message><source>tabs_all</source><translation>Все плейлисты</translation></message>
 </context>
 
 <context>

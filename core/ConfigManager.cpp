@@ -501,6 +501,16 @@ void ConfigManager::setShowPanelsFullscreen(bool enabled) {
     emit showPanelsFullscreenChanged();
 }
 
+int ConfigManager::musicCrossfade() const {
+    return qBound(0, m_settings->value("music/crossfade", 0).toInt(), 12);
+}
+void ConfigManager::setMusicCrossfade(int seconds) {
+    const int value = qBound(0, seconds, 12);
+    if (musicCrossfade() == value) return;
+    m_settings->setValue("music/crossfade", value);
+    emit musicCrossfadeChanged();
+}
+
 QString ConfigManager::audioOutput() const { return m_audioOutput; }
 void ConfigManager::setAudioOutput(const QString &output) {
     const QString normalized = kAudioOutputs.contains(output) ? output : QStringLiteral("auto");

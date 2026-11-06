@@ -343,7 +343,7 @@ Rectangle {
                                                   Kirigami.Theme.textColor.g,
                                                   Kirigami.Theme.textColor.b, 0.5)
                     color: Kirigami.Theme.textColor
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     selectByMouse: true
                     // Reserve room for the magnifier on the left and the clear
                     // button on the right; the field itself spans the full

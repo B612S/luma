@@ -38,7 +38,6 @@ Dialog {
 
     property string urlValue: ""
     property string originalUrl: ""
-    property bool urlDirty: false
 
     // The save button looks at the actual difference, not at the flags.
     readonly property bool dirty: dialog.isStream
@@ -66,7 +65,6 @@ Dialog {
     onOpened: dialog.reloadTags()
     onClosed: {
         dialog.tagsDirty = false;
-        dialog.urlDirty = false;
         dialog.tagsSaving = false;
         dialog.saveMessage = "";
     }
@@ -86,7 +84,6 @@ Dialog {
         dialog.pendingTags = ({});
         dialog.originalUrl = dialog.fileInfo.path || "";
         dialog.urlValue = dialog.originalUrl;
-        dialog.urlDirty = false;
         dialog.saveMessage = "";
     }
 
@@ -109,7 +106,6 @@ Dialog {
             if (Media.updateStreamUrl(dialog.originalUrl, newUrl)) {
                 dialog.originalUrl = newUrl;
                 dialog.urlValue = newUrl;
-                dialog.urlDirty = false;
                 dialog.saveMessage = qsTranslate("MediaInfoDialog", "tags_saved");
             } else {
                 dialog.saveMessage = qsTranslate("MediaInfoDialog", "tags_save_failed");
@@ -197,7 +193,7 @@ Dialog {
                     color: Kirigami.Theme.textColor
                     padding: 2
                     text: dialog.urlValue
-                    onTextChanged: { dialog.urlValue = text; dialog.urlDirty = (text !== dialog.originalUrl); }
+                    onTextChanged: { dialog.urlValue = text; }
                     background: Item {
                         implicitHeight: 22
                         Rectangle {
@@ -263,7 +259,10 @@ Dialog {
                     wrapMode: Text.Wrap
                 }
 
-                Rectangle { Layout.fillWidth: true; height: 1; visible: !dialog.isStream; color: dialog.lineColor }
+                // Only audio has a tag block between the two separators. For
+                // video the block is empty, so the second line would sit right
+                // under the first one and look like a double rule.
+                Rectangle { Layout.fillWidth: true; height: 1; visible: dialog.isAudio && !dialog.isStream; color: dialog.lineColor }
 
                 Label {
                     Layout.fillWidth: true

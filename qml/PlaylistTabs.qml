@@ -160,7 +160,7 @@ Item {
             Kirigami.Icon {
                 anchors.centerIn: parent
                 width: 18; height: 18
-                source: "view-media-playlist-symbolic"
+                source: "view-list-symbolic"
                 color: Kirigami.Theme.textColor
                 // Force the themed icon to be drawn as a monochrome mask.
                 isMask: true
@@ -185,9 +185,6 @@ Item {
                 }
             }
 
-            ToolTip.visible: allTabsHover.containsMouse
-            ToolTip.text: qsTranslate("PlaylistTabs", "tabs_all")
-            ToolTip.delay: 500
         }
 
         Flickable {
@@ -359,7 +356,7 @@ Item {
                 color: Kirigami.Theme.textColor
                 isMask: true
             }
-            MouseArea { id: addHover; anchors.fill: parent; hoverEnabled: true; onClicked: root.createRequested() }            ToolTip.visible: addHover.containsMouse; ToolTip.text: qsTranslate("PlaylistTabs", "tabs_new"); ToolTip.delay: 500
+            MouseArea { id: addHover; anchors.fill: parent; hoverEnabled: true; onClicked: root.createRequested() }
         }
     }
 

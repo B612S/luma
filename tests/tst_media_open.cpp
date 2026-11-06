@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <cmath>
 
 #include "ConfigManager.hpp"
 #include "MediaManager.hpp"
@@ -23,6 +24,9 @@ private slots:
     void openVideo();
     void folderScanMergesSiblings();
     void nextFollowsPlayingPlaylist();
+    void musicCrossfadeFilter();
+    void musicCrossfadeSkipsTrailingSilence();
+    void musicCrossfadeKeepsShortTrailingSilence();
     void externalAudioStartsWithFile();
     void endOfPlaylistStopsPlayback();
     void missingFileReportsUnavailable();
@@ -36,6 +40,8 @@ private slots:
 
 private:
     bool waitForFileLoaded(MpvItem *mpv, int timeout = 10000);
+    static bool writeSilentWav(const QString &path, int seconds);
+    static bool writeToneWav(const QString &path, int toneSeconds, int silenceSeconds);
     void stopPlayback();
 
     QTemporaryDir m_temp;
@@ -80,7 +86,8 @@ void TestMediaOpen::initTestCase()
     m_config = new ConfigManager;
     m_playlists = new PlaylistManager(m_config);
     m_mpv = new MpvItem;
-    m_media = new MediaManager(m_mpv);
+    m_media = new MediaManager(nullptr);
+    m_media->setMpv(m_mpv);
     m_media->setPlaylistManager(m_playlists);
     m_media->setConfig(m_config);
     m_oldPath = qgetenv("PATH");
@@ -148,6 +155,189 @@ void TestMediaOpen::folderScanMergesSiblings()
     QTRY_VERIFY_WITH_TIMEOUT(def->contains(video), 5000);
     QTRY_VERIFY_WITH_TIMEOUT(def->count() >= 2, 5000);
     QCOMPARE(def->currentFile(), audio);
+}
+
+bool TestMediaOpen::writeSilentWav(const QString &path, int seconds)
+{
+    const quint32 sampleRate = 8000;
+    const quint32 dataSize = quint32(seconds) * sampleRate * 2; // mono, 16-bit
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+
+    QByteArray header(44, 0);
+    auto put16 = [&header](int offset, quint16 value) {
+        header[offset] = char(value & 0xff);
+        header[offset + 1] = char((value >> 8) & 0xff);
+    };
+    auto put32 = [&header](int offset, quint32 value) {
+        header[offset] = char(value & 0xff);
+        header[offset + 1] = char((value >> 8) & 0xff);
+        header[offset + 2] = char((value >> 16) & 0xff);
+        header[offset + 3] = char((value >> 24) & 0xff);
+    };
+    header.replace(0, 4, "RIFF");
+    put32(4, 36 + dataSize);
+    header.replace(8, 4, "WAVE");
+    header.replace(12, 4, "fmt ");
+    put32(16, 16);
+    put16(20, 1); // PCM
+    put16(22, 1); // mono
+    put32(24, sampleRate);
+    put32(28, sampleRate * 2); // byte rate
+    put16(32, 2); // block align
+    put16(34, 16); // bits per sample
+    header.replace(36, 4, "data");
+    put32(40, dataSize);
+
+    if (file.write(header) != header.size())
+        return false;
+    const QByteArray silence(4096, 0);
+    quint32 remaining = dataSize;
+    while (remaining > 0) {
+        const int chunk = int(qMin<quint32>(remaining, silence.size()));
+        if (file.write(silence.constData(), chunk) != chunk)
+            return false;
+        remaining -= quint32(chunk);
+    }
+    return true;
+}
+
+bool TestMediaOpen::writeToneWav(const QString &path, int toneSeconds, int silenceSeconds)
+{
+    const quint32 sampleRate = 8000;
+    const quint32 toneSamples = quint32(toneSeconds) * sampleRate;
+    const quint32 totalSamples = quint32(toneSeconds + silenceSeconds) * sampleRate;
+    const quint32 dataSize = totalSamples * 2;
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+
+    QByteArray header(44, 0);
+    auto put16 = [&header](int offset, quint16 value) {
+        header[offset] = char(value & 0xff);
+        header[offset + 1] = char((value >> 8) & 0xff);
+    };
+    auto put32 = [&header](int offset, quint32 value) {
+        header[offset] = char(value & 0xff);
+        header[offset + 1] = char((value >> 8) & 0xff);
+        header[offset + 2] = char((value >> 16) & 0xff);
+        header[offset + 3] = char((value >> 24) & 0xff);
+    };
+    header.replace(0, 4, "RIFF");
+    put32(4, 36 + dataSize);
+    header.replace(8, 4, "WAVE");
+    header.replace(12, 4, "fmt ");
+    put32(16, 16);
+    put16(20, 1);
+    put16(22, 1);
+    put32(24, sampleRate);
+    put32(28, sampleRate * 2);
+    put16(32, 2);
+    put16(34, 16);
+    header.replace(36, 4, "data");
+    put32(40, dataSize);
+    if (file.write(header) != header.size())
+        return false;
+
+    QByteArray data(int(dataSize), 0);
+    auto *samples = reinterpret_cast<qint16 *>(data.data());
+    constexpr double twoPi = 6.28318530717958647692;
+    for (quint32 i = 0; i < toneSamples; ++i)
+        samples[i] = qint16(12000.0 * std::sin(twoPi * 440.0 * i / sampleRate));
+    return file.write(data) == data.size();
+}
+
+void TestMediaOpen::musicCrossfadeKeepsShortTrailingSilence()
+{
+    stopPlayback();
+    const QString a = m_temp.path() + "/short-silence-a.wav";
+    const QString b = m_temp.path() + "/short-silence-b.wav";
+    // A normal three-second pause must not be treated as a skipped track.
+    QVERIFY(writeToneWav(a, 2, 3));
+    QVERIFY(writeToneWav(b, 1, 1));
+
+    m_config->setMusicCrossfade(1);
+    PlaylistModel *def = m_playlists->defaultModel();
+    def->setFiles({a, b}, a);
+    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
+
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playIndex(0);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->crossfadeFilter().contains(QStringLiteral("afade=t=out")), 5000);
+    QVERIFY(m_media->crossfadeFilter().contains(QStringLiteral("st=4.000:d=1")));
+    QCOMPARE(m_mpv->source(), a);
+
+    m_config->setMusicCrossfade(0);
+    stopPlayback();
+}
+
+void TestMediaOpen::musicCrossfadeSkipsTrailingSilence()
+{
+    stopPlayback();
+    const QString a = m_temp.path() + "/silence-tail-a.wav";
+    const QString b = m_temp.path() + "/silence-tail-b.wav";
+    // Two seconds of music followed by three seconds of digital silence.
+    QVERIFY(writeToneWav(a, 2, 6));
+    QVERIFY(writeToneWav(b, 1, 1));
+
+    m_config->setMusicCrossfade(1);
+    PlaylistModel *def = m_playlists->defaultModel();
+    def->setFiles({a, b}, a);
+    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
+
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playIndex(0);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+
+    // The detector shortens the fade start from the container-based 4.000 s
+    // to roughly the end of the audible part.
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->crossfadeFilter().contains(QStringLiteral("afade=t=out"))
+                             && !m_media->crossfadeFilter().contains(QStringLiteral("st=4.000")),
+                             5000);
+
+    QSignalSpy changed(m_media, &MediaManager::fileChanged);
+    QTRY_VERIFY_WITH_TIMEOUT(changed.count() > 0
+                             && changed.last().at(0).toString() == b, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->crossfadeFilter().contains(QStringLiteral("afade=t=in:st=0:d=1")), 5000);
+    QCOMPARE(m_mpv->source(), b);
+
+    m_config->setMusicCrossfade(0);
+    stopPlayback();
+}
+
+void TestMediaOpen::musicCrossfadeFilter()
+{
+    stopPlayback();
+    const QString a = m_temp.path() + "/crossfade-a.wav";
+    const QString b = m_temp.path() + "/crossfade-b.wav";
+    QVERIFY(writeSilentWav(a, 5));
+    QVERIFY(writeSilentWav(b, 5));
+
+    m_config->setMusicCrossfade(2);
+    PlaylistModel *def = m_playlists->defaultModel();
+    def->setFiles({a, b}, a);
+    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
+
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playIndex(0);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->crossfadeFilter().contains(QStringLiteral("afade=t=out")), 5000);
+    QVERIFY(m_media->crossfadeFilter().contains(QStringLiteral("st=3.000:d=2")));
+
+    // Simulate the end-of-file notification the player sends before advancing.
+    QMetaObject::invokeMethod(m_mpv, "fileEnded", Qt::DirectConnection,
+                              Q_ARG(QString, QStringLiteral("eof")));
+    QSignalSpy nextLoaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->playNext();
+    QTRY_VERIFY_WITH_TIMEOUT(nextLoaded.count() > 0, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->crossfadeFilter().contains(QStringLiteral("afade=t=in:st=0:d=2")), 5000);
+    QVERIFY(!m_media->crossfadeFilter().contains(QStringLiteral("afade=t=out")));
+
+    m_config->setMusicCrossfade(0);
+    stopPlayback();
 }
 
 void TestMediaOpen::nextFollowsPlayingPlaylist()

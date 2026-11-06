@@ -8,9 +8,9 @@
 # AppImage cannot bundle the build host's glibc.
 #
 # Requirements: cmake, ninja (or make), a C++17 compiler, Qt 6.9 development
-# packages, qmake6, curl, and the runtime QML modules used by the app
-# (Kirigami, qqc2-desktop-style). Network access is needed the first time to
-# download linuxdeploy/appimagetool.
+# packages, qmake6, curl, ffmpeg, avahi-browse, and the runtime QML modules used
+# by the app (Kirigami, qqc2-desktop-style). Network access is needed the first
+# time to download linuxdeploy/appimagetool.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,7 +29,7 @@ if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
     exit 1
 fi
 
-for tool in cmake curl qmake6; do
+for tool in cmake curl qmake6 ffmpeg avahi-browse; do
     command -v "$tool" >/dev/null 2>&1 || {
         echo "Missing required tool: $tool" >&2
         exit 1
@@ -99,6 +99,42 @@ echo "Deploying Qt/QML dependencies..."
     --executable "$APPDIR/usr/bin/luma" \
     --desktop-file "$APPDIR/usr/share/applications/luma.desktop" \
     --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/luma.png"
+
+# KDE apps take their font, palette and widget style from the Plasma platform
+# theme plugin. Without it the AppImage only has the stock Breeze style and Qt's
+# default font. Bundle the plugin (and its KF6 dependencies) and let AppRun use
+# it on Plasma.
+KDE_THEME_PLUGIN=""
+for candidate in \
+    "$QT_PLUGINS_DIR/platformthemes/KDEPlasmaPlatformTheme6.so" \
+    "$QT_PLUGINS_DIR/platformthemes/libqkde.so"; do
+    if [[ -f "$candidate" ]]; then
+        KDE_THEME_PLUGIN="$candidate"
+        break
+    fi
+done
+if [[ -n "$KDE_THEME_PLUGIN" ]]; then
+    echo "Bundling KDE platform theme..."
+    mkdir -p "$APPDIR/usr/plugins/platformthemes"
+    cp "$KDE_THEME_PLUGIN" "$APPDIR/usr/plugins/platformthemes/"
+    "$LINUXDEPLOY" --appdir "$APPDIR" --library "$APPDIR/usr/plugins/platformthemes/$(basename "$KDE_THEME_PLUGIN")" >/dev/null
+else
+    echo "Warning: KDE platform theme plugin not found; using stock Breeze style" >&2
+fi
+
+# Luma shells out to ffmpeg for HLS casting and to avahi-browse for Chromecast
+# discovery. Bundle both so the AppImage does not depend on host packages.
+# Luma shells out to ffmpeg for HLS casting and to avahi-browse for Chromecast
+# discovery. Bundle both so the AppImage does not depend on host packages.
+for tool in ffmpeg avahi-browse; do
+    tool_path="$(command -v "$tool" 2>/dev/null || true)"
+    if [[ -z "$tool_path" ]]; then
+        echo "Warning: $tool not found; the AppImage will need it from the host" >&2
+        continue
+    fi
+    echo "Bundling $tool..."
+    "$LINUXDEPLOY" --appdir "$APPDIR" --executable "$tool_path" >/dev/null
+done
 
 # Luma is Wayland-only. The Qt plugin deploys the host's platform plugin (xcb
 # on an X11 host) by default, so remove the X11 platform plugin and the X11 GL
@@ -243,6 +279,14 @@ export QT_QPA_PLATFORM=wayland
 export LUMA_APPIMAGE=1
 export PATH="$HERE/usr/bin:$PATH"
 export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+# On Plasma, load the bundled platform theme so the AppImage inherits the
+# system font, colour scheme and widget style. Other desktops keep the defaults.
+if [ -f "$HERE/usr/plugins/platformthemes/KDEPlasmaPlatformTheme6.so" ] \
+        || [ -f "$HERE/usr/plugins/platformthemes/libqkde.so" ]; then
+    case "${XDG_CURRENT_DESKTOP:-}" in
+        *KDE*|*kde*|*Plasma*|*plasma*) export QT_QPA_PLATFORMTHEME=kde ;;
+    esac
+fi
 exec "$HERE/usr/bin/luma" "$@"
 RUN
 chmod +x "$APPDIR/AppRun"

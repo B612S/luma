@@ -31,6 +31,7 @@ class ConfigManager : public QObject {
     Q_PROPERTY(bool subtitleIgnoreFileStyle READ subtitleIgnoreFileStyle WRITE setSubtitleIgnoreFileStyle NOTIFY subtitlesChanged)
     Q_PROPERTY(bool showPanelsFullscreen READ showPanelsFullscreen WRITE setShowPanelsFullscreen NOTIFY showPanelsFullscreenChanged)
     Q_PROPERTY(QString audioOutput READ audioOutput WRITE setAudioOutput NOTIFY audioOutputChanged)
+    Q_PROPERTY(int musicCrossfade READ musicCrossfade WRITE setMusicCrossfade NOTIFY musicCrossfadeChanged)
     Q_PROPERTY(QString hwdec READ hwdec WRITE setHwdec NOTIFY hwdecChanged)
     Q_PROPERTY(QString ytdlpQuality READ ytdlpQuality WRITE setYtdlpQuality NOTIFY ytdlpSettingsChanged)
     Q_PROPERTY(QString ytdlpProxy READ ytdlpProxy WRITE setYtdlpProxy NOTIFY ytdlpSettingsChanged)
@@ -107,6 +108,10 @@ public:
     QString audioOutput() const;
     void setAudioOutput(const QString &output);
 
+    // Crossfade duration for local music, in seconds; 0 disables it.
+    int musicCrossfade() const;
+    void setMusicCrossfade(int seconds);
+
     // mpv hardware decoding: "auto", "auto-copy", "vaapi", "nvdec",
     // "no", etc. The value is written to luma.conf and applied to mpv.
     QString hwdec() const;
@@ -159,6 +164,7 @@ signals:
     void subtitlesChanged();
     void showPanelsFullscreenChanged();
     void audioOutputChanged();
+    void musicCrossfadeChanged();
     void hwdecChanged();
     void ytdlpSettingsChanged();
     void loggingChanged();

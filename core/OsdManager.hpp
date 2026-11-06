@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QTimer>
+#include <QElapsedTimer>
 #include "mpvqt/MpvItem.hpp"
 
 class OsdManager : public QObject {
@@ -41,6 +42,7 @@ private:
     MpvItem *m_mpv;
     QTimer *m_hideTimer;
     QTimer *m_updateTimer;
+    QElapsedTimer m_seekOsdShown;
 
     QString m_message;
     bool m_visible = false;
