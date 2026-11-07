@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QStandardPaths>
+#include <QDirIterator>
 #include <QUuid>
 #include <QDebug>
 #include <QProcess>
@@ -30,6 +31,27 @@ static bool isPlaylistMode(const QString &mode)
 static QString normalizedPlaylistMode(const QString &mode)
 {
     return isPlaylistMode(mode) ? mode : QStringLiteral("sequential");
+}
+
+// Supported media files inside a folder, including its subfolders. Used when
+// a folder is dropped onto the playlist or added with "Add folder".
+static QStringList mediaFilesInFolder(const QString &folder)
+{
+    static const QStringList allowed = {
+        "mp4","mkv","avi","webm","mov","flv",
+        "mp3","flac","aac","wav","ogg","m4a","opus","wma"
+    };
+
+    QStringList files;
+    QDirIterator it(folder, QDir::Files | QDir::Readable,
+                    QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString path = it.next();
+        if (allowed.contains(QFileInfo(path).suffix().toLower()))
+            files << path;
+    }
+    files.sort(Qt::CaseInsensitive);
+    return files;
 }
 
 PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
@@ -450,8 +472,21 @@ void PlaylistManager::addFilesToPlaylist(const QString &id, const QStringList &p
     PlaylistModel *model = m_models.value(id, nullptr);
     if (!model || paths.isEmpty()) return;
 
+    QStringList files;
     for (const QString &path : paths) {
-        QFileInfo fi(path);
+        const QFileInfo fi(path);
+        if (!fi.exists()) continue;
+        if (fi.isDir()) {
+            // Drag & drop can hand us a folder: add its contents recursively
+            // instead of silently skipping it.
+            files << mediaFilesInFolder(fi.absoluteFilePath());
+            continue;
+        }
+        files << fi.absoluteFilePath();
+    }
+
+    for (const QString &path : files) {
+        const QFileInfo fi(path);
         if (!fi.exists() || fi.isDir()) continue;
         QVariantMap entry = buildEntry(fi.absoluteFilePath());
         model->appendEntry(entry);
@@ -625,21 +660,8 @@ void PlaylistManager::fetchUrlTitle(const QString &id, const QString &url) {
 }
 
 void PlaylistManager::addFolderToPlaylist(const QString &id, const QString &folder) {
-    QDir dir(folder);
-    if (!dir.exists()) return;
-
-    static const QStringList allowed = {
-        "mp4","mkv","avi","webm","mov","flv",
-        "mp3","flac","aac","wav","ogg","m4a","opus","wma"
-    };
-
-    QStringList files;
-    for (const QFileInfo &fi : dir.entryInfoList(QDir::Files, QDir::Name)) {
-        if (allowed.contains(fi.suffix().toLower()))
-            files << fi.absoluteFilePath();
-    }
-
-    addFilesToPlaylist(id, files);
+    if (!QFileInfo(folder).isDir()) return;
+    addFilesToPlaylist(id, {folder});
 }
 
 void PlaylistManager::openAddFilesDialog(const QString &id) {

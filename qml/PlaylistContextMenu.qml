@@ -6,7 +6,7 @@ import QtQuick.Controls
 // one page and the "add to playlist" list on the next one.
 LumaMenu {
     id: trackContextMenu
-    width: 220
+    width: Math.min(220, menuAvailableWidth)
 
     property int trackIndex: -1
     // The property must NOT be named panel: it shadows the id panel from
@@ -113,9 +113,27 @@ LumaMenu {
             width: parent.width
             spacing: 2
 
-            Repeater {
+            // Scrollable so a long playlist list cannot grow past the window.
+            // The height follows the window size while the menu is open.
+            ListView {
+                id: addToPlaylistList
+                width: parent.width
+                height: Math.min(contentHeight,
+                                 Math.max(40, trackContextMenu.menuMaxContentHeight - 40))
+                implicitHeight: height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                spacing: 2
                 model: Playlists.playlists
-                LumaMenuButton {
+
+                ScrollBar.vertical: ScrollBar {
+                    id: addToScroll
+                    policy: ScrollBar.AsNeeded
+                }
+
+                delegate: LumaMenuButton {
+                    width: addToPlaylistList.width
+                           - (addToScroll.visible ? addToScroll.width : 0)
                     text: modelData.name
                     isEnabled: modelData.id !== Playlists.activeId
                     onClicked: {

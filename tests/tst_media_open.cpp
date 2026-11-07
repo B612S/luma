@@ -37,6 +37,7 @@ private slots:
     void fileInfoBitrateEstimate();
     void liveBitrateSample();
     void thumbnailKeepsVideoAspect();
+    void aspectUpdatesAfterFileSwitch();
     void videoCropRectReflectsMpv();
     void realYouTubeLink();
 
@@ -594,6 +595,34 @@ void TestMediaOpen::thumbnailKeepsVideoAspect()
         QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"), 0.0);
     QVERIFY2(!square.isNull(), "square thumbnail decode failed");
     QCOMPARE(square.width(), square.height());
+}
+
+void TestMediaOpen::aspectUpdatesAfterFileSwitch()
+{
+    stopPlayback();
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->openFile(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"));
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
+    // The square fixture must have delivered its aspect before switching.
+    QTRY_VERIFY_WITH_TIMEOUT(
+        m_mpv->observedProperty(QStringLiteral("video-params/aspect")).toDouble() > 0.0,
+        5000);
+
+    QSignalSpy params(m_mpv, &MpvItem::videoParamsChanged);
+    loaded.clear();
+    m_media->openFile(QStringLiteral(LUMA_TEST_DATA_DIR "/4x3/test_video_4x3.mp4"));
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
+
+    // mpv reports video-params/aspect after file-loaded; the signal is what
+    // makes the seek-preview tooltip switch away from the previous file's
+    // aspect instead of keeping black bars.
+    QTRY_VERIFY_WITH_TIMEOUT(params.count() > 0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        qAbs(m_mpv->observedProperty(QStringLiteral("video-params/aspect")).toDouble()
+             - 4.0 / 3.0) < 0.02,
+        5000);
 }
 
 void TestMediaOpen::videoCropRectReflectsMpv()

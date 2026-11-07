@@ -6,7 +6,7 @@ import org.kde.kirigami as Kirigami
 // Main player menu. Styled by LumaMenu, like every other in-app context menu.
 LumaMenu {
     id: menu
-    width: 240
+    width: Math.min(240, menuAvailableWidth)
     parent: Overlay.overlay
 
     property var tracksList: []

@@ -172,6 +172,9 @@ Rectangle {
             if (mpv.duration <= 0) root.finishSeek();
             else root.updateVideoAspect();
         }
+        function onVideoParamsChanged() {
+            root.updateVideoAspect();
+        }
         function onVideoCropRectChanged() {
             root.updateVideoAspect();
         }

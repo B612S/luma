@@ -6,7 +6,7 @@ import QtQuick.Controls
 // second page.
 LumaMenu {
     id: tabContextMenu
-    width: 220
+    width: Math.min(220, menuAvailableWidth)
 
     property string targetId: ""
     property string targetName: ""

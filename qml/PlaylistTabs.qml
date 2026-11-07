@@ -175,12 +175,8 @@ Item {
                         tabListMenu.close();
                         return;
                     }
-                    // Cap the list height so a long playlist list scrolls
-                    // instead of growing past the window.
-                    const win = allTabsBtn.Window.window;
-                    tabListMenu.maxListHeight =
-                            Math.max(120, (win ? win.height : 600) - 20);
-                    // The menu follows the button when the window is resized.
+                    // The menu tracks the window size itself; it follows the
+                    // button when the window is resized.
                     tabListMenu.openAt(allTabsBtn, 0, allTabsBtn.height + 4);
                 }
             }
@@ -385,17 +381,14 @@ Item {
     // List of all playlists (the tab row can be scrolled away).
     LumaMenu {
         id: tabListMenu
-        width: 220
-        // Height cap set by the button before opening: with many playlists the
-        // list scrolls instead of running past the window.
-        property int maxListHeight: 360
-        // x/y are set in the button's handler in scene coordinates; the menu is
-        // parented to the window overlay and LumaMenu keeps it inside the window.
+        width: Math.min(220, menuAvailableWidth)
 
         ListView {
             id: playlistsList
             width: parent ? parent.width : 220
-            height: Math.min(contentHeight, tabListMenu.maxListHeight)
+            // Follow the window size while the menu is open: with many
+            // playlists the list scrolls instead of running past the window.
+            height: Math.min(contentHeight, tabListMenu.menuMaxContentHeight)
             implicitHeight: height
             clip: true
             boundsBehavior: Flickable.StopAtBounds

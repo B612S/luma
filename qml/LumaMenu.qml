@@ -36,6 +36,16 @@ Popup {
     property point anchorPoint: Qt.point(0, 0)
     property bool anchored: false
 
+    // Size available to the menu inside the window (10 px margins on every
+    // side). The menus bind their width and scrollable list heights to these,
+    // so they follow window resizes while open instead of keeping the size
+    // from the moment they were opened.
+    readonly property real menuAvailableWidth: menuHostWindow
+        ? Math.max(140, menuHostWindow.width - 20) : 240
+    readonly property real menuAvailableHeight: menuHostWindow
+        ? Math.max(120, menuHostWindow.height - 20) : 400
+    readonly property real menuMaxContentHeight: Math.max(80, menuAvailableHeight - topPadding - bottomPadding)
+
     function openAt(item, localX, localY) {
         anchorItem = item;
         anchorPoint = Qt.point(localX, localY);
@@ -76,10 +86,19 @@ Popup {
 
     // Follow window resizes, content size changes (pages) and the anchor moving
     // (scrolling a tab row or a playlist).
+    // Reposition after the popup's own size settles. The window resize
+    // notification can arrive before the width/height bindings have updated;
+    // without this second pass the menu can stay at coordinates computed for
+    // the previous size and "drift" away when the window is resized back.
+    onWidthChanged: positionAtAnchor()
+    onHeightChanged: positionAtAnchor()
+
     Connections {
         target: menu.menuHostWindow
-        function onWidthChanged() { menu.positionAtAnchor(); }
-        function onHeightChanged() { menu.positionAtAnchor(); }
+        function onWidthChanged() { Qt.callLater(menu.positionAtAnchor); }
+        function onHeightChanged() { Qt.callLater(menu.positionAtAnchor); }
+        // Restoring from minimized does not necessarily change the size.
+        function onVisibilityChanged() { Qt.callLater(menu.positionAtAnchor); }
     }
 
     Connections {
@@ -157,9 +176,11 @@ Popup {
     }
 
     background: Rectangle {
+        // Opaque: the playlist behind the menu must not show through the menu
+        // rows, which made the names look doubled/overlapping.
         color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                        Kirigami.Theme.backgroundColor.g,
-                       Kirigami.Theme.backgroundColor.b, 0.95)
+                       Kirigami.Theme.backgroundColor.b, 1.0)
         radius: 8
         border.color: "transparent"
     }

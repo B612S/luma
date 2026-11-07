@@ -122,6 +122,9 @@ signals:
     void deinterlaceChanged();
     void cropEnabledChanged();
     void videoCropRectChanged();
+    // The file's display aspect or source dimensions changed (also emitted for
+    // the new file after switching), so aspect-dependent previews can follow.
+    void videoParamsChanged();
     void chapterListChanged();
     void chapterChanged();
     void thumbnailReady(const QString &requestId);

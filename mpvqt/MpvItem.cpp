@@ -499,4 +499,9 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
     else if (property == QLatin1String("video-crop")) {
         emit videoCropRectChanged();
     }
+    else if (property == QLatin1String("video-params/aspect")
+             || property == QLatin1String("width")
+             || property == QLatin1String("height")) {
+        emit videoParamsChanged();
+    }
 }

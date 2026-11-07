@@ -244,6 +244,19 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Dropping a folder onto the playlist, or adding it with “Add folder”, now
+  adds the media files inside it recursively. Drag & drop used to ignore
+  folders completely, and “Add folder” only scanned the top level.
+- The all-playlists dropdown and the “Add to playlist” menu fit a small
+  window: their width and scrollable list height follow the window size while
+  they are open, long playlist lists scroll instead of running past the
+  window, and an opaque menu background stops the playlist names behind from
+  showing through the rows. An open menu is repositioned once the new window
+  size has settled, so resizing the window to its minimum and back no longer
+  leaves it away from its anchor.
+- The seek-preview tooltip keeps the new file's aspect ratio after switching
+  from a video with a different shape: it now follows mpv's video-parameter
+  updates instead of keeping the previous file's aspect and black bars.
 - The statistics panel no longer logs a QML warning that `Window.window` is
   only available on items: the window is now read from the panel itself.
 - Playlist drag & drop: the entry being moved is highlighted in place with

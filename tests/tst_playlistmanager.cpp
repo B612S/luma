@@ -27,6 +27,7 @@ private slots:
     void playlistModesPersist();
     void onlyPlayingPlaylistIsMarked();
     void addAudioAndVideoFiles();
+    void addFolderAddsContents();
     void unavailableMarkPersists();
     void unavailableMarkClearedAtRuntime();
     void staleUnavailableMarkRemovedOnLoad();
@@ -257,6 +258,41 @@ void TestPlaylistManager::addAudioAndVideoFiles()
     QCOMPARE(model->data(model->index(1), Qt::UserRole + 2).toString(), QStringLiteral("video"));
     QCOMPARE(model->data(model->index(0), Qt::UserRole + 6).toString(), QStringLiteral("Song"));
     QCOMPARE(model->data(model->index(1), Qt::UserRole + 6).toString(), QStringLiteral("Movie"));
+}
+
+void TestPlaylistManager::addFolderAddsContents()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QVERIFY(QDir(dir.path()).mkpath(QStringLiteral("Season 1")));
+    const QString top = dir.path() + "/OP.mp3";
+    const QString nested = dir.path() + "/Season 1/Episode.mkv";
+    for (const QString &path : {top, nested}) {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+
+    ConfigManager config;
+    PlaylistManager manager(&config);
+
+    // "Add folder" scans the folder and its subfolders.
+    const QString id = manager.createPlaylist("Folder");
+    manager.addFolderToPlaylist(id, dir.path());
+    PlaylistModel *model = manager.modelById(id);
+    QVERIFY(model != nullptr);
+    QCOMPARE(model->rowCount(), 2);
+    QVERIFY(model->contains(top));
+    QVERIFY(model->contains(nested));
+
+    // Drag & drop passes the folder to addFilesToPlaylist.
+    const QString droppedId = manager.createPlaylist("Dropped");
+    manager.addFilesToPlaylist(droppedId, {dir.path()});
+    PlaylistModel *dropped = manager.modelById(droppedId);
+    QVERIFY(dropped != nullptr);
+    QCOMPARE(dropped->rowCount(), 2);
+    QVERIFY(dropped->contains(top));
+    QVERIFY(dropped->contains(nested));
 }
 
 void TestPlaylistManager::urlTitleIsFetched()
