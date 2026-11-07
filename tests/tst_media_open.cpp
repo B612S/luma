@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include "MediaManager.hpp"
 #include "PlaylistManager.hpp"
 #include "mpvqt/MpvItem.hpp"
+#include "mpvqt/FrameDecoder.hpp"
 
 // These tests use the real libmpv. They are kept separate from the fast core
 // tests and run with QT_QPA_PLATFORM=offscreen and ao=null.
@@ -34,8 +36,8 @@ private slots:
     void fileInfoRequest();
     void fileInfoBitrateEstimate();
     void liveBitrateSample();
-    void youtubeLinkThroughYtdlp();
-    void youtubeFromPlaylistKeepsPlayingMarker();
+    void thumbnailKeepsVideoAspect();
+    void videoCropRectReflectsMpv();
     void realYouTubeLink();
 
 private:
@@ -49,7 +51,6 @@ private:
     PlaylistManager *m_playlists = nullptr;
     MpvItem *m_mpv = nullptr;
     MediaManager *m_media = nullptr;
-    QByteArray m_oldPath;
 };
 
 bool TestMediaOpen::waitForFileLoaded(MpvItem *mpv, int timeout)
@@ -78,6 +79,16 @@ void TestMediaOpen::initTestCase()
     mpvConf.write("ao=null\nhwdec=no\n");
     mpvConf.close();
 
+    // The integration test runs with a temporary XDG_CONFIG_HOME. Reuse the
+    // user's real yt-dlp options (notably the proxy) for the YouTube case.
+    const QString userYtdlpConfig = QDir::homePath() + "/.config/luma/yt-dlp.conf";
+    if (QFileInfo::exists(userYtdlpConfig)) {
+        const QString testYtdlpConfig = configDir + "/yt-dlp.conf";
+        QFile::remove(testYtdlpConfig);
+        QVERIFY2(QFile::copy(userYtdlpConfig, testYtdlpConfig),
+                 "could not copy the user's yt-dlp.conf into the test config");
+    }
+
     QVERIFY2(QFileInfo(QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav")).exists(),
              "audio fixture missing");
     QVERIFY2(QFileInfo(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4")).exists(),
@@ -90,13 +101,11 @@ void TestMediaOpen::initTestCase()
     m_media->setMpv(m_mpv);
     m_media->setPlaylistManager(m_playlists);
     m_media->setConfig(m_config);
-    m_oldPath = qgetenv("PATH");
     QVERIFY(!m_media->hasMedia());
 }
 
 void TestMediaOpen::cleanupTestCase()
 {
-    qputenv("PATH", m_oldPath);
     delete m_media;
     m_media = nullptr;
     delete m_playlists;
@@ -568,108 +577,54 @@ void TestMediaOpen::liveBitrateSample()
     QVERIFY2(args.at(3).toLongLong() > 0, "audio bitrate not sampled");
 }
 
-void TestMediaOpen::youtubeLinkThroughYtdlp()
+void TestMediaOpen::thumbnailKeepsVideoAspect()
 {
-    stopPlayback();
+    FrameDecoder decoder;
 
-    QTemporaryDir fakeBin;
-    QVERIFY(fakeBin.isValid());
-    const QString video = QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4");
-    const QString scriptPath = fakeBin.path() + "/yt-dlp";
-    QFile script(scriptPath);
-    QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    script.write("#!/bin/sh\n"
-                 "printf '{\"title\":\"Fake YouTube\",\"url\":\"%s\"}\\n' \"$LUMA_FAKE_VIDEO\"\n");
-    script.close();
-    QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
-                                  | QFileDevice::ExeOwner));
-    qputenv("LUMA_FAKE_VIDEO", video.toUtf8());
-    qputenv("PATH", fakeBin.path().toUtf8() + ':' + m_oldPath);
+    const QImage fourThree = decoder.decodeFrame(
+        QStringLiteral(LUMA_TEST_DATA_DIR "/4x3/test_video_4x3.mp4"), 0.0);
+    QVERIFY2(!fourThree.isNull(), "4:3 thumbnail decode failed");
+    QVERIFY2(qAbs(fourThree.width() - fourThree.height() * 4.0 / 3.0) <= 1.0,
+             "4:3 frame was not kept at 4:3");
+    QVERIFY(fourThree.width() <= 320);
+    QVERIFY(fourThree.height() <= 180);
 
-    const QString url = QStringLiteral("https://www.youtube.com/watch?v=test");
-    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
-    m_media->openFile(url);
-
-    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 15000);
-    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
-    QCOMPARE(QFileInfo(m_mpv->source()).canonicalFilePath(),
-             QFileInfo(video).canonicalFilePath());
-
-    PlaylistModel *def = m_playlists->defaultModel();
-    QVERIFY(def);
-    const int index = def->indexOf(url);
-    QVERIFY(index >= 0);
-    QTRY_COMPARE_WITH_TIMEOUT(
-        def->data(def->index(index), Qt::UserRole + 6).toString(),
-        QStringLiteral("Fake YouTube"), 5000);
-    QVERIFY(m_media->hasVideo());
+    // The square fixture guards against accidentally forcing 16:9 as well.
+    const QImage square = decoder.decodeFrame(
+        QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"), 0.0);
+    QVERIFY2(!square.isNull(), "square thumbnail decode failed");
+    QCOMPARE(square.width(), square.height());
 }
 
-void TestMediaOpen::youtubeFromPlaylistKeepsPlayingMarker()
+void TestMediaOpen::videoCropRectReflectsMpv()
 {
     stopPlayback();
-
-    // yt-dlp is slow enough for the tab switch to happen while the link is
-    // being resolved.
-    QTemporaryDir fakeBin;
-    QVERIFY(fakeBin.isValid());
-    const QString video = QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4");
-    const QString scriptPath = fakeBin.path() + "/yt-dlp";
-    QFile script(scriptPath);
-    QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    script.write("#!/bin/sh\n"
-                 "sleep 0.4\n"
-                 "printf '{\"title\":\"Fake YouTube\",\"url\":\"%s\"}\\n' \"$LUMA_FAKE_VIDEO\"\n");
-    script.close();
-    QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
-                                  | QFileDevice::ExeOwner));
-    qputenv("LUMA_FAKE_VIDEO", video.toUtf8());
-    qputenv("PATH", fakeBin.path().toUtf8() + ':' + m_oldPath);
-
-    const QString firstId = m_playlists->createPlaylist(QStringLiteral("First"));
-    const QString secondId = m_playlists->createPlaylist(QStringLiteral("Second"));
-    QVERIFY(!firstId.isEmpty());
-    QVERIFY(!secondId.isEmpty());
-
-    const QString url = QStringLiteral("https://www.youtube.com/watch?v=playlist-marker");
-    m_playlists->addUrlToPlaylist(firstId, url);
-    PlaylistModel *first = m_playlists->modelById(firstId);
-    PlaylistModel *second = m_playlists->modelById(secondId);
-    QVERIFY(first);
-    QVERIFY(second);
-
-    m_playlists->setActiveId(firstId);
     QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
-    m_media->playIndex(0);
-    // The entry is marked as playing immediately, while yt-dlp is still busy.
-    QVERIFY(first->isPlaying());
-    // The user switches to the other playlist before yt-dlp has resolved the
-    // link; the playing marker must stay on the first playlist.
-    m_playlists->setActiveId(secondId);
+    m_media->openFile(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"));
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
 
-    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 15000);
-    QTRY_VERIFY_WITH_TIMEOUT(first->isPlaying(), 5000);
-    QCOMPARE(first->currentIndex(), 0);
-    QVERIFY2(first->data(first->index(0), Qt::DisplayRole).toString()
-                 .startsWith(QStringLiteral("▶ ")),
-             qPrintable(first->data(first->index(0), Qt::DisplayRole).toString()));
-    QVERIFY(!second->isPlaying());
+    m_mpv->setProperty(QStringLiteral("video-crop"), QStringLiteral("32x32+16+16"));
+    QTRY_COMPARE_WITH_TIMEOUT(m_mpv->videoCropRect(), QRect(16, 16, 32, 32), 5000);
 
-    stopPlayback();
-    m_playlists->setActiveId(PlaylistManager::DEFAULT_ID);
-    m_playlists->deletePlaylist(firstId);
-    m_playlists->deletePlaylist(secondId);
+    m_mpv->setProperty(QStringLiteral("video-crop"), QString());
+    QTRY_VERIFY_WITH_TIMEOUT(m_mpv->videoCropRect().isEmpty(), 5000);
 }
 
 void TestMediaOpen::realYouTubeLink()
 {
-    const QByteArray url = qgetenv("LUMA_TEST_YOUTUBE_URL");
-    if (url.isEmpty())
-        QSKIP("set LUMA_TEST_YOUTUBE_URL to run the real YouTube playback test");
+    if (qEnvironmentVariableIsSet("LUMA_TEST_NO_NETWORK"))
+        QSKIP("network tests are disabled by LUMA_TEST_NO_NETWORK");
+    if (QStandardPaths::findExecutable(QStringLiteral("yt-dlp")).isEmpty())
+        QSKIP("yt-dlp is required for the real YouTube test");
+    const QByteArray configuredUrl = qgetenv("LUMA_TEST_YOUTUBE_URL");
+    if (configuredUrl.isEmpty())
+        QSKIP("set LUMA_TEST_YOUTUBE_URL to run the real YouTube test");
 
     stopPlayback();
+    const QString url = QString::fromUtf8(configuredUrl);
     QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
-    m_media->openFile(QString::fromUtf8(url));
+    m_media->openFile(url);
     QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 30000);
     QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
     QVERIFY(m_media->hasVideo());

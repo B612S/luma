@@ -8,6 +8,7 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Add `G` as the default shortcut for toggling the equalizer.
 - Prefer system `yt-dlp`/`yt-dlp-ejs`, fall back to private copies in
   `~/.local/share/luma`, show their versions and asynchronously check the private
   copies for updates.
@@ -243,6 +244,21 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- The statistics panel no longer logs a QML warning that `Window.window` is
+  only available on items: the window is now read from the panel itself.
+- Playlist drag & drop: the entry being moved is highlighted in place with
+  the theme's highlight colour and reordered live, so it always sits in the row
+  under the pointer instead of in a separate floating copy that could lag
+  behind, be drawn twice or leave a gap. When the pointer leaves the list the
+  entry stays on the first or last visible row instead of being moved out of
+  view, so auto-scrolling up and down is not cancelled. The scroll direction is
+  remembered once the pointer reaches an edge, so the list keeps scrolling even
+  when the pointer leaves the playlist or the window and no further move events
+  arrive; the target also follows manual scrolling, and the list no longer
+  scrolls to the playing row on its own, so reordering an entry in a long
+  playlist keeps it under the pointer instead of losing it.
+- Let the floating control bar auto-hide while a dialog is open, without
+  hiding the cursor over that dialog.
 - Keep the seek preview in the video's aspect ratio and size its tooltip to
   that ratio. The aspect is taken from mpv as soon as the video is known, and
   a current-position thumbnail is precached so the first seek shows a frame

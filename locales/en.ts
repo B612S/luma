@@ -341,6 +341,8 @@
 <name>ShortcutHandler</name>
 <message><source>osd_crop_detecting</source><translation>Detecting black bars…</translation></message>
 <message><source>osd_crop_off</source><translation>Black bars: shown</translation></message>
+<message><source>osd_equalizer_on</source><translation>Equalizer on</translation></message>
+<message><source>osd_equalizer_off</source><translation>Equalizer off</translation></message>
 <message><source>osd_crop_on</source><translation>Black bars: cropped</translation></message>
 <message><source>osd_crop_failed</source><translation>Could not detect black bars</translation></message>
 <message><source>osd_no_subtitles</source><translation>This file has no subtitles</translation></message>
@@ -441,6 +443,7 @@
 <message><source>shortcut_cycle_deinterlace</source><translation>Switch deinterlacing</translation></message>
 <message><source>shortcut_cycle_aspect</source><translation>Switch aspect ratio</translation></message>
 <message><source>shortcut_toggle_crop</source><translation>Detect and crop black bars</translation></message>
+<message><source>shortcut_toggle_equalizer</source><translation>Toggle equalizer</translation></message>
 </context>
 
 <context>

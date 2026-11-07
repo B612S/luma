@@ -355,6 +355,14 @@ int main(int argc, char *argv[]) {
                                           config.singleInstance());
     engine.rootContext()->setContextProperty("shortcuts", shortcuts);
 
+    QObject::connect(shortcuts, &ShortcutHandler::toggleEqualizerRequested, &equalizer,
+                     [&equalizer, &osd]() {
+        equalizer.setEnabled(!equalizer.enabled());
+        osd.showInfo(equalizer.enabled()
+            ? QCoreApplication::translate("ShortcutHandler", "osd_equalizer_on")
+            : QCoreApplication::translate("ShortcutHandler", "osd_equalizer_off"));
+    });
+
     QObject::connect(&config, &ConfigManager::singleInstanceChanged, shortcuts,
                      [shortcuts, &config]() {
         shortcuts->setGlobalShortcutsAllowed(config.singleInstance());

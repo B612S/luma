@@ -776,6 +776,9 @@ void ShortcutHandler::executeAction(ShortcutAction action, bool autoRepeat) {
         case ShortcutAction::ToggleCrop:
             if (!autoRepeat) toggleCrop();
             break;
+        case ShortcutAction::ToggleEqualizer:
+            if (!autoRepeat) emit toggleEqualizerRequested();
+            break;
         case ShortcutAction::None:
         default:
             break;

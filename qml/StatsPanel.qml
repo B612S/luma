@@ -127,7 +127,9 @@ Rectangle {
     }
 
     Connections {
-        target: Window.window
+        // Connections is not an Item, so the Window attached property must be
+        // read from the panel itself.
+        target: statsPanel.Window.window
         function onWidthChanged() { statsPanel.cancelHeightAnimation() }
         function onHeightChanged() { statsPanel.cancelHeightAnimation() }
     }

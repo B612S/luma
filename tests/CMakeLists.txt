@@ -86,8 +86,8 @@ if(TARGET luma)
     )
 endif()
 
-# Integration tests with the real libmpv: headless, no display, no network by
-# default. The optional real YouTube test runs only with LUMA_TEST_YOUTUBE_URL.
+# Integration tests with the real libmpv: headless, no display. One case uses
+# the real YouTube URL; disable it with LUMA_TEST_NO_NETWORK for offline runs.
 add_executable(tst_media_open
     tst_media_open.cpp
     ${CMAKE_SOURCE_DIR}/core/MediaManager.cpp
@@ -128,7 +128,7 @@ target_compile_definitions(tst_media_open PRIVATE
 )
 add_test(NAME tst_media_open COMMAND tst_media_open)
 set_tests_properties(tst_media_open PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;LUMA_TEST_NO_NETWORK=1;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-config;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-cache"
-    TIMEOUT 60
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-config;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/media-test-cache"
+    TIMEOUT 180
     LABELS "integration;libmpv"
 )

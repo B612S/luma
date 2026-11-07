@@ -35,6 +35,7 @@ enum class ShortcutAction {
     CycleDeinterlace,
     CycleAspectRatio,
     ToggleCrop,
+    ToggleEqualizer,
     // Unknown
     None
 };
@@ -81,6 +82,7 @@ inline const QList<ShortcutActionInfo>& shortcutActions() {
         { ShortcutAction::CycleDeinterlace,  "cycle_deinterlace",  "tracks",    "Switch deinterlacing" },
         { ShortcutAction::CycleAspectRatio,  "cycle_aspect",       "tracks",    "Switch aspect ratio" },
         { ShortcutAction::ToggleCrop,        "toggle_crop",        "tracks",    "Detect and crop black bars" },
+        { ShortcutAction::ToggleEqualizer,   "toggle_equalizer",   "tracks",    "Equalizer on / off" },
     };
     return list;
 }
@@ -165,6 +167,7 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::CycleDeinterlace,  "D",      40,  Qt::NoModifier },
         { ShortcutAction::CycleAspectRatio,  "R",      27,  Qt::NoModifier },
         { ShortcutAction::ToggleCrop,        "J",      44,  Qt::NoModifier },
+        { ShortcutAction::ToggleEqualizer,   "G",      42,  Qt::NoModifier },
     };
     return list;
 }

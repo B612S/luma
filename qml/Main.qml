@@ -270,15 +270,17 @@ ApplicationWindow {
         interval: 2000
         repeat: false
         onTriggered: {
-            if (root.isInteracting() || root.isDialogOpen) { idleTimer.restart(); return; }
+            if (root.isInteracting()) { idleTimer.restart(); return; }
             const noVideo = (mpv.duration <= 0) && !CastManager.casting;
             const isPaused = CastManager.casting ? !CastManager.isRemotePlaying : mpv.paused;
             if (noVideo || isPaused) { idleTimer.restart(); return; }
             const inBottomZone = root.cursorY > root.height - root.bottomZoneHeight;
             if (inBottomZone) { idleTimer.restart(); return; }
             // An open menu doesn't prevent hiding the bar: it is drawn on top
-            // and doesn't depend on the bottom bar.
-            if (!root.currentOpenMenu) root.cursorVisible = false;
+            // and doesn't depend on the bottom bar. A dialog is different for
+            // the cursor: hiding it over a dialog would leave the user without
+            // a pointer, but the bar itself may still auto-hide.
+            if (!root.currentOpenMenu && !root.isDialogOpen) root.cursorVisible = false;
             if (!Config.pinControls) root.controlsVisible = false;
         }
     }

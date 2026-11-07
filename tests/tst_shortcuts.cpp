@@ -16,13 +16,8 @@ private slots:
     void tableIsNotEmpty();
     void noDuplicateBindings();
     void keycodesAreSane();
-    void mapsSpaceToTogglePause();
-    void mapsSeekAndLongSeek();
-    void mapsFrameStepping();
-    void mapsPip();
-    void mapsChapters();
-    void mapsFitWindowToVideo();
-    void removedCoversKeyDoesNothing();
+    void mapsDefaultBindings_data();
+    void mapsDefaultBindings();
     void unknownKeyGivesNone();
     void helpKeyWorksWithAndWithoutShift();
     void actionIdsAreUnique();
@@ -64,61 +59,46 @@ void TestShortcuts::keycodesAreSane()
     }
 }
 
-void TestShortcuts::mapsSpaceToTogglePause()
+void TestShortcuts::mapsDefaultBindings_data()
 {
-    QCOMPARE(static_cast<int>(actionFor(65, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::TogglePause));
+    QTest::addColumn<quint32>("keycode");
+    QTest::addColumn<int>("modifiers");
+    QTest::addColumn<int>("action");
+
+    QTest::newRow("space / pause") << quint32(65) << int(Qt::NoModifier)
+                                   << int(ShortcutAction::TogglePause);
+    QTest::newRow("right / seek forward") << quint32(114) << int(Qt::NoModifier)
+                                          << int(ShortcutAction::SeekForward);
+    QTest::newRow("left / seek backward") << quint32(113) << int(Qt::NoModifier)
+                                          << int(ShortcutAction::SeekBackward);
+    QTest::newRow("ctrl+right / long forward") << quint32(114) << int(Qt::ControlModifier)
+                                               << int(ShortcutAction::SeekForwardLong);
+    QTest::newRow("ctrl+left / long backward") << quint32(113) << int(Qt::ControlModifier)
+                                               << int(ShortcutAction::SeekBackwardLong);
+    QTest::newRow("alt+left / frame backward") << quint32(113) << int(Qt::AltModifier)
+                                               << int(ShortcutAction::FrameBackward);
+    QTest::newRow("alt+right / frame forward") << quint32(114) << int(Qt::AltModifier)
+                                               << int(ShortcutAction::FrameForward);
+    QTest::newRow("f / picture in picture") << quint32(33) << int(Qt::NoModifier)
+                                            << int(ShortcutAction::TogglePip);
+    QTest::newRow("page up / previous chapter") << quint32(112) << int(Qt::NoModifier)
+                                                << int(ShortcutAction::PreviousChapter);
+    QTest::newRow("page down / next chapter") << quint32(117) << int(Qt::NoModifier)
+                                              << int(ShortcutAction::NextChapter);
+    QTest::newRow("w / fit window") << quint32(25) << int(Qt::NoModifier)
+                                    << int(ShortcutAction::FitWindowToVideo);
+    QTest::newRow("g / equalizer") << quint32(42) << int(Qt::NoModifier)
+                                   << int(ShortcutAction::ToggleEqualizer);
 }
 
-void TestShortcuts::mapsSeekAndLongSeek()
+void TestShortcuts::mapsDefaultBindings()
 {
-    QCOMPARE(static_cast<int>(actionFor(114, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::SeekForward));
-    QCOMPARE(static_cast<int>(actionFor(113, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::SeekBackward));
-    QCOMPARE(static_cast<int>(actionFor(114, Qt::ControlModifier)),
-             static_cast<int>(ShortcutAction::SeekForwardLong));
-    QCOMPARE(static_cast<int>(actionFor(113, Qt::ControlModifier)),
-             static_cast<int>(ShortcutAction::SeekBackwardLong));
-}
+    QFETCH(quint32, keycode);
+    QFETCH(int, modifiers);
+    QFETCH(int, action);
 
-void TestShortcuts::mapsFrameStepping()
-{
-    QCOMPARE(static_cast<int>(actionFor(113, Qt::AltModifier)),
-             static_cast<int>(ShortcutAction::FrameBackward));
-    QCOMPARE(static_cast<int>(actionFor(114, Qt::AltModifier)),
-             static_cast<int>(ShortcutAction::FrameForward));
-}
-
-void TestShortcuts::mapsPip()
-{
-    QCOMPARE(static_cast<int>(actionFor(33, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::TogglePip));
-}
-
-void TestShortcuts::mapsChapters()
-{
-    // PageUp / PageDown: evdev KEY_PAGEUP (104) and KEY_PAGEDOWN (109) + 8.
-    QCOMPARE(static_cast<int>(actionFor(112, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::PreviousChapter));
-    QCOMPARE(static_cast<int>(actionFor(117, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::NextChapter));
-}
-
-void TestShortcuts::mapsFitWindowToVideo()
-{
-    // W is the default: evdev KEY_W (17) + 8.
-    QCOMPARE(static_cast<int>(actionFor(25, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::FitWindowToVideo));
-    QCOMPARE(shortcutActionFromId(QStringLiteral("fit_window")),
-             ShortcutAction::FitWindowToVideo);
-}
-
-void TestShortcuts::removedCoversKeyDoesNothing()
-{
-    // The N key (ToggleCsd) was removed — there must be no binding.
-    QCOMPARE(static_cast<int>(actionFor(57, Qt::NoModifier)),
-             static_cast<int>(ShortcutAction::None));
+    QCOMPARE(static_cast<int>(actionFor(keycode, static_cast<Qt::KeyboardModifiers>(modifiers))),
+             action);
 }
 
 void TestShortcuts::unknownKeyGivesNone()

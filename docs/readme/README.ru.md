@@ -186,10 +186,13 @@ ctest --test-dir build --output-on-failure
 необязателен: если модуля нет, тесты просто не собираются.
 
 `tst_media_open` — интеграционный тест с настоящим libmpv в headless-режиме
-(`vo=null`, `ao=null`): открывает аудио/видео из `tests/data/` и YouTube-ссылку через
-поддельный `yt-dlp`. Запуск только его:
-`ctest --test-dir build -R tst_media_open --output-on-failure`. Настоящая сетевая
-проверка YouTube пропускается, пока не задана переменная `LUMA_TEST_YOUTUBE_URL`.
+(`vo=null`, `ao=null`): открывает аудио/видео из `tests/data/` и реальное видео
+YouTube. Запуск только его:
+`ctest --test-dir build -R tst_media_open --output-on-failure`. Проверка YouTube
+использует настоящий `yt-dlp` и сеть, берёт параметры из `~/.config/luma/yt-dlp.conf`
+(включая прокси) и запускается только при заданной `LUMA_TEST_YOUTUBE_URL`, например
+`LUMA_TEST_YOUTUBE_URL=https://www.youtube.com/watch?v=jNQXAC9IVRw`. Для офлайн-запуска
+задайте `LUMA_TEST_NO_NETWORK=1`.
 
 ## Использование
 
@@ -243,6 +246,7 @@ ctest --test-dir build --output-on-failure
 | `D` | Чересстрочность (`auto` / `yes` / `no`) |
 | `R` | Соотношение сторон |
 | `J` | Определить и обрезать чёрные поля |
+| `G` | Включить / выключить эквалайзер |
 | Правый клик | Контекстное меню |
 | Двойной клик | Полноэкранный режим |
 | `Esc` | Выйти из полноэкранного режима / закрыть меню |

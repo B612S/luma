@@ -28,8 +28,9 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   expected message). There is no lint/format config at the repo root.
   `tst_media_open` is a separate libmpv integration test: it runs
   headless with `vo=null`/`ao=null`, uses the fixtures in `tests/data/`, and is labelled
-  `integration;libmpv`. Its real network YouTube case is skipped unless
-  `LUMA_TEST_YOUTUBE_URL` is set; the default YouTube path uses a fake `yt-dlp`.
+  `integration;libmpv`. Its YouTube case uses the real `yt-dlp`, network and
+  `~/.config/luma/yt-dlp.conf` (including the proxy); it runs only when
+  `LUMA_TEST_YOUTUBE_URL` is set, and can be disabled with `LUMA_TEST_NO_NETWORK=1`.
 - The binary is `build/bin/luma` (`CMAKE_RUNTIME_OUTPUT_DIRECTORY`), not `build/luma`.
   `README.md` is the English user documentation; other languages live in `docs/readme/`.
 - **Rebuild the AppImage only when it is genuinely required** — for example after a

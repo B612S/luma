@@ -4,6 +4,7 @@
 #include <QVariantMap>
 #include <QRectF>
 #include <QQuickWindow>
+#include <QRegularExpression>
 #include <QQuickItem>
 #include <QQuickImageProvider>
 #include <QQmlEngine>
@@ -107,10 +108,9 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     // Display aspect ratio of the video: includes the pixel aspect ratio and the
     // Playback → Aspect ratio override. Used to fit the window to the picture.
     observeProperty("video-params/aspect", MPV_FORMAT_DOUBLE);
-    observeProperty("video-params/crop-x", MPV_FORMAT_INT64);
-    observeProperty("video-params/crop-y", MPV_FORMAT_INT64);
-    observeProperty("video-params/crop-w", MPV_FORMAT_INT64);
-    observeProperty("video-params/crop-h", MPV_FORMAT_INT64);
+    // Manual black-bar crop from ShortcutHandler. video-params/crop-* is the
+    // decoder's own crop rectangle, not the --video-crop option.
+    observeProperty("video-crop", MPV_FORMAT_STRING);
 
     // Used by the statistics panel. Reading these through getProperty() from
     // QML would block the GUI thread while mpv is opening or buffering a file.
@@ -313,10 +313,17 @@ void MpvItem::setChaptersFile(const QString &path) {
 
 QRect MpvItem::videoCropRect() const
 {
-    const int x = m_observedValues.value(QStringLiteral("video-params/crop-x")).toInt();
-    const int y = m_observedValues.value(QStringLiteral("video-params/crop-y")).toInt();
-    const int w = m_observedValues.value(QStringLiteral("video-params/crop-w")).toInt();
-    const int h = m_observedValues.value(QStringLiteral("video-params/crop-h")).toInt();
+    const QString crop = m_observedValues.value(QStringLiteral("video-crop"))
+                             .toString().trimmed();
+    static const QRegularExpression pattern(
+        QStringLiteral("^(\\d+)x(\\d+)\\+(\\d+)\\+(\\d+)$"));
+    const QRegularExpressionMatch match = pattern.match(crop);
+    if (!match.hasMatch())
+        return {};
+    const int w = match.captured(1).toInt();
+    const int h = match.captured(2).toInt();
+    const int x = match.captured(3).toInt();
+    const int y = match.captured(4).toInt();
     if (w <= 0 || h <= 0)
         return {};
     return QRect(x, y, w, h);
@@ -489,7 +496,7 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
             emit deinterlaceChanged();
         }
     }
-    else if (property.startsWith(QLatin1String("video-params/crop-"))) {
+    else if (property == QLatin1String("video-crop")) {
         emit videoCropRectChanged();
     }
 }

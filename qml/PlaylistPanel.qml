@@ -20,9 +20,13 @@ Rectangle {
 
     property bool isDragging: false
     property int draggedIndex: -1
-    property int readyIndex: -1
     property real dragGlobalY: -1
     property real dragZoneHeight: 40
+    // -1 = scrolling up, 1 = scrolling down, 0 = not at an edge. The direction
+    // is latched so auto-scroll keeps running even when the pointer leaves the
+    // panel/window and no more move events arrive (or they stop at the border).
+    property int dragScrollDirection: 0
+    readonly property int rowHeight: 38
 
     property int contextMenuIndex: -1
     property real swipeAccumX: 0
@@ -40,6 +44,8 @@ Rectangle {
     onOpacityChanged: { if (opacity > 0.0 && isOpen) scrollToCurrent(); }
     onIsOpenChanged: {
         if (!isOpen) {
+            // A drag must not survive the panel: its release may never arrive.
+            panel.endDrag();
             contextMenu.close(); tabs.closeMenus(); infoDialog.close();
             // Never keep keyboard focus inside the closed search field.
             searchField.focus = false;
@@ -49,6 +55,8 @@ Rectangle {
 
     onIsFilteringChanged: {
         if (isFiltering) {
+            // The rows are proxy rows now, so a reorder cannot continue.
+            panel.endDrag();
             listView.currentIndex = -1;
             listView.positionViewAtBeginning();
         } else {
@@ -69,7 +77,10 @@ Rectangle {
         target: model
         function onCurrentIndexChanged() {
             // While filtering the list rows are proxy rows, not model rows.
-            if (model && !panel.isFiltering) listView.currentIndex = model.currentIndex;
+            // During a drag the current item is irrelevant, and changing it can
+            // make the view scroll away from the dragged row.
+            if (model && !panel.isFiltering && !panel.isDragging)
+                listView.currentIndex = model.currentIndex;
         }
     }
 
@@ -174,20 +185,79 @@ Rectangle {
 
     // The timers are ids inside this file, not properties of the panel object,
     // so the delegate cannot access them directly.
-    function startAutoScroll() { autoScrollTimer.start(); }
     function startClickResetTimer() { clickResetTimer.start(); }
-    function endDrag() {
-        panel.isDragging = false; panel.readyIndex = -1; panel.draggedIndex = -1;
-        panel.dragGlobalY = -1; autoScrollTimer.stop();
-        // Qt.binding must capture its own copy of the delegate:
-        // with a shared var item, the closure ends up with null after the loop.
-        for (var i = 0; i < listView.count; i++) {
-            const delegate = listView.itemAtIndex(i);
-            if (!delegate || delegate.itemIndex === undefined) continue;
-            delegate.y = Qt.binding(() => delegate.itemIndex * 38);
+
+    function beginDrag(index, sceneY) {
+        if (!model || isFiltering || index < 0) return;
+        draggedIndex = index;
+        dragGlobalY = sceneY;
+        isDragging = true;
+        updateDragScrollDirection(sceneY);
+        autoScrollTimer.start();
+    }
+
+    // The pointer may leave the list, the panel or the whole window while the
+    // button is held. Remember which edge it was on so the auto-scroll timer
+    // can keep going without new move events.
+    function updateDragScrollDirection(sceneY) {
+        if (!listView || !isDragging || sceneY < 0) {
+            dragScrollDirection = 0;
+            return;
         }
-        // Rebuild the layout, otherwise "holes" remain after moving an item up.
+        const localY = listView.mapFromItem(null, 0, sceneY).y;
+        if (localY < dragZoneHeight)
+            dragScrollDirection = -1;
+        else if (localY > listView.height - dragZoneHeight)
+            dragScrollDirection = 1;
+        else
+            dragScrollDirection = 0;
+    }
+
+    // Model row under the pointer. Everything is computed from the pointer,
+    // never from the moved delegate's position. The result is clamped to the
+    // rows that are actually visible: when the pointer leaves the list, the
+    // dragged row must stay on the first/last visible row. Moving it outside
+    // the viewport makes the view drop the grabbed delegate (the drag is then
+    // cancelled) and the auto-scroll never starts, which looked like the entry
+    // vanishing at the top or bottom.
+    function viewIndexAtSceneY(sceneY) {
+        if (!listView || listView.count === 0) return -1;
+        const pointer = listView.mapFromItem(null, 0, sceneY).y + listView.contentY;
+        const index = Math.floor(pointer / rowHeight);
+        const firstVisible = Math.floor(listView.contentY / rowHeight);
+        const lastVisible = Math.floor((listView.contentY + listView.height - 1) / rowHeight);
+        const visibleIndex = Math.max(firstVisible, Math.min(lastVisible, index));
+        return Math.max(0, Math.min(listView.count - 1, visibleIndex));
+    }
+
+    function updateDrag(sceneY) {
+        if (!isDragging || sceneY < 0) return;
+        dragGlobalY = sceneY;
+        updateDragScrollDirection(sceneY);
+        const target = viewIndexAtSceneY(sceneY);
+        if (target < 0 || target === draggedIndex) return;
+        model.moveItem(draggedIndex, target);
+        // The move may end the drag synchronously (the grab can be dropped).
+        if (!isDragging) return;
+        // Keep the highlight in sync before any relayout.
+        draggedIndex = target;
+        // ListView can defer the relayout of moved rows while the pointer keeps
+        // moving. The delegates then stay in their previous slots, the row
+        // under the pointer is not the highlighted one any more, and repeated
+        // drags start from a broken layout. Re-layout after every move.
         listView.forceLayout();
+        // forceLayout() can also cancel the drag; never leave a stale index.
+        if (!isDragging) draggedIndex = -1;
+    }
+
+    // The model was reordered live, so there is nothing to commit here;
+    // updateDrag() has already kept the list layout in sync after every move.
+    function endDrag() {
+        isDragging = false;
+        draggedIndex = -1;
+        dragGlobalY = -1;
+        dragScrollDirection = 0;
+        autoScrollTimer.stop();
     }
 
     Timer {
@@ -206,14 +276,16 @@ Rectangle {
     Timer {
         id: autoScrollTimer; interval: 16; repeat: true; running: false
         onTriggered: {
-            if (!panel.isDragging || panel.dragGlobalY < 0) return;
-            var localY = listView.mapFromItem(null, 0, panel.dragGlobalY).y;
-            if (localY < panel.dragZoneHeight) {
-                listView.contentY = Math.max(0, listView.contentY - Math.min(25, (panel.dragZoneHeight - localY) * 0.8 + 5));
-            } else if (localY > listView.height - panel.dragZoneHeight) {
-                var maxY = Math.max(0, listView.contentHeight - listView.height);
-                listView.contentY = Math.min(maxY, listView.contentY + Math.min(25, (localY - (listView.height - panel.dragZoneHeight)) * 0.8 + 5));
-            }
+            if (!panel.isDragging) return;
+            if (panel.dragScrollDirection === 0) return;
+            var maxY = Math.max(0, listView.contentHeight - listView.height);
+            if (panel.dragScrollDirection < 0)
+                listView.contentY = Math.max(0, listView.contentY - 18);
+            else
+                listView.contentY = Math.min(maxY, listView.contentY + 18);
+            // The view scrolled under a stationary pointer, so the row under it
+            // changed: move the dragged entry to the visible edge row.
+            panel.updateDrag(panel.dragGlobalY);
         }
     }
 
@@ -265,8 +337,20 @@ Rectangle {
                 clip: true; model: panel.viewModel
                 boundsBehavior: Flickable.StopAtBounds
                 focus: true; interactive: !panel.isDragging; cacheBuffer: 400
+                // The panel scrolls to the current item explicitly (see
+                // scrollToCurrent). Letting the view follow currentIndex makes
+                // it jump to the playing row while a drag reorders the list.
+                highlightFollowsCurrentItem: false
                 currentIndex: panel.isFiltering ? -1
                                                 : (panel.model ? panel.model.currentIndex : -1)
+
+                // Scrolling while a drag is active (wheel, trackpad, or any
+                // programmatic scroll) changes the row under the pointer
+                // without a mouse move, so the dragged entry is re-targeted.
+                onContentYChanged: {
+                    if (panel.isDragging && panel.dragGlobalY >= 0)
+                        panel.updateDrag(panel.dragGlobalY);
+                }
 
                 ScrollBar.vertical: ScrollBar { id: vbar; policy: ScrollBar.AsNeeded }
 
@@ -295,7 +379,6 @@ Rectangle {
                     playlistView: listView
                     playlistPanel: panel
                     scrollBar: vbar
-                    isReady: panel.readyIndex === index
                     isBeingDragged: panel.draggedIndex === index
                     isCurrent: model.isCurrent
                 }

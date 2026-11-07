@@ -65,6 +65,7 @@ signals:
     void toggleStats();
     void togglePip();
     void fitWindowToVideo();
+    void toggleEqualizerRequested();
     void shortcutsHelpVisibleChanged(bool visible);
     void bindingsChanged();
 

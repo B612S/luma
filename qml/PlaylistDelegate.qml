@@ -9,11 +9,10 @@ Rectangle {
         if (!playlistView) return parent ? parent.width : 200;
         return scrollBar && scrollBar.visible ? playlistView.width - scrollBar.width - 8 : playlistView.width;
     }
-    height: 38
+    height: playlistPanel ? playlistPanel.rowHeight : 38
     radius: 4
 
     property int itemIndex: index
-    property bool isReady: false
     property bool isBeingDragged: false
     property bool isCurrent: false
     // IMPORTANT: don't name the properties panel/listView — they would shadow
@@ -23,13 +22,14 @@ Rectangle {
     property var playlistPanel: null
     property var scrollBar: null
 
-    z: isBeingDragged ? 2 : 0
-    color: {
-        if (isBeingDragged) return Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.4);
-        if (isReady) return Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25);
-        if (dragArea.containsMouse) return Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1);
-        return "transparent";
-    }
+    // The row being dragged is highlighted in place: it is moved through the
+    // model as the pointer crosses rows, so it always occupies the slot that
+    // will be dropped. No separate floating copy is drawn.
+    color: isBeingDragged
+           ? Kirigami.Theme.highlightColor
+           : (dragArea.containsMouse && !(playlistPanel && playlistPanel.isDragging)
+              ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1)
+              : "transparent")
 
     RowLayout {
         anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 8
@@ -37,8 +37,9 @@ Rectangle {
             Layout.fillWidth: true; text: model.display
             // A file that failed to open (deleted or moved) stays red until it
             // is available again.
-            color: model.unavailable ? Kirigami.Theme.negativeTextColor
-                                     : Kirigami.Theme.textColor
+            color: isBeingDragged ? Kirigami.Theme.highlightedTextColor
+                                  : (model.unavailable ? Kirigami.Theme.negativeTextColor
+                                                       : Kirigami.Theme.textColor)
             font.pixelSize: 14
             font.weight: isCurrent ? Font.Bold : Font.Medium
             elide: Text.ElideRight; wrapMode: Text.NoWrap
@@ -47,28 +48,35 @@ Rectangle {
         Text {
             visible: (model.artist || "").length > 0
             text: model.artist || ""
-            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.6)
+            color: isBeingDragged
+                   ? Qt.rgba(Kirigami.Theme.highlightedTextColor.r,
+                             Kirigami.Theme.highlightedTextColor.g,
+                             Kirigami.Theme.highlightedTextColor.b, 0.75)
+                   : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.6)
             font.pixelSize: 12; elide: Text.ElideRight
             Layout.maximumWidth: 100
             verticalAlignment: Text.AlignVCenter; Layout.alignment: Qt.AlignVCenter
         }
     }
 
-    Drag.active: dragArea.drag.active
-    Drag.hotSpot.x: width / 2
-    Drag.hotSpot.y: height / 2
-
+    // The row itself is never handed to the Drag attached property: while the
+    // delegate is reordered through the model the view keeps owning its
+    // position. This MouseArea only reports the pointer; PlaylistPanel moves
+    // the row to the row under it. Coupling the drag to the delegate used to
+    // detach it from the pointer after a few moves towards the top of the list.
     MouseArea {
         id: dragArea
         anchors.fill: parent
         hoverEnabled: true; propagateComposedEvents: false
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-        drag.target: (playlistPanel && playlistPanel.readyIndex === itemIndex) ? itemRect : null
-        drag.axis: Drag.YAxis
+        // Once reordering starts, no other item (tabs, flickables, the search
+        // field) may take the grab away: the drag must survive the pointer
+        // leaving the row/list/panel.
+        preventStealing: playlistPanel ? playlistPanel.isDragging : false
 
         property real pressX: 0
         property real pressY: 0
+        property real lastSceneY: -1
 
         onClicked: (mouse) => {
             if (playlistPanel && playlistPanel.isDragging) return;
@@ -95,6 +103,7 @@ Rectangle {
 
         onPressed: (mouse) => {
             pressX = mouse.x; pressY = mouse.y;
+            lastSceneY = mapToItem(null, mouse.x, mouse.y).y;
             // Reordering a filtered list makes no sense: its indices are not
             // playlist indices.
             if (mouse.button === Qt.LeftButton && playlistPanel
@@ -103,38 +112,37 @@ Rectangle {
 
         onPositionChanged: (mouse) => {
             if (!playlistPanel) return;
-            if (!playlistPanel.isDragging && playlistPanel.readyIndex === -1) {
+            lastSceneY = mapToItem(null, mouse.x, mouse.y).y;
+            if (!playlistPanel.isDragging) {
                 if (Math.abs(mouse.x - pressX) > 5 || Math.abs(mouse.y - pressY) > 5) dragHoldTimer.stop();
-            } else if (playlistPanel.isDragging && playlistView) {
-                var globalMouse = mapToItem(null, mouse.x, mouse.y);
-                playlistPanel.dragGlobalY = globalMouse.y;
-                // Compute the index from the cursor, not from the item's own position:
-                // after moveItem the view rearranges the delegates, the position
-                // "drifts", and repeated drags to the edge started jumping.
-                var viewPos = playlistView.mapFromItem(null, globalMouse.x, globalMouse.y);
-                var contentY = viewPos.y + playlistView.contentY;
-                var newIndex = Math.floor(contentY / 38);
-                newIndex = Math.max(0, Math.min(playlistView.count - 1, newIndex));
-                if (newIndex !== playlistPanel.draggedIndex) {
-                    playlistPanel.model.moveItem(playlistPanel.draggedIndex, newIndex);
-                    playlistPanel.draggedIndex = newIndex;
-                    playlistPanel.readyIndex = newIndex;
-                }
+                return;
             }
+            playlistPanel.updateDrag(lastSceneY);
         }
 
         onReleased: {
             dragHoldTimer.stop();
             if (playlistPanel && playlistPanel.isDragging) playlistPanel.endDrag();
         }
+
+        onCanceled: {
+            dragHoldTimer.stop();
+            if (playlistPanel && playlistPanel.isDragging) playlistPanel.endDrag();
+        }
+    }
+
+    // A drag cannot survive the delegate being unloaded: stop it instead of
+    // leaving the drag active and the list non-interactive behind.
+    Component.onDestruction: {
+        if (isBeingDragged && playlistPanel && playlistPanel.isDragging)
+            playlistPanel.endDrag();
     }
 
     Timer {
         id: dragHoldTimer; interval: 1000; repeat: false
         onTriggered: {
             if (playlistPanel && !playlistPanel.isFiltering) {
-                playlistPanel.readyIndex = itemIndex; playlistPanel.draggedIndex = itemIndex;
-                playlistPanel.isDragging = true; playlistPanel.startAutoScroll();
+                playlistPanel.beginDrag(itemIndex, dragArea.lastSceneY);
             }
         }
     }

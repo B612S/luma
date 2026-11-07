@@ -341,6 +341,8 @@
 <name>ShortcutHandler</name>
 <message><source>osd_crop_detecting</source><translation>Определение чёрных полей…</translation></message>
 <message><source>osd_crop_off</source><translation>Чёрные поля: показаны</translation></message>
+<message><source>osd_equalizer_on</source><translation>Эквалайзер включён</translation></message>
+<message><source>osd_equalizer_off</source><translation>Эквалайзер выключен</translation></message>
 <message><source>osd_crop_on</source><translation>Чёрные поля: обрезаны</translation></message>
 <message><source>osd_crop_failed</source><translation>Не удалось определить чёрные поля</translation></message>
 <message><source>osd_no_subtitles</source><translation>В этом файле нет субтитров</translation></message>
@@ -441,6 +443,7 @@
 <message><source>shortcut_cycle_deinterlace</source><translation>Переключить деинтерлейсинг</translation></message>
 <message><source>shortcut_cycle_aspect</source><translation>Переключить соотношение сторон</translation></message>
 <message><source>shortcut_toggle_crop</source><translation>Обрезать чёрные полосы</translation></message>
+<message><source>shortcut_toggle_equalizer</source><translation>Включить / выключить эквалайзер</translation></message>
 </context>
 
 <context>

@@ -561,18 +561,22 @@ void PlaylistModel::moveItem(int from, int to) {
     beginMoveRows(QModelIndex(), from, from, QModelIndex(), to > from ? to + 1 : to);
     m_entries.move(from, to);
 
+    const int oldCurrentIndex = m_currentIndex;
     if (m_currentIndex == from) {
         m_currentIndex = to;
-        emit currentIndexChanged();
     } else if (m_currentIndex > from && m_currentIndex <= to) {
         m_currentIndex--;
-        emit currentIndexChanged();
     } else if (m_currentIndex < from && m_currentIndex >= to) {
         m_currentIndex++;
-        emit currentIndexChanged();
     }
 
     endMoveRows();
+
+    // Emit only after endMoveRows(): a QML view reacting to a current-index
+    // change in the middle of a row move may scroll or relayout while the move
+    // is in progress, which made the playlist jump during drag & drop.
+    if (m_currentIndex != oldCurrentIndex)
+        emit currentIndexChanged();
 
     m_originalPaths.clear();
     for (const Entry &e : m_entries) m_originalPaths << e.path;

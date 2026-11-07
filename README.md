@@ -188,11 +188,13 @@ are not touched. Qt6::Test is optional — if the module is missing, the tests a
 during configuration.
 
 `tst_media_open` is an integration test that uses the real libmpv in headless mode
-(`vo=null`, `ao=null`) to open the audio/video fixtures in `tests/data/` and a YouTube
-URL routed through a fake `yt-dlp`. Run only it with
-`ctest --test-dir build -R tst_media_open --output-on-failure`. A real network YouTube
-test is skipped unless `LUMA_TEST_YOUTUBE_URL` is set; it uses the real `yt-dlp` and
-network, so it is not part of the default run.
+(`vo=null`, `ao=null`) to open the audio/video fixtures in `tests/data/` and a real
+YouTube video. Run only it with
+`ctest --test-dir build -R tst_media_open --output-on-failure`. The YouTube case uses
+the real `yt-dlp` and network; it reuses `~/.config/luma/yt-dlp.conf` (including the
+proxy). It is skipped unless `LUMA_TEST_YOUTUBE_URL` is set, e.g.
+`LUMA_TEST_YOUTUBE_URL=https://www.youtube.com/watch?v=jNQXAC9IVRw`. Set
+`LUMA_TEST_NO_NETWORK=1` for an offline run.
 
 ## Usage
 
@@ -246,6 +248,7 @@ intentionally fixed.
 | `D` | Cycle deinterlacing (`auto` / `yes` / `no`) |
 | `R` | Cycle aspect ratio |
 | `J` | Detect and crop black bars |
+| `G` | Toggle the equalizer |
 | Right click | Context menu |
 | Double click | Toggle fullscreen |
 | `Esc` | Exit fullscreen / close a menu |
