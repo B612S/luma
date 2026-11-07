@@ -73,6 +73,7 @@ public:
     Q_INVOKABLE void refreshYtdlpRuntime();
     Q_INVOKABLE void installYtdlp();
     Q_INVOKABLE void installYtdlpEjs();
+    Q_INVOKABLE void installDeno();
     Q_INVOKABLE void openFile(const QString &path);
     Q_INVOKABLE void openFolder(const QString &folder);
     Q_INVOKABLE void addToPlaylist(const QString &path);
@@ -127,6 +128,7 @@ signals:
     void defaultFileManagerNameChanged();
     void ytdlpInstallFinished(bool success, const QString &message);
     void ytdlpEjsInstallFinished(bool success, const QString &message);
+    void denoInstallFinished(bool success, const QString &message);
     // Result of refreshYtdlpRuntime(), including the asynchronous ejs probe.
     void ytdlpRuntimeReady(const QVariantMap &info);
     void loadingChanged();
@@ -180,9 +182,19 @@ private:
     };
     QString writeChaptersFile(const QVector<ChapterInfo> &chapters);
     QString ytdlpLocalDir() const;
-    void runPipInstall(const QString &package, const QString &dir,
-                       std::function<void(bool, const QString &)> done);
     QString ytdlpEjsLocalDir() const;
+    QString denoLocalDir() const;
+    void runWheelInstall(const QString &package, const QString &dir,
+                         std::function<void(bool, const QString &)> done);
+    QString localPackageVersion(const QString &dir, const QString &module) const;
+    void probeSystemYtdlpVersion(const QString &exe);
+    void probeSystemEjs(const QString &python);
+    void checkLocalPackageUpdate(const QString &package, const QString &localVersion,
+                                 const QString &latestKey, const QString &updateKey,
+                                 bool *running);
+    void runDenoInstall(std::function<void(bool, const QString &)> done);
+    void probeDenoVersion(const QString &exe);
+    void checkDenoUpdate(const QString &localVersion);
 
     MpvItem *m_mpv;
     PlaylistManager *m_playlists = nullptr;
@@ -252,6 +264,12 @@ private:
     // Last result of refreshYtdlpRuntime(); keeps the settings page stable
     // while the background ejs probe runs.
     QVariantMap m_ytdlpRuntime;
+    bool m_ytdlpVersionProbeRunning = false;
+    bool m_ejsProbeRunning = false;
+    bool m_ytdlpUpdateCheckRunning = false;
+    bool m_ejsUpdateCheckRunning = false;
+    bool m_denoVersionProbeRunning = false;
+    bool m_denoUpdateCheckRunning = false;
     // Discards notifications from a file that was already replaced.
     quint64 m_notifyGeneration = 0;
     quint64 m_folderScanGeneration = 0;

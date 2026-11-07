@@ -11,7 +11,8 @@
 # packages, qmake6, curl, ffmpeg, avahi-browse, and the runtime QML modules used
 # by the app (Kirigami, qqc2-desktop-style). Network access is needed the first
 # time to download linuxdeploy/appimagetool.
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; echo "build-appimage.sh: failed at line $LINENO (exit $status)" >&2' ERR
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -124,15 +125,13 @@ fi
 
 # Luma shells out to ffmpeg for HLS casting and to avahi-browse for Chromecast
 # discovery. Bundle both so the AppImage does not depend on host packages.
-# Luma shells out to ffmpeg for HLS casting and to avahi-browse for Chromecast
-# discovery. Bundle both so the AppImage does not depend on host packages.
 for tool in ffmpeg avahi-browse; do
     tool_path="$(command -v "$tool" 2>/dev/null || true)"
     if [[ -z "$tool_path" ]]; then
         echo "Warning: $tool not found; the AppImage will need it from the host" >&2
         continue
     fi
-    echo "Bundling $tool..."
+    echo "Bundling $tool (this may take a minute while the AppDir is rescanned)..."
     "$LINUXDEPLOY" --appdir "$APPDIR" --executable "$tool_path" >/dev/null
 done
 
@@ -246,6 +245,7 @@ if [[ ! -x "$PATCHELF" ]]; then
     exit 1
 fi
 
+echo "Fixing absolute library dependencies..."
 while IFS= read -r -d '' elf; do
     file -b "$elf" 2>/dev/null | grep -q '^ELF' || continue
     needed_list="$("$PATCHELF" --print-needed "$elf" 2>/dev/null || true)"
@@ -265,6 +265,7 @@ done < <(find "$APPDIR/usr" -type f -print0)
 
 # linuxdeploy only creates an AppRun symlink; use a real launcher so Qt finds
 # the bundled plugins/QML modules and the KDE style is active on every desktop.
+echo "Writing AppRun launcher..."
 rm -f "$APPDIR/AppRun"
 cat > "$APPDIR/AppRun" <<'RUN'
 #!/bin/sh

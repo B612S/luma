@@ -385,6 +385,9 @@ int main(int argc, char *argv[]) {
     if (mpv) {
         media.setMpv(mpv);
         osd.setMpv(mpv);
+        // Probe system and private yt-dlp installations once at startup, so the
+        // first URL already prefers system packages and the UI has versions.
+        media.refreshYtdlpRuntime();
         // The equalizer and the music crossfade both live in mpv's single "af"
         // property, so build the combined chain in one place.
         auto applyAudioFilters = [mpv, &equalizer, &media]() {

@@ -16,7 +16,9 @@ Rectangle {
     border.color: "transparent"
 
     property var mpv
-    property bool hovered: hoverArea.containsMouse
+    // HoverHandler tracks the whole bar reliably, even over its child buttons
+    // and sliders; a MouseArea behind the layout does not.
+    property bool hovered: barHover.hovered
     property bool isSeeking: false
     property bool isVolumeSeeking: false
 
@@ -48,6 +50,81 @@ Rectangle {
     // Only show previews for local video.
     readonly property bool showSeekPreview: !CastManager.casting && !root.audioFile
                                             && !root.isLive && !root.networkStream
+
+    // Take the aspect from mpv as soon as the file is loaded, so the preview
+    // has the right shape before the first thumbnail arrives. The black-bar
+    // crop is applied as well: the preview must mirror what the video output
+    // shows.
+    property real fullVideoAspect: 16.0 / 9.0
+    property real videoAspect: 16.0 / 9.0
+    property int videoWidth: 0
+    property int videoHeight: 0
+    property bool previewShown: false
+    property bool previewImageIsSeek: false
+    readonly property bool previewVisible: root.showSeekPreview && root.previewShown
+    readonly property int seekPreviewHeight: 90
+    readonly property int seekPreviewWidth: Math.round(
+        Math.min(220, Math.max(80, seekPreviewHeight * videoAspect)))
+
+    // The thumbnail decoder always returns the complete frame, fitted inside
+    // 320x180. These are the dimensions of that bitmap; sourceClipRect is
+    // expressed in its pixels.
+    readonly property int previewSourceWidth: fullVideoAspect >= 16.0 / 9.0
+        ? 320 : Math.max(1, Math.round(180 * fullVideoAspect))
+    readonly property int previewSourceHeight: fullVideoAspect >= 16.0 / 9.0
+        ? Math.max(1, Math.round(320 / fullVideoAspect)) : 180
+
+    readonly property var cropRect: {
+        if (typeof mpv === "undefined" || mpv === null || !mpv.cropEnabled)
+            return null;
+        const r = mpv.videoCropRect;
+        return (r && r.width > 0 && r.height > 0) ? r : null;
+    }
+
+    readonly property rect previewClip: {
+        const r = root.cropRect;
+        if (!r || root.videoWidth <= 0 || root.videoHeight <= 0)
+            return Qt.rect(0, 0, 0, 0);
+        const sx = root.previewSourceWidth / root.videoWidth;
+        const sy = root.previewSourceHeight / root.videoHeight;
+        return Qt.rect(r.x * sx, r.y * sy, r.width * sx, r.height * sy);
+    }
+
+    function updateVideoAspect() {
+        if (typeof mpv === "undefined" || mpv === null)
+            return;
+        const sourceW = Number(mpv.observedProperty("width"));
+        const sourceH = Number(mpv.observedProperty("height"));
+        if (sourceW > 0) root.videoWidth = Math.round(sourceW);
+        if (sourceH > 0) root.videoHeight = Math.round(sourceH);
+
+        let aspect = Number(mpv.observedProperty("video-params/aspect"));
+        if (!(aspect > 0) && sourceW > 0 && sourceH > 0)
+            aspect = sourceW / sourceH;
+        if (!(aspect > 0) || !isFinite(aspect))
+            return;
+        root.fullVideoAspect = Math.max(0.1, Math.min(10, aspect));
+
+        let visibleAspect = root.fullVideoAspect;
+        const crop = root.cropRect;
+        if (crop && sourceW > 0 && sourceH > 0) {
+            visibleAspect = root.fullVideoAspect
+                * (crop.width / sourceW) / (crop.height / sourceH);
+        }
+        root.videoAspect = Math.max(0.1, Math.min(10, visibleAspect));
+    }
+
+    function requestPreviewPlaceholder() {
+        if (typeof mpv === "undefined" || mpv === null || !root.showSeekPreview)
+            return;
+        const position = Number(mpv.position);
+        if (!(position >= 0) || !(Number(mpv.duration) > 0))
+            return;
+        root.previewImageIsSeek = false;
+        mpv.requestThumbnail(position, "thumb-placeholder");
+    }
+
+    Component.onCompleted: updateVideoAspect()
 
     // Chapter ticks on the seek bar (embedded chapters and yt-dlp chapters).
     readonly property bool chapterMarkersVisible: Config.showChapterMarkers
@@ -82,11 +159,24 @@ Rectangle {
                 seekTooltip.currentThumbId = "";
                 seekTooltip.pendingTime = -1;
             }
+            root.previewShown = false;
+            root.previewImageIsSeek = false;
             if (root.isLive) liveFollowTimer.restart();
+        }
+        function onFileLoaded() {
+            root.updateVideoAspect();
+            Qt.callLater(root.requestPreviewPlaceholder);
         }
         function onDurationChanged() {
             // The file was stopped/ended while a seek was still settling.
             if (mpv.duration <= 0) root.finishSeek();
+            else root.updateVideoAspect();
+        }
+        function onVideoCropRectChanged() {
+            root.updateVideoAspect();
+        }
+        function onCropEnabledChanged() {
+            root.updateVideoAspect();
         }
     }
 
@@ -120,7 +210,7 @@ Rectangle {
         id: hoverLostTimer
         interval: 250
         onTriggered: {
-            if (!hoverArea.containsMouse && !root.isOpen) {
+            if (!root.hovered && !root.isOpen) {
                 fadeAnim.stop();
                 fadeAnim.from = root.opacity;
                 fadeAnim.to = 0.0;
@@ -137,7 +227,7 @@ Rectangle {
             fadeAnim.to = 1.0;
             fadeAnim.start();
         } else {
-            if (!hoverArea.containsMouse) {
+            if (!root.hovered) {
                 fadeAnim.stop();
                 fadeAnim.from = root.opacity;
                 fadeAnim.to = 0.0;
@@ -148,24 +238,20 @@ Rectangle {
         }
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        propagateComposedEvents: true
-        onClicked: (mouse) => { mouse.accepted = false }
-        onEntered: {
-            hoverLostTimer.stop();
-            if (!root.isOpen) {
-                root.isOpen = true;
-            }
-            if (root.opacity < 1.0) {
-                fadeAnim.stop();
-                fadeAnim.from = root.opacity;
-                fadeAnim.to = 1.0;
-                fadeAnim.start();
-            }
+    onHoveredChanged: {
+        if (!hovered)
+            return;
+        hoverLostTimer.stop();
+        if (root.opacity < 1.0) {
+            fadeAnim.stop();
+            fadeAnim.from = root.opacity;
+            fadeAnim.to = 1.0;
+            fadeAnim.start();
         }
+    }
+
+    HoverHandler {
+        id: barHover
     }
 
     RowLayout {
@@ -181,6 +267,7 @@ Rectangle {
                 anchors.centerIn: parent
                 source: root.displayPaused ? "media-playback-start-symbolic" : "media-playback-pause-symbolic"
                 color: Kirigami.Theme.textColor
+                isMask: true
                 width: 22
                 height: 22
             }
@@ -328,8 +415,9 @@ Rectangle {
                 id: seekTooltip
                 visible: seekSlider.seeking && !root.isLive
                 z: 100
-                width: root.showSeekPreview ? 160 : (seekTimeText.implicitWidth + 16)
-                height: root.showSeekPreview ? (90 + 24) : 24
+                width: root.previewVisible ? root.seekPreviewWidth
+                                           : (seekTimeText.implicitWidth + 16)
+                height: root.previewVisible ? (root.seekPreviewHeight + 24) : 24
                 radius: 6
                 color: "#1a1a1a"
                 clip: true
@@ -355,7 +443,7 @@ Rectangle {
                     running: seekSlider.seeking && root.showSeekPreview
                     onTriggered: {
                         if (seekTooltip.pendingTime >= 0) {
-                            let id = "thumb";
+                            let id = "thumb-seek";
                             seekTooltip.currentThumbId = id;
                             mpv.requestThumbnail(seekTooltip.pendingTime, id);
                             seekTooltip.pendingTime = -1;
@@ -366,8 +454,16 @@ Rectangle {
                 Connections {
                     target: mpv
                     function onThumbnailReady(id) {
+                        if (id.startsWith("thumb-placeholder")) {
+                            // The current frame is only a stand-in until the
+                            // first seek frame is decoded. Never overwrite an
+                            // already shown seek frame with it.
+                            if (!root.previewImageIsSeek)
+                                previewImage.source = "image://thumbnail/" + id;
+                            return;
+                        }
                         if (id.startsWith(seekTooltip.currentThumbId)) {
-                            previewImage.source = ""
+                            root.previewImageIsSeek = true;
                             previewImage.source = "image://thumbnail/" + id;
                         }
                     }
@@ -386,10 +482,17 @@ Rectangle {
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    height: 90
-                    fillMode: Image.PreserveAspectCrop
+                    height: root.seekPreviewHeight
+                    fillMode: Image.PreserveAspectFit
+                    sourceClipRect: root.previewClip
                     asynchronous: false
-                    visible: root.showSeekPreview
+                    visible: root.previewVisible
+                    onStatusChanged: {
+                        if (status === Image.Ready)
+                            root.previewShown = true;
+                        else if (status === Image.Error)
+                            root.previewShown = false;
+                    }
                 }
 
                 Rectangle {
@@ -426,6 +529,7 @@ Rectangle {
                 source: (CastManager.casting ? (CastManager.remoteVolume === 0) : (mpv.muted || mpv.volume === 0))
                 ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
                 color: Kirigami.Theme.textColor
+                isMask: true
                 width: 22
                 height: 22
             }
@@ -565,6 +669,7 @@ Rectangle {
                 anchors.centerIn: parent
                 source: "view-media-playlist"
                 color: Kirigami.Theme.textColor
+                isMask: true
                 width: 22
                 height: 22
             }

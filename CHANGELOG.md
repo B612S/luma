@@ -8,6 +8,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Prefer system `yt-dlp`/`yt-dlp-ejs`, fall back to private copies in
+  `~/.local/share/luma`, show their versions and asynchronously check the private
+  copies for updates.
+- Install missing `yt-dlp`/`yt-dlp-ejs` as private pure-Python wheels from PyPI
+  without pip; no files are installed system-wide or exposed to the system Python.
+- Install a missing Deno privately into `~/.local/share/luma/deno` (system Deno is
+  still preferred), with a version display and an asynchronous update check.
 - A music crossfade option in **Settings → Playback → Music**. For consecutive
   local audio files it fades the current track out and the next one in; the duration
   is configurable from 1 to 12 seconds and `0` disables it. A trailing silent tail of
@@ -236,6 +243,18 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Keep the seek preview in the video's aspect ratio and size its tooltip to
+  that ratio. The aspect is taken from mpv as soon as the video is known, and
+  a current-position thumbnail is precached so the first seek shows a frame
+  immediately instead of waiting on a time-only bubble. The thumbnail decoder
+  fits the source aspect into a 320x180 bitmap instead of always stretching it
+  to 16:9. When black-bar cropping is active, the preview follows the same crop
+  and aspect.
+- Keep the floating control bar visible while the pointer is over it; reliable
+  whole-bar hover detection and no self-assignment of `isOpen` stop the
+  auto-hide from toggling it.
+- Force all control-bar and PiP icons to use the active theme colour, so a mixed
+  set of light and dark icons no longer appears on other systems.
 - Context menus now reveal the cursor even if the idle timer had hidden it, so
   the pointer is visible outside the menu again.
 - The playlist panel button and the all-playlists dropdown use distinct icons from

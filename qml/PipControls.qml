@@ -177,6 +177,7 @@ Item {
             anchors.centerIn: parent
             width: 18; height: 18
             color: pip.iconColor
+            isMask: true
             source: pip.windowed ? "view-fullscreen-symbolic" : "view-restore-symbolic"
         }
 
@@ -200,6 +201,7 @@ Item {
             anchors.centerIn: parent
             width: 18; height: 18
             color: pip.iconColor
+            isMask: true
             source: "window-close-symbolic"
         }
 
@@ -221,6 +223,7 @@ Item {
             anchors.centerIn: parent
             width: 22; height: 22
             color: pip.iconColor
+            isMask: true
             source: pip.mpv && pip.mpv.paused ? "media-playback-start-symbolic" : "media-playback-pause-symbolic"
         }
 
@@ -342,6 +345,7 @@ Item {
                     anchors.centerIn: parent
                     width: 18; height: 18
                     color: pip.iconColor
+                    isMask: true
                     source: pip.mpv && pip.mpv.muted ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
                 }
 

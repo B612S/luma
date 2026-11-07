@@ -3,6 +3,7 @@
 #include "mpvabstractitem.h"
 #include <QVariant>
 #include <QRectF>
+#include <QRect>
 #include <QElapsedTimer>
 #include <QImage>
 #include <QThread>
@@ -43,6 +44,7 @@ class MpvItem : public MpvAbstractItem {
     Q_PROPERTY(bool videoDisabled READ videoDisabled NOTIFY videoDisabledChanged)
     Q_PROPERTY(bool deinterlaceEnabled READ deinterlaceEnabled NOTIFY deinterlaceChanged)
     Q_PROPERTY(bool cropEnabled READ cropEnabled NOTIFY cropEnabledChanged)
+    Q_PROPERTY(QRect videoCropRect READ videoCropRect NOTIFY videoCropRectChanged)
     Q_PROPERTY(QVariantList chapterList READ chapterList NOTIFY chapterListChanged)
     Q_PROPERTY(int chapter READ chapter NOTIFY chapterChanged)
 
@@ -78,6 +80,9 @@ public:
     bool deinterlaceEnabled() const { return m_deinterlaceEnabled; }
     bool cropEnabled() const { return m_cropEnabled; }
     void setCropEnabled(bool enabled);
+    // Rectangle reported by mpv's video-params/crop-* properties, in source
+    // frame pixels. Empty when the file has no crop information.
+    QRect videoCropRect() const;
     QVariantList chapterList() const { return m_chapterList; }
     int chapter() const { return m_chapter; }
 
@@ -116,6 +121,7 @@ signals:
     void fileLoaded();
     void deinterlaceChanged();
     void cropEnabledChanged();
+    void videoCropRectChanged();
     void chapterListChanged();
     void chapterChanged();
     void thumbnailReady(const QString &requestId);

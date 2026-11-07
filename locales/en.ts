@@ -169,10 +169,15 @@
 <message><source>settings_ytdlp_runtime_ejs</source><translation>yt-dlp-ejs: %1</translation></message>
 <message><source>settings_ytdlp_runtime_found</source><translation>found</translation></message>
 <message><source>settings_ytdlp_runtime_missing</source><translation>not found</translation></message>
-<message><source>settings_ytdlp_runtime_hint</source><translation>Missing yt-dlp or yt-dlp-ejs can be installed into ~/.local/share/luma with the buttons above; Deno must be installed by the system package manager. Together they solve YouTube’s JavaScript challenge without reading browser cookies.</translation></message>
+<message><source>settings_ytdlp_runtime_source_system</source><translation>system</translation></message>
+<message><source>settings_ytdlp_runtime_source_local</source><translation>local</translation></message>
+<message><source>settings_ytdlp_runtime_update_available</source><translation>update available: %1</translation></message>
+<message><source>settings_ytdlp_runtime_update</source><translation>Update</translation></message>
+<message><source>settings_ytdlp_runtime_hint</source><translation>System yt-dlp, yt-dlp-ejs and Deno are used when available. Otherwise the buttons install private copies into ~/.local/share/luma; they are never installed system-wide, and Luma checks those copies for updates. Together they solve YouTube’s JavaScript challenge without reading browser cookies.</translation></message>
 <message><source>settings_ytdlp_runtime_installing</source><translation>Installing…</translation></message>
 <message><source>settings_ytdlp_runtime_install_ytdlp</source><translation>Install yt-dlp</translation></message>
 <message><source>settings_ytdlp_runtime_install_ejs</source><translation>Install yt-dlp-ejs</translation></message>
+<message><source>settings_ytdlp_runtime_install_deno</source><translation>Install Deno</translation></message>
 <message><source>about_title</source><translation>About</translation></message>
 <message><source>about_version</source><translation>Version %1</translation></message>
 <message><source>about_description</source><translation>A fast, minimalist media player.</translation></message>
@@ -310,9 +315,10 @@
 <context>
 <name>MediaManager</name>
 <message><source>dialog_open_video</source><translation>Open media file</translation></message>
-<message><source>ytdlp_python_missing</source><translation>python3 not found; cannot install yt-dlp-ejs</translation></message>
+<message><source>ytdlp_python_missing</source><translation>python3 not found; cannot install yt-dlp</translation></message>
 <message><source>ytdlp_install_dir_failed</source><translation>Could not create %1</translation></message>
-<message><source>ytdlp_install_start_failed</source><translation>Could not start pip</translation></message>
+<message><source>ytdlp_install_start_failed</source><translation>Could not start python3</translation></message>
+<message><source>ytdlp_deno_arch_unsupported</source><translation>Unsupported architecture for Deno: %1</translation></message>
 <message><source>dialog_video_filter</source><translation>Video files (*.mp4 *.mkv *.avi *.webm);;All files (*)</translation></message>
 <message><source>dialog_open_folder</source><translation>Choose folder</translation></message>
 <message><source>dialog_open_url</source><translation>Open link</translation></message>

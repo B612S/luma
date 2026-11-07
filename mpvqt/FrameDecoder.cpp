@@ -121,6 +121,25 @@ QImage FrameDecoder::decodeFrame(const QString &filePath, double timeInSeconds) 
     };
 
     auto toImage = [&](const AVFrame *f) {
+        // Never force the preview into a 16:9 bitmap: that distorted 4:3 video
+        // before the QML side ever saw the frame. Fit the source's display
+        // aspect (including anamorphic SAR) inside 320x180 instead.
+        AVRational sar = f->sample_aspect_ratio;
+        if (sar.num <= 0 || sar.den <= 0)
+            sar = videoStream->sample_aspect_ratio;
+        const double sourceAspect = (sar.num > 0 && sar.den > 0)
+            ? (double(f->width) * sar.num / sar.den) / f->height
+            : double(f->width) / f->height;
+        int targetWidth;
+        int targetHeight;
+        if (sourceAspect >= 320.0 / 180.0) {
+            targetWidth = 320;
+            targetHeight = qMax(1, qRound(320.0 / sourceAspect));
+        } else {
+            targetHeight = 180;
+            targetWidth = qMax(1, qRound(180.0 * sourceAspect));
+        }
+
         m_swsCtx = sws_getCachedContext(m_swsCtx, f->width, f->height,
                                         (AVPixelFormat)f->format,
                                         targetWidth, targetHeight, AV_PIX_FMT_RGB32,

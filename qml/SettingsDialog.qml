@@ -38,11 +38,36 @@ Dialog {
     property var ytdlpRuntime: ({})
     property bool ytdlpInstalling: false
     property bool ytdlpEjsInstalling: false
+    property bool denoInstalling: false
     property string ytdlpInstallMessage: ""
 
     function refreshYtdlpRuntime() {
         if (typeof Media !== "undefined" && Media !== null)
             Media.refreshYtdlpRuntime();
+    }
+
+    function runtimeSourceText(source) {
+        if (source === "system") return qsTr("settings_ytdlp_runtime_source_system");
+        if (source === "local") return qsTr("settings_ytdlp_runtime_source_local");
+        return "";
+    }
+
+    function runtimeStatus(info, presentKey, sourceKey, versionKey) {
+        if (!info[presentKey])
+            return qsTr("settings_ytdlp_runtime_missing");
+        let text = qsTr("settings_ytdlp_runtime_found");
+        const source = runtimeSourceText(info[sourceKey] || "");
+        if (source !== "")
+            text += " · " + source;
+        if (info[versionKey])
+            text += " " + info[versionKey];
+        return text;
+    }
+
+    function runtimeUpdateText(info, updateKey, latestKey) {
+        if (!info[updateKey])
+            return "";
+        return " · " + qsTr("settings_ytdlp_runtime_update_available").arg(info[latestKey] || "");
     }
 
     Connections {
@@ -59,6 +84,11 @@ Dialog {
         }
         function onYtdlpEjsInstallFinished(success, message) {
             settingsDialog.ytdlpEjsInstalling = false;
+            settingsDialog.ytdlpInstallMessage = success ? "" : message;
+            settingsDialog.refreshYtdlpRuntime();
+        }
+        function onDenoInstallFinished(success, message) {
+            settingsDialog.denoInstalling = false;
             settingsDialog.ytdlpInstallMessage = success ? "" : message;
             settingsDialog.refreshYtdlpRuntime();
         }
@@ -628,9 +658,12 @@ Dialog {
                                     Label {
                                         Layout.fillWidth: true
                                         text: qsTr("settings_ytdlp_runtime_ytdlp").arg(
-                                                  settingsDialog.ytdlpRuntime.ytdlp
-                                                  ? qsTr("settings_ytdlp_runtime_found")
-                                                  : qsTr("settings_ytdlp_runtime_missing"))
+                                                  settingsDialog.runtimeStatus(
+                                                      settingsDialog.ytdlpRuntime,
+                                                      "ytdlp", "ytdlpSource", "ytdlpVersion")
+                                                  + settingsDialog.runtimeUpdateText(
+                                                      settingsDialog.ytdlpRuntime,
+                                                      "ytdlpUpdateAvailable", "ytdlpLatestVersion"))
                                         color: settingsDialog.ytdlpRuntime.ytdlp
                                                ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.8)
                                                : Kirigami.Theme.negativeTextColor
@@ -639,10 +672,13 @@ Dialog {
                                     }
                                     Button {
                                         visible: !settingsDialog.ytdlpRuntime.ytdlp
+                                                 || settingsDialog.ytdlpRuntime.ytdlpUpdateAvailable
                                         enabled: !settingsDialog.ytdlpInstalling
                                         text: settingsDialog.ytdlpInstalling
                                               ? qsTr("settings_ytdlp_runtime_installing")
-                                              : qsTr("settings_ytdlp_runtime_install_ytdlp")
+                                              : (settingsDialog.ytdlpRuntime.ytdlpUpdateAvailable
+                                                 ? qsTr("settings_ytdlp_runtime_update")
+                                                 : qsTr("settings_ytdlp_runtime_install_ytdlp"))
                                         onClicked: {
                                             settingsDialog.ytdlpInstalling = true;
                                             settingsDialog.ytdlpInstallMessage = "";
@@ -658,14 +694,32 @@ Dialog {
                                     Label {
                                         Layout.fillWidth: true
                                         text: qsTr("settings_ytdlp_runtime_deno").arg(
-                                                  settingsDialog.ytdlpRuntime.deno
-                                                  ? qsTr("settings_ytdlp_runtime_found")
-                                                  : qsTr("settings_ytdlp_runtime_missing"))
+                                                  settingsDialog.runtimeStatus(
+                                                      settingsDialog.ytdlpRuntime,
+                                                      "deno", "denoSource", "denoVersion")
+                                                  + settingsDialog.runtimeUpdateText(
+                                                      settingsDialog.ytdlpRuntime,
+                                                      "denoUpdateAvailable", "denoLatestVersion"))
                                         color: settingsDialog.ytdlpRuntime.deno
                                                ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.8)
                                                : Kirigami.Theme.negativeTextColor
                                         font.pixelSize: 12
                                         wrapMode: Text.WordWrap
+                                    }
+                                    Button {
+                                        visible: !settingsDialog.ytdlpRuntime.deno
+                                                 || settingsDialog.ytdlpRuntime.denoUpdateAvailable
+                                        enabled: !settingsDialog.denoInstalling
+                                        text: settingsDialog.denoInstalling
+                                              ? qsTr("settings_ytdlp_runtime_installing")
+                                              : (settingsDialog.ytdlpRuntime.denoUpdateAvailable
+                                                 ? qsTr("settings_ytdlp_runtime_update")
+                                                 : qsTr("settings_ytdlp_runtime_install_deno"))
+                                        onClicked: {
+                                            settingsDialog.denoInstalling = true;
+                                            settingsDialog.ytdlpInstallMessage = "";
+                                            Media.installDeno();
+                                        }
                                     }
                                 }
 
@@ -676,9 +730,12 @@ Dialog {
                                     Label {
                                         Layout.fillWidth: true
                                         text: qsTr("settings_ytdlp_runtime_ejs").arg(
-                                                  settingsDialog.ytdlpRuntime.ejsAvailable
-                                                  ? qsTr("settings_ytdlp_runtime_found")
-                                                  : qsTr("settings_ytdlp_runtime_missing"))
+                                                  settingsDialog.runtimeStatus(
+                                                      settingsDialog.ytdlpRuntime,
+                                                      "ejsAvailable", "ejsSource", "ejsVersion")
+                                                  + settingsDialog.runtimeUpdateText(
+                                                      settingsDialog.ytdlpRuntime,
+                                                      "ejsUpdateAvailable", "ejsLatestVersion"))
                                         color: settingsDialog.ytdlpRuntime.ejsAvailable
                                                ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.8)
                                                : Kirigami.Theme.negativeTextColor
@@ -687,10 +744,13 @@ Dialog {
                                     }
                                     Button {
                                         visible: !settingsDialog.ytdlpRuntime.ejsAvailable
+                                                 || settingsDialog.ytdlpRuntime.ejsUpdateAvailable
                                         enabled: !settingsDialog.ytdlpEjsInstalling
                                         text: settingsDialog.ytdlpEjsInstalling
                                               ? qsTr("settings_ytdlp_runtime_installing")
-                                              : qsTr("settings_ytdlp_runtime_install_ejs")
+                                              : (settingsDialog.ytdlpRuntime.ejsUpdateAvailable
+                                                 ? qsTr("settings_ytdlp_runtime_update")
+                                                 : qsTr("settings_ytdlp_runtime_install_ejs"))
                                         onClicked: {
                                             settingsDialog.ytdlpEjsInstalling = true;
                                             settingsDialog.ytdlpInstallMessage = "";

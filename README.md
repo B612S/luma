@@ -159,10 +159,12 @@ the AppImage inherits the system font, colour scheme, widget style and icon them
 other desktops it falls back to the Breeze style. A small Breeze set is shipped only as
 a hicolor fallback for icon names the system theme lacks. On first use it downloads
 `linuxdeploy`, its Qt plugin and `appimagetool` into `.appimage-tools/`. `ffmpeg` and
-`avahi-browse` are bundled for HLS casting and Chromecast discovery. `yt-dlp` and
-`yt-dlp-ejs` can be installed from *Settings → Playback → Internet playback* without
-packaging them; install Deno on the system to solve YouTube's JavaScript challenge
-without reading browser cookies.
+`avahi-browse` are bundled for HLS casting and Chromecast discovery. System `yt-dlp` and `yt-dlp-ejs` are used when available. If they are missing,
+*Settings → Playback → Internet playback* can install private copies into
+`~/.local/share/luma` without touching the system Python; Luma checks those copies
+for updates and shows the versions it uses. Deno is preferred from the system; if it
+is missing, Luma can install a private copy into `~/.local/share/luma` as well. This
+solves YouTube's JavaScript challenge without reading browser cookies.
 
 Build on the oldest glibc-based distribution you intend to support — an AppImage cannot
 bundle glibc. On systems without FUSE, run the image with
@@ -333,12 +335,16 @@ starts a local HTTP bridge: mpv fetches the stream (including seeking and Range 
 through it, so a SOCKS-only proxy works without extra tools. HTTP proxies are passed to
 mpv directly. No files are downloaded.
 
-*Playback → Internet playback* also shows the YouTube runtime status. Deno is installed
-with the system package manager; the `yt-dlp-ejs` helper can be installed into
-`~/.local/share/luma` with the button in that section, without modifying the system
-Python. Luma passes Deno to yt-dlp automatically and does not read browser cookies. The
-packages are fetched from PyPI only when you press the install button and keep their own
-licenses (yt-dlp: Unlicense; yt-dlp-ejs: Unlicense/MIT/ISC).
+*Playback → Internet playback* shows the runtime status, including the versions in
+use and whether updates are available for Luma's private copies. System packages are
+always preferred; if both are missing, the buttons download the pure-Python wheels
+directly from PyPI into `~/.local/share/luma` (no pip, no system-wide install). Those
+private copies are added to `PYTHONPATH` only for Luma's own yt-dlp process, so the
+system never sees them. Deno is also preferred from the system; otherwise its button
+installs a private binary into `~/.local/share/luma/deno`, and that directory is added
+to `PATH` only for Luma's yt-dlp process. Luma passes Deno to yt-dlp automatically and
+does not read browser cookies. The packages keep their own licenses (yt-dlp: Unlicense;
+yt-dlp-ejs: Unlicense/MIT/ISC; Deno: MIT).
 
 ## Localization
 
