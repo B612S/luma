@@ -20,6 +20,7 @@ private slots:
     void builtinPresets();
     void customPresets();
     void applySignal();
+    void reloadsExternalChanges();
     void persists();
 
 private:
@@ -197,6 +198,34 @@ void TestEqualizer::applySignal()
     // Nothing to do afterwards.
     equalizer.applyNow();
     QCOMPARE(spy.count(), 2);
+}
+
+void TestEqualizer::reloadsExternalChanges()
+{
+    // luma.conf must exist before the reading ConfigManager starts its
+    // watcher, otherwise there is no file to observe.
+    {
+        ConfigManager seed;
+        seed.setValue("ui/volume", 80);
+    }
+
+    ConfigManager config;
+    Equalizer equalizer(&config);
+    QVERIFY(!equalizer.enabled());
+
+    // Another Luma instance writes new equalizer settings.
+    {
+        ConfigManager writer;
+        writer.setValue("equalizer/enabled", true);
+        writer.setValue("equalizer/preamp", 4.0);
+        writer.setValue("equalizer/gains10",
+                        "0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0");
+    }
+
+    QTRY_VERIFY_WITH_TIMEOUT(equalizer.enabled(), 3000);
+    QTRY_COMPARE_WITH_TIMEOUT(equalizer.preamp(), 4.0, 2000);
+    QCOMPARE(equalizer.gains().at(1).toDouble(), 1.0);
+    QVERIFY(!equalizer.audioFilter().isEmpty());
 }
 
 void TestEqualizer::persists()

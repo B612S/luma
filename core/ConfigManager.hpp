@@ -168,6 +168,10 @@ signals:
     void hwdecChanged();
     void ytdlpSettingsChanged();
     void loggingChanged();
+    // luma.conf (or mpv.conf) changed on disk and was reloaded. Objects that
+    // keep their own copy of settings (the equalizer) can pick up the values
+    // written by another Luma instance.
+    void settingsReloaded();
 
 private:
     void loadPlaybackSettingsFromMpvConf();

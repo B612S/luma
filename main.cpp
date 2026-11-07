@@ -540,7 +540,17 @@ int main(int argc, char *argv[]) {
                 QObject::connect(shortcuts, &ShortcutHandler::shortcutsHelpVisibleChanged, root,
                                  [root](bool visible) { root->setProperty("shortcutsHelpVisible", visible); });
 
-                new MprisManager(mpv, &media, &app);
+                // With multiple instances every window needs its own MPRIS
+                // name, otherwise only the first one is visible to playerctl
+                // and the desktop's media applet.
+                QString mprisService = QStringLiteral("org.mpris.MediaPlayer2.luma");
+                QString mprisIdentity = QStringLiteral("Luma");
+                if (!config.singleInstance()) {
+                    const QString pid = QString::number(QCoreApplication::applicationPid());
+                    mprisService += QStringLiteral(".i") + pid;
+                    mprisIdentity = QStringLiteral("Luma (%1)").arg(pid);
+                }
+                new MprisManager(mpv, &media, mprisService, mprisIdentity, &app);
     }
 
     // Guard against a hang on exit: if stopping mpv/the bridge or tearing

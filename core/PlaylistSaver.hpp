@@ -24,12 +24,17 @@ public:
     // Queues a write. The entries are copied (cheap: QString is implicitly
     // shared); the returned call does not wait for the disk.
     void save(const QString &filePath, const QString &id, const QString &name,
-              const QString &mode, const QVector<PlaylistModel::Entry> &entries);
+              const QString &mode, const QVector<PlaylistModel::Entry> &entries,
+              const QStringList &watchFolders = {});
 
     // Blocks until every queued save has been written. Used before a
     // synchronous save (which must win over queued snapshots), before a
     // playlist is deleted, and on shutdown.
     void waitForIdle();
+
+signals:
+    // Emitted on the saver's thread after a background write has finished.
+    void saved(const QString &filePath);
 
 private:
     QThread m_thread;

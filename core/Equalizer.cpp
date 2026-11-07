@@ -141,6 +141,52 @@ Equalizer::Equalizer(ConfigManager *config, QObject *parent)
     connect(m_saveTimer, &QTimer::timeout, this, &Equalizer::save);
 
     load();
+
+    // luma.conf is watched by ConfigManager; reload the curve when another
+    // instance changes it, so all windows share the equalizer.
+    if (m_config)
+        connect(m_config, &ConfigManager::settingsReloaded,
+                this, &Equalizer::reloadFromDisk);
+}
+
+void Equalizer::reloadFromDisk()
+{
+    if (!m_config) return;
+
+    const bool oldEnabled = m_enabled;
+    const int oldBands = m_bands;
+    const double oldPreamp = m_preamp;
+    const QVector<double> oldGains10 = m_gains10;
+    const QVector<double> oldGains20 = m_gains20;
+    const QString oldPresetId = m_presetId;
+    const QVector<CustomPreset> oldCustomPresets = m_customPresets;
+
+    load();
+
+    const bool curvesChanged = oldGains10 != m_gains10 || oldGains20 != m_gains20;
+    const bool presetsChanged = oldCustomPresets.size() != m_customPresets.size()
+        || [&]() {
+               for (int i = 0; i < oldCustomPresets.size(); ++i) {
+                   const CustomPreset &a = oldCustomPresets.at(i);
+                   const CustomPreset &b = m_customPresets.at(i);
+                   if (a.name != b.name || a.bands != b.bands
+                           || a.preamp != b.preamp || a.gains != b.gains)
+                       return true;
+               }
+               return false;
+           }();
+
+    if (oldBands != m_bands) emit bandsChanged();
+    if (oldPreamp != m_preamp) emit preampChanged();
+    if (curvesChanged) emit gainsChanged();
+    if (oldEnabled != m_enabled) emit enabledChanged();
+    if (oldPresetId != m_presetId) emit presetChanged();
+    if (presetsChanged) emit customPresetsChanged();
+
+    if (oldEnabled != m_enabled || oldBands != m_bands
+            || oldPreamp != m_preamp || curvesChanged) {
+        scheduleApply();
+    }
 }
 
 Equalizer::~Equalizer()

@@ -137,6 +137,7 @@ Item {
     signal deleteRequested(string id, string name)
     signal addFilesRequested(string id)
     signal addFolderRequested(string id)
+    signal propertiesRequested(string id)
     signal addUrlRequested(string id)
     signal clearRequested(string id)
 
@@ -417,6 +418,7 @@ Item {
         id: tabContextMenu
         onAddFilesRequested: (id) => root.addFilesRequested(id)
         onAddFolderRequested: (id) => root.addFolderRequested(id)
+        onPropertiesRequested: (id) => root.propertiesRequested(id)
         onAddUrlRequested: (id) => root.addUrlRequested(id)
         onClearRequested: (id) => root.clearRequested(id)
         onRenameRequested: (id, name) => root.renameRequested(id, name)

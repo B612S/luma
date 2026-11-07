@@ -8,6 +8,24 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Playlist properties (right-click a playlist tab): a playlist can watch
+  folders. Existing media files are imported in the background when a folder
+  is added and new files are appended automatically. Watching uses filesystem
+  notifications plus a debounced background scan, so the UI is not blocked.
+  The dialog follows the Settings layout (categories on the left, the watched
+  folders on the right); it is not available for the Default playlist, which is
+  per-window and not saved.
+- Named playlists are now shared between running Luma instances: creating,
+  renaming, deleting, reordering, changing the playback mode and adding or
+  removing entries in one window is reflected in the others (last write wins).
+  The Default playlist stays per-window.
+- In multi-instance mode every window registers its own MPRIS player
+  (`org.mpris.MediaPlayer2.luma.i<pid>`), so playerctl and the desktop media
+  applet can control each instance separately.
+- “Play in another window” in the playlist track menu when
+  `single_instance=false`: starts a separate Luma process for the selected track
+  while the current window keeps playing. The entry is hidden in single-instance
+  mode.
 - Add `G` as the default shortcut for toggling the equalizer.
 - Prefer system `yt-dlp`/`yt-dlp-ejs`, fall back to private copies in
   `~/.local/share/luma`, show their versions and asynchronously check the private
@@ -244,6 +262,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- The playlist tab menu hides **Properties**, **Rename** and **Delete** for
+  the Default playlist instead of offering actions that cannot work (the
+  Default playlist is not saved and cannot be renamed or deleted).
+- Equalizer changes made in one Luma window now reach other running
+  instances: mpv/luma settings are watched by `ConfigManager`, and the
+  equalizer now reloads its curve from `luma.conf` when another process
+  changes it.
 - Dropping a folder onto the playlist, or adding it with “Add folder”, now
   adds the media files inside it recursively. Drag & drop used to ignore
   folders completely, and “Add folder” only scanned the top level.

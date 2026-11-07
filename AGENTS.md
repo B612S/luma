@@ -53,6 +53,25 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   (`en`, `ru`; Japanese/Chinese are temporarily disabled) and installed to
   `share/luma/translations`; keep the TS list in `CMakeLists.txt` in sync when adding a language.
 
+### Single-instance and multi-instance verification
+
+Every new feature and every fix must be checked in **both** modes before it is
+reported as done — do not test only the default one:
+
+- **Single instance** (`ui/single_instance=true`): one process, argument forwarding
+  to the running window, global shortcuts enabled, one MPRIS player
+  (`org.mpris.MediaPlayer2.luma`).
+- **Multiple instances** (`ui/single_instance=false`): start two windows and verify
+  that named-playlist/settings/equalizer changes are synchronized, the Default
+  playlist stays per-window, and every window exposes its own MPRIS player
+  (`org.mpris.MediaPlayer2.luma.i<pid>`, visible in `playerctl -l`); global shortcuts
+  must stay disabled.
+
+State which modes were exercised when reporting the result. Changes touching shared
+state (playlists, config/equalizer, MPRIS, single-instance plumbing) need the
+two-window check in particular; purely visual changes still need both modes for the
+settings/menu behavior.
+
 ## Runtime gotchas when launching
 
 - `main.cpp` is Wayland-only: it exits with an error when neither `WAYLAND_DISPLAY`

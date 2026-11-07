@@ -57,6 +57,8 @@ public:
 
     // Re-emits filterRequested() for the current state (used once mpv exists).
     Q_INVOKABLE void applyNow();
+    // Picks up equalizer values written to luma.conf by another Luma instance.
+    void reloadFromDisk();
 
 signals:
     void enabledChanged();

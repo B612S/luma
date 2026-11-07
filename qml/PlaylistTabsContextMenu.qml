@@ -14,6 +14,7 @@ LumaMenu {
 
     signal addFilesRequested(string id)
     signal addFolderRequested(string id)
+    signal propertiesRequested(string id)
     signal addUrlRequested(string id)
     signal clearRequested(string id)
     signal renameRequested(string id, string name)
@@ -66,8 +67,19 @@ LumaMenu {
             LumaMenuSeparator {}
 
             LumaMenuButton {
+                text: qsTranslate("PlaylistTabs", "tabs_properties")
+                // The Default playlist is not saved and has no properties.
+                visible: !tabContextMenu.targetIsDefault
+                onClicked: {
+                    tabContextMenu.close();
+                    tabContextMenu.propertiesRequested(tabContextMenu.targetId);
+                }
+            }
+            LumaMenuButton {
                 text: qsTranslate("PlaylistTabs", "tabs_rename")
-                isEnabled: !tabContextMenu.targetIsDefault
+                // The Default playlist cannot be renamed or deleted; hide the
+                // actions instead of showing them permanently disabled.
+                visible: !tabContextMenu.targetIsDefault
                 onClicked: {
                     tabContextMenu.close();
                     tabContextMenu.renameRequested(tabContextMenu.targetId, tabContextMenu.targetName);
@@ -84,7 +96,7 @@ LumaMenu {
             LumaMenuButton {
                 text: qsTranslate("PlaylistTabs", "tabs_delete")
                 destructive: true
-                isEnabled: !tabContextMenu.targetIsDefault
+                visible: !tabContextMenu.targetIsDefault
                 onClicked: {
                     tabContextMenu.close();
                     tabContextMenu.deleteRequested(tabContextMenu.targetId, tabContextMenu.targetName);

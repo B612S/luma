@@ -57,6 +57,20 @@ LumaMenu {
                 }
             }
 
+            // Launching a second player only makes sense when this instance
+            // does not own the application's single-instance server.
+            LumaMenuButton {
+                text: qsTranslate("PlaylistPanel", "playlist_play_new_window")
+                visible: typeof Config !== "undefined" && Config
+                         && !Config.singleInstance
+                onClicked: {
+                    const path = trackContextMenu.trackPath();
+                    if (!path) return;
+                    trackContextMenu.close();
+                    Media.openInNewWindow(path);
+                }
+            }
+
             LumaMenuSeparator {}
 
             LumaMenuButton {

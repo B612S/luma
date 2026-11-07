@@ -93,6 +93,7 @@ qt_add_qml_module(luma
         qml/Main.qml
         qml/ControlBar.qml
         qml/PlaylistPanel.qml
+        qml/PlaylistPropertiesDialog.qml
         qml/PlaylistTabs.qml
         qml/PlaylistTabsContextMenu.qml
         qml/PlaylistDelegate.qml

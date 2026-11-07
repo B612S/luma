@@ -191,6 +191,15 @@
 <context>
 <name>PlaylistPanel</name>
 <message><source>playlist_play</source><translation>Play</translation></message>
+
+<message><source>playlist_play_new_window</source><translation>Play in another window</translation></message>
+<message><source>playlist_properties_title</source><translation>Playlist properties</translation></message>
+<message><source>playlist_watch_folders</source><translation>Watched folders</translation></message>
+<message><source>playlist_watch_hint</source><translation>Media files in these folders are added automatically. Existing files are imported when a folder is added; new files are picked up in the background.</translation></message>
+<message><source>playlist_add_watch_folder</source><translation>Add folder…</translation></message>
+<message><source>playlist_no_watch_folders</source><translation>No folders are watched yet.</translation></message>
+<message><source>playlist_remove_watch_folder</source><translation>Stop watching this folder</translation></message>
+<message><source>playlist_close</source><translation>Close</translation></message>
 <message><source>playlist_shuffle</source><translation>Shuffle playlist</translation></message>
 <message><source>playlist_open_folder</source><translation>Open in %1</translation></message>
 <message><source>playlist_remove</source><translation>Remove from playlist</translation></message>
@@ -225,6 +234,7 @@
 <message><source>tabs_sort_year</source><translation>By year</translation></message>
 <message><source>tabs_sort_album</source><translation>By album</translation></message>
 <message><source>tabs_clear</source><translation>Clear playlist</translation></message>
+<message><source>tabs_properties</source><translation>Properties</translation></message>
 <message><source>tabs_rename</source><translation>Rename</translation></message>
 <message><source>tabs_delete</source><translation>Delete</translation></message>
 </context>
@@ -233,6 +243,7 @@
 <name>PlaylistManager</name>
 <message><source>playlist_add_files</source><translation>Add files to playlist</translation></message>
 <message><source>playlist_add_folder</source><translation>Add folder to playlist</translation></message>
+<message><source>playlist_watch_add_folder</source><translation>Add watched folder</translation></message>
 <message><source>dialog_add_url</source><translation>Add link</translation></message>
 <message><source>playlist_default</source><translation>Default</translation></message>
 <message><source>playlist_files_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>

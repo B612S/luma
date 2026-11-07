@@ -9,6 +9,7 @@
 
 class ConfigManager;
 class PlaylistSaver;
+class QFileSystemWatcher;
 class TagScanner;
 class RadioNameResolver;
 
@@ -45,6 +46,13 @@ public:
     Q_INVOKABLE void renamePlaylist(const QString &id, const QString &newName);
     Q_INVOKABLE void addFilesToPlaylist(const QString &id, const QStringList &paths);
     Q_INVOKABLE void addFolderToPlaylist(const QString &id, const QString &folder);
+    // Folders watched by a playlist: existing media is imported in the
+    // background when a folder is added, and new files are appended when they
+    // appear (QFileSystemWatcher + debounced background scan, no polling).
+    Q_INVOKABLE QStringList watchFolders(const QString &id) const;
+    Q_INVOKABLE bool addWatchFolder(const QString &id, const QString &folder);
+    Q_INVOKABLE void removeWatchFolder(const QString &id, const QString &folder);
+    Q_INVOKABLE void openAddWatchFolderDialog(const QString &id);
     Q_INVOKABLE void openAddFilesDialog(const QString &id);
     Q_INVOKABLE void openAddFolderDialog(const QString &id);
     Q_INVOKABLE void addUrlToPlaylist(const QString &id, const QString &url);
@@ -69,6 +77,7 @@ signals:
     void playlistsChanged();
     void activeIdChanged();
     void activeModelChanged();
+    void watchFoldersChanged(const QString &id);
 
 private:
     void loadAll();
@@ -85,6 +94,18 @@ private:
     // and the playlistsChanged signal are coalesced via a timer.
     void scheduleSave(const QString &id);
     void flushPendingSaves();
+    // Watch the named playlist files written by other Luma instances. The
+    // Default playlist is intentionally not shared between windows.
+    void setupPlaylistWatcher();
+    void watchPlaylistFiles();
+    void reloadExternalPlaylists();
+    // Folder watching for playlists.
+    void setupFolderWatching();
+    void rebuildFolderWatcher();
+    void scheduleWatchScan(const QString &id);
+    void startWatchScan(const QString &id);
+    void invalidateWatchScan(const QString &id);
+    void stopWatchingPlaylist(const QString &id);
     QString playlistFilePath(const QString &id) const;
     QString sanitizeName(const QString &name) const;
     QStringList playlistOrder() const;
@@ -110,4 +131,23 @@ private:
     QSet<QString> m_dirtyIds;
     QSet<QString> m_scannedPlaylists;
     bool m_playlistsChangedPending = false;
+    QFileSystemWatcher *m_playlistWatcher = nullptr;
+    QTimer m_externalReloadTimer;
+    bool m_reloadingExternal = false;
+    // Playlist writes still queued in PlaylistSaver, so an external reload
+    // does not read the previous snapshot from disk while our save is running.
+    QHash<QString, int> m_pendingPlaylistSaves;
+    // A file can be missing briefly while another instance atomically replaces
+    // it; only remove the playlist after it stayed missing for a moment.
+    QSet<QString> m_missingPlaylistIds;
+    // Watch folders per playlist (including the per-window Default playlist).
+    QHash<QString, QStringList> m_watchFolders;
+    QHash<QString, QSet<QString>> m_watchedDirs;
+    QHash<QString, QSet<QString>> m_folderDirOwners;
+    QFileSystemWatcher *m_folderWatcher = nullptr;
+    QTimer m_watchScanDebounce;
+    QSet<QString> m_watchScanPending;
+    QSet<QString> m_watchScanRunning;
+    QSet<QString> m_watchScanQueued;
+    QHash<QString, quint64> m_watchScanGeneration;
 };

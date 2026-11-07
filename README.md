@@ -29,7 +29,10 @@
 
 - **mpv inside** — plays virtually any video/audio format without extra codecs.
 - **Multiple playlists** — tabs with create/rename/delete/clear, drag & drop reordering,
-  add files or a whole folder, “Add to playlist” from the track menu.
+  add files or a whole folder, “Add to playlist” from the track menu. A playlist can
+  watch folders (right-click its tab → **Properties**): existing media is imported in
+  the background and new files are added automatically. With
+  `single_instance=false`, the track menu can also play an entry in another window.
 - **Subtitle tuning** — font, size, weight, text/outline colors, outline width,
   background box, vertical position, ASS style override; applied to mpv live.
 - **Links via yt-dlp** — open a URL from the menu and Luma resolves the direct stream
@@ -272,6 +275,22 @@ Logs are written to `~/.cache/luma/`: `luma.log`, `mpv.log` and `yt-dlp.log`.
 Each component can be set to `off`, `error`, `info` or `debug` on the **Debug**
 page in Settings, or under `[debug]` in `luma.conf`. Resume positions are kept in
 `~/.cache/luma/playback-positions.json` (the 500 most recent files, at most 90 days).
+
+### Multiple instances
+
+With `single_instance=false` every launch is a separate player with its own
+**Default** playlist, playback and window. Named playlists are shared between the
+running instances: creating, renaming, deleting, reordering, changing the
+playback mode and adding/removing entries in one window is reflected in the
+others (last write wins). The equalizer and the normal settings are shared
+through `luma.conf` as well. Global shortcuts are disabled while multiple
+instances may run.
+
+Every instance registers a separate MPRIS player
+(`org.mpris.MediaPlayer2.luma.i<pid>`), so `playerctl -l` and the desktop media
+applet list and control each window independently. Changing the
+`single_instance` setting takes effect on the next launch (the local server and
+the MPRIS name are created at startup).
 
 `luma.conf` sections:
 

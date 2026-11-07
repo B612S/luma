@@ -1994,6 +1994,20 @@ void MediaManager::openInFileManager(const QString &path) {
     }
 }
 
+bool MediaManager::openInNewWindow(const QString &path) {
+    if (path.isEmpty()) return false;
+
+    QString program = QCoreApplication::applicationFilePath();
+    // Inside an AppImage applicationFilePath() points into the temporary
+    // mount. Restart the AppImage itself so the new process gets the same
+    // runtime (libraries, QML modules, translations).
+    const QByteArray appImage = qgetenv("APPIMAGE");
+    if (!appImage.isEmpty())
+        program = QString::fromLocal8Bit(appImage);
+
+    return QProcess::startDetached(program, {path});
+}
+
 void MediaManager::copyToClipboard(const QString &text) {
     if (QClipboard *clipboard = QGuiApplication::clipboard())
         clipboard->setText(text);

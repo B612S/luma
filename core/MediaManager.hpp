@@ -86,6 +86,9 @@ public:
     Q_INVOKABLE void playIndex(int index);
 
     Q_INVOKABLE void openInFileManager(const QString &path);
+    // Starts a second Luma process playing path. Only meaningful when
+    // single-instance mode is off; the playlist menu hides it otherwise.
+    Q_INVOKABLE bool openInNewWindow(const QString &path);
     Q_INVOKABLE void copyToClipboard(const QString &text);
     Q_INVOKABLE void removeFromPlaylist(int index);
     // Used by the playlist context menu: file-only actions (Information) are

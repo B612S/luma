@@ -44,11 +44,13 @@ class MprisManager : public QObject {
 public:
     explicit MprisManager(MpvItem *mpv = nullptr,
                           MediaManager *media = nullptr,
+                          const QString &serviceName = QStringLiteral("org.mpris.MediaPlayer2.luma"),
+                          const QString &identity = QStringLiteral("Luma"),
                           QObject *parent = nullptr);
     ~MprisManager() override;
 
     // Root Interface getters
-    QString getIdentity() const { return "Luma"; }
+    QString getIdentity() const { return m_identity; }
     bool getCanQuit() const { return true; }
     bool getCanRaise() const { return false; }
     bool getHasTrackList() const { return false; }
@@ -109,6 +111,10 @@ private:
 
     MpvItem *m_mpv = nullptr;
     MediaManager *m_media = nullptr;
+    // Unique in multi-instance mode, so every window is a separate MPRIS
+    // player instead of only the first one owning the bus name.
+    QString m_serviceName;
+    QString m_identity;
     QTimer *m_posTimer = nullptr;
     bool m_busRegistered = false;
 };

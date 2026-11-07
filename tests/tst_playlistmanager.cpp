@@ -28,6 +28,8 @@ private slots:
     void onlyPlayingPlaylistIsMarked();
     void addAudioAndVideoFiles();
     void addFolderAddsContents();
+    void syncsNamedPlaylistsAcrossInstances();
+    void watchesFolderForNewFiles();
     void unavailableMarkPersists();
     void unavailableMarkClearedAtRuntime();
     void staleUnavailableMarkRemovedOnLoad();
@@ -367,6 +369,132 @@ void TestPlaylistManager::playlistModesPersist()
 
 // The "unavailable" mark is saved in named playlists, so a deleted file stays
 // red after a restart until it comes back.
+void TestPlaylistManager::syncsNamedPlaylistsAcrossInstances()
+{
+    QTemporaryDir mediaDir;
+    QVERIFY(mediaDir.isValid());
+    QStringList files;
+    for (int i = 0; i < 3; ++i) {
+        const QString path = mediaDir.path() + QStringLiteral("/Track%1.mp4").arg(i);
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("x");
+        files << path;
+    }
+
+    ConfigManager configA;
+    configA.setSingleInstance(false);
+    ConfigManager configB;
+    configB.setSingleInstance(false);
+
+    PlaylistManager a(&configA);
+    PlaylistManager b(&configB);
+
+    const QString id = a.createPlaylist(QStringLiteral("Shared"));
+    QVERIFY(!id.isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(b.modelById(id) != nullptr, 5000);
+
+    a.addFilesToPlaylist(id, files);
+    QTRY_VERIFY_WITH_TIMEOUT(b.modelById(id) && b.modelById(id)->rowCount() == 3, 5000);
+
+    a.renamePlaylist(id, QStringLiteral("Renamed"));
+    QTRY_COMPARE_WITH_TIMEOUT(b.playlistName(id), QStringLiteral("Renamed"), 5000);
+
+    a.setPlaylistMode(id, QStringLiteral("repeat"));
+    QTRY_COMPARE_WITH_TIMEOUT(b.playlistMode(id), QStringLiteral("repeat"), 5000);
+
+    // Watch folders are part of the playlist file and follow the same sync.
+    QTemporaryDir watchDir;
+    QVERIFY(watchDir.isValid());
+    QVERIFY(a.addWatchFolder(id, watchDir.path()));
+    const QString canonicalWatchDir = QFileInfo(watchDir.path()).canonicalFilePath();
+    QTRY_VERIFY_WITH_TIMEOUT(b.watchFolders(id).contains(canonicalWatchDir), 5000);
+
+    PlaylistModel *aModel = a.modelById(id);
+    QVERIFY(aModel);
+    aModel->moveItem(0, 2);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        b.modelById(id)
+            && b.modelById(id)->data(b.modelById(id)->index(2), Qt::UserRole).toString() == files.first(),
+        5000);
+
+    const QString second = a.createPlaylist(QStringLiteral("Second"));
+    QVERIFY(!second.isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(b.modelById(second) != nullptr, 5000);
+
+    a.movePlaylist(2, 1);
+    auto playlistIds = [](const QVariantList &list) {
+        QStringList ids;
+        for (const QVariant &entry : list)
+            ids << entry.toMap().value(QStringLiteral("id")).toString();
+        return ids;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(playlistIds(b.playlists()),
+                              (QStringList{PlaylistManager::DEFAULT_ID, second, id}), 5000);
+
+    a.deletePlaylist(second);
+    QTRY_VERIFY_WITH_TIMEOUT(b.modelById(second) == nullptr, 6000);
+    QVERIFY(!playlistIds(b.playlists()).contains(second));
+
+    // Deleting the active playlist in one window switches the other window
+    // back to its own Default playlist.
+    b.setActiveId(id);
+    QCOMPARE(b.activeId(), id);
+    a.deletePlaylist(id);
+    QTRY_COMPARE_WITH_TIMEOUT(b.activeId(), PlaylistManager::DEFAULT_ID, 6000);
+    QTRY_VERIFY_WITH_TIMEOUT(b.modelById(id) == nullptr, 6000);
+}
+
+void TestPlaylistManager::watchesFolderForNewFiles()
+{
+    QTemporaryDir mediaDir;
+    QVERIFY(mediaDir.isValid());
+    QVERIFY(QDir(mediaDir.path()).mkpath(QStringLiteral("Season 1")));
+    const QString existing = mediaDir.path() + QStringLiteral("/Existing.mp4");
+    const QString nested = mediaDir.path() + QStringLiteral("/Season 1/Nested.mp4");
+    for (const QString &path : {existing, nested}) {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+
+    ConfigManager config;
+    PlaylistManager manager(&config);
+    const QString id = manager.createPlaylist(QStringLiteral("Watched"));
+    QVERIFY(manager.addWatchFolder(id, mediaDir.path()));
+    QVERIFY(manager.watchFolders(id).contains(mediaDir.path())
+            || manager.watchFolders(id).contains(QFileInfo(mediaDir.path()).canonicalFilePath()));
+
+    // The initial background scan imports the existing tree.
+    QTRY_VERIFY_WITH_TIMEOUT(manager.modelById(id)->contains(existing), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(manager.modelById(id)->contains(nested), 5000);
+    QVERIFY(playlistJson(id).contains(QStringLiteral("watchFolders")));
+
+    // A new file in the root is picked up without polling.
+    const QString added = mediaDir.path() + QStringLiteral("/New.mkv");
+    {
+        QFile f(added);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(manager.modelById(id)->contains(added), 5000);
+
+    // A new file in a subfolder is picked up once the scan has registered the
+    // subfolder with the filesystem watcher.
+    QTest::qWait(800);
+    const QString nestedAdded = mediaDir.path() + QStringLiteral("/Season 1/New2.mkv");
+    {
+        QFile f(nestedAdded);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(manager.modelById(id)->contains(nestedAdded), 5000);
+
+    // The folders are saved in the playlist and restored by another instance.
+    PlaylistManager reloaded(&config);
+    QVERIFY(reloaded.watchFolders(id).contains(manager.watchFolders(id).first()));
+}
+
 void TestPlaylistManager::unavailableMarkPersists()
 {
     ConfigManager config;

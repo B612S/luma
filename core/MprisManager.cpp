@@ -9,8 +9,11 @@
 #include <QDBusMetaType>
 #include <QDebug>
 
-MprisManager::MprisManager(MpvItem *mpv, MediaManager *media, QObject *parent)
-: QObject(parent), m_mpv(mpv), m_media(media)
+MprisManager::MprisManager(MpvItem *mpv, MediaManager *media,
+                           const QString &serviceName, const QString &identity,
+                           QObject *parent)
+: QObject(parent), m_mpv(mpv), m_media(media),
+  m_serviceName(serviceName), m_identity(identity)
 {
     qDBusRegisterMetaType<QDBusObjectPath>();
     qDBusRegisterMetaType<QVariantMap>();
@@ -34,7 +37,7 @@ MprisManager::MprisManager(MpvItem *mpv, MediaManager *media, QObject *parent)
 
 MprisManager::~MprisManager() {
     if (m_busRegistered) {
-        QDBusConnection::sessionBus().unregisterService("org.mpris.MediaPlayer2.luma");
+        QDBusConnection::sessionBus().unregisterService(m_serviceName);
         QDBusConnection::sessionBus().unregisterObject("/org/mpris/MediaPlayer2");
     }
 }
@@ -61,7 +64,7 @@ void MprisManager::registerOnBus() {
     return;
         }
 
-        if (!bus.registerService("org.mpris.MediaPlayer2.luma")) {
+        if (!bus.registerService(m_serviceName)) {
             qWarning() << "MPRIS: failed to register service (already taken?)";
             bus.unregisterObject("/org/mpris/MediaPlayer2");
             return;

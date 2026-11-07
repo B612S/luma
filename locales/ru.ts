@@ -191,6 +191,15 @@
 <context>
 <name>PlaylistPanel</name>
 <message><source>playlist_play</source><translation>Воспроизвести</translation></message>
+
+<message><source>playlist_play_new_window</source><translation>Воспроизвести в другом окне</translation></message>
+<message><source>playlist_properties_title</source><translation>Свойства плейлиста</translation></message>
+<message><source>playlist_watch_folders</source><translation>Отслеживаемые папки</translation></message>
+<message><source>playlist_watch_hint</source><translation>Медиафайлы в этих папках добавляются автоматически. При добавлении папки импортируются существующие файлы, новые подхватываются в фоне.</translation></message>
+<message><source>playlist_add_watch_folder</source><translation>Добавить папку…</translation></message>
+<message><source>playlist_no_watch_folders</source><translation>Пока нет отслеживаемых папок.</translation></message>
+<message><source>playlist_remove_watch_folder</source><translation>Перестать отслеживать эту папку</translation></message>
+<message><source>playlist_close</source><translation>Закрыть</translation></message>
 <message><source>playlist_shuffle</source><translation>Перемешать плейлист</translation></message>
 <message><source>playlist_open_folder</source><translation>Открыть в %1</translation></message>
 <message><source>playlist_remove</source><translation>Удалить из плейлиста</translation></message>
@@ -225,6 +234,7 @@
 <message><source>tabs_sort_year</source><translation>По году</translation></message>
 <message><source>tabs_sort_album</source><translation>По альбому</translation></message>
 <message><source>tabs_clear</source><translation>Очистить плейлист</translation></message>
+<message><source>tabs_properties</source><translation>Свойства</translation></message>
 <message><source>tabs_rename</source><translation>Переименовать</translation></message>
 <message><source>tabs_delete</source><translation>Удалить</translation></message>
 </context>
@@ -233,6 +243,7 @@
 <name>PlaylistManager</name>
 <message><source>playlist_add_files</source><translation>Добавить файлы в плейлист</translation></message>
 <message><source>playlist_add_folder</source><translation>Добавить папку в плейлист</translation></message>
+<message><source>playlist_watch_add_folder</source><translation>Добавить отслеживаемую папку</translation></message>
 <message><source>dialog_add_url</source><translation>Добавить ссылку</translation></message>
 <message><source>playlist_default</source><translation>По умолчанию</translation></message>
 <message><source>playlist_files_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>

@@ -150,12 +150,18 @@ void ConfigManager::setupFileWatcher() {
         if (QFile::exists(file) && !m_watcher->files().contains(file))
             m_watcher->addPath(file);
     }
+    // luma.conf may not exist yet on the first run; watch the directory so a
+    // file created by another instance is picked up as well.
+    if (QFile::exists(m_configDir) && !m_watcher->directories().contains(m_configDir))
+        m_watcher->addPath(m_configDir);
 
-    connect(m_watcher, &QFileSystemWatcher::fileChanged, this, [this](const QString &) {
+    auto scheduleReload = [this]() {
         // The watcher is restarted inside reloadFromDisk: a file replaced with
         // rename() (as some editors/tools do) is no longer watched afterwards.
         m_reloadTimer->start();
-    });
+    };
+    connect(m_watcher, &QFileSystemWatcher::fileChanged, this, scheduleReload);
+    connect(m_watcher, &QFileSystemWatcher::directoryChanged, this, scheduleReload);
 }
 
 void ConfigManager::reloadFromDisk() {
@@ -237,6 +243,7 @@ void ConfigManager::reloadFromDisk() {
         emit loggingChanged();
 
     m_reloading = false;
+    emit settingsReloaded();
 }
 
 bool ConfigManager::rememberVolume() const {

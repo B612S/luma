@@ -15,9 +15,12 @@
 #include <QJsonArray>
 #include <QStandardPaths>
 #include <QDirIterator>
+#include <QFileSystemWatcher>
 #include <QUuid>
 #include <QDebug>
 #include <QProcess>
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrentRun>
 #include <memory>
 
 const QString PlaylistManager::DEFAULT_ID = "__default__";
@@ -33,25 +36,69 @@ static QString normalizedPlaylistMode(const QString &mode)
     return isPlaylistMode(mode) ? mode : QStringLiteral("sequential");
 }
 
-// Supported media files inside a folder, including its subfolders. Used when
-// a folder is dropped onto the playlist or added with "Add folder".
-static QStringList mediaFilesInFolder(const QString &folder)
+static bool isMediaFile(const QString &path)
 {
     static const QStringList allowed = {
         "mp4","mkv","avi","webm","mov","flv",
         "mp3","flac","aac","wav","ogg","m4a","opus","wma"
     };
+    return allowed.contains(QFileInfo(path).suffix().toLower());
+}
 
+struct FolderScanResult {
     QStringList files;
-    QDirIterator it(folder, QDir::Files | QDir::Readable,
-                    QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        const QString path = it.next();
-        if (allowed.contains(QFileInfo(path).suffix().toLower()))
-            files << path;
+    QStringList dirs;
+};
+
+// Recursively lists media files and directories under the given roots. Runs
+// off the GUI thread for the folder watcher; also used synchronously by
+// "Add folder" and by dropped folders.
+static FolderScanResult scanFolderTree(const QStringList &roots)
+{
+    QSet<QString> files;
+    QSet<QString> dirs;
+
+    for (const QString &root : roots) {
+        const QFileInfo rootInfo(root);
+        if (!rootInfo.isDir())
+            continue;
+        const QString rootPath = rootInfo.canonicalFilePath().isEmpty()
+            ? rootInfo.absoluteFilePath() : rootInfo.canonicalFilePath();
+        dirs.insert(rootPath);
+
+        QDirIterator it(rootPath,
+                        QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString path = it.next();
+            if (it.fileInfo().isDir())
+                dirs.insert(path);
+            else if (isMediaFile(path))
+                files.insert(path);
+        }
     }
-    files.sort(Qt::CaseInsensitive);
-    return files;
+
+    FolderScanResult result;
+    result.files = files.values();
+    result.files.sort(Qt::CaseInsensitive);
+    result.dirs = dirs.values();
+    result.dirs.sort(Qt::CaseInsensitive);
+    return result;
+}
+
+static QStringList mediaFilesInFolder(const QString &folder)
+{
+    return scanFolderTree({folder}).files;
+}
+
+static QStringList foldersFromJson(const QJsonArray &array)
+{
+    QStringList folders;
+    for (const QJsonValue &value : array) {
+        if (value.isString() && !value.toString().isEmpty())
+            folders << value.toString();
+    }
+    return folders;
 }
 
 PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
@@ -73,6 +120,14 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
     loadAll();
 
     m_saver = new PlaylistSaver(this);
+    connect(m_saver, &PlaylistSaver::saved, this, [this](const QString &filePath) {
+        const QString id = QFileInfo(filePath).completeBaseName();
+        auto it = m_pendingPlaylistSaves.find(id);
+        if (it == m_pendingPlaylistSaves.end())
+            return;
+        if (--it.value() <= 0)
+            m_pendingPlaylistSaves.erase(it);
+    });
 
     m_radioNames = new RadioNameResolver(this);
     connect(m_radioNames, &RadioNameResolver::nameResolved, this,
@@ -99,6 +154,9 @@ PlaylistManager::PlaylistManager(ConfigManager *config, QObject *parent)
     // of files competed with the first paint and with mpv opening the requested
     // file. The saved tags are still shown; a playlist is refreshed when it is
     // opened (see setActiveId), and newly added files are scanned immediately.
+
+    setupPlaylistWatcher();
+    setupFolderWatching();
 }
 
 PlaylistManager::~PlaylistManager() {
@@ -126,6 +184,341 @@ void PlaylistManager::flushPendingSaves() {
         m_playlistsChangedPending = false;
         emit playlistsChanged();
     }
+}
+
+void PlaylistManager::setupPlaylistWatcher()
+{
+    m_externalReloadTimer.setSingleShot(true);
+    m_externalReloadTimer.setInterval(250);
+    connect(&m_externalReloadTimer, &QTimer::timeout,
+            this, &PlaylistManager::reloadExternalPlaylists);
+
+    m_playlistWatcher = new QFileSystemWatcher(this);
+    watchPlaylistFiles();
+    connect(m_playlistWatcher, &QFileSystemWatcher::fileChanged, this, [this]() {
+        watchPlaylistFiles();
+        m_externalReloadTimer.start();
+    });
+    connect(m_playlistWatcher, &QFileSystemWatcher::directoryChanged, this, [this]() {
+        watchPlaylistFiles();
+        m_externalReloadTimer.start();
+    });
+    if (m_config) {
+        // The tab order lives in luma.conf; ConfigManager already watches it.
+        connect(m_config, &ConfigManager::settingsReloaded, this, [this]() {
+            m_externalReloadTimer.start();
+        });
+    }
+    // Catch a file that changed while this instance was loading (or between the
+    // directory scan and the watcher setup).
+    m_externalReloadTimer.start();
+}
+
+void PlaylistManager::watchPlaylistFiles()
+{
+    if (!m_playlistWatcher) return;
+    const QString dirPath = playlistsDir();
+    if (!m_playlistWatcher->directories().contains(dirPath))
+        m_playlistWatcher->addPath(dirPath);
+
+    const QDir dir(dirPath);
+    for (const QFileInfo &fi : dir.entryInfoList({"*.json"}, QDir::Files)) {
+        // The Default playlist belongs to each window and is not shared.
+        if (fi.completeBaseName() == DEFAULT_ID) continue;
+        if (!m_playlistWatcher->files().contains(fi.absoluteFilePath()))
+            m_playlistWatcher->addPath(fi.absoluteFilePath());
+    }
+}
+
+void PlaylistManager::reloadExternalPlaylists()
+{
+    if (m_loading || m_reloadingExternal || !m_playlistWatcher)
+        return;
+    m_reloadingExternal = true;
+
+    bool changed = false;
+    const QDir dir(playlistsDir());
+    const QFileInfoList files = dir.entryInfoList({"*.json"}, QDir::Files, QDir::Name);
+    QSet<QString> present;
+
+    for (const QFileInfo &fi : files) {
+        const QString id = fi.completeBaseName();
+        if (id == DEFAULT_ID) continue;
+        present.insert(id);
+        m_missingPlaylistIds.remove(id);
+
+        // Our own save is still queued/in flight: reading the file now could
+        // restore the previous snapshot and undo the local change.
+        if (m_dirtyIds.contains(id) || m_pendingPlaylistSaves.value(id) > 0)
+            continue;
+
+        QFile f(fi.absoluteFilePath());
+        if (!f.open(QIODevice::ReadOnly)) continue;
+        const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+        f.close();
+        if (!doc.isObject()) continue;
+        const QJsonObject obj = doc.object();
+        const QJsonArray entries = obj.value("entries").toArray();
+        QString name = obj.value("name").toString();
+        if (name.isEmpty()) name = id;
+        const QString mode = normalizedPlaylistMode(obj.value("mode").toString());
+        const QStringList folders = foldersFromJson(obj.value("watchFolders").toArray());
+
+        PlaylistModel *model = m_models.value(id, nullptr);
+        if (!model) {
+            // A playlist created by another instance.
+            model = new PlaylistModel(this);
+            m_models.insert(id, model);
+            m_names.insert(id, name);
+            m_modes.insert(id, mode);
+            connect(model, &PlaylistModel::modified, this, [this, id]() {
+                if (m_loading) return;
+                scheduleSave(id);
+            });
+            model->setEntriesFromJson(entries, QString());
+            if (!m_order.contains(id)) m_order << id;
+            m_watchFolders.insert(id, folders);
+            rebuildFolderWatcher();
+            scheduleWatchScan(id);
+            emit watchFoldersChanged(id);
+            changed = true;
+            continue;
+        }
+
+        if (model->toJsonArray() != entries) {
+            // Keep the currently playing file selected if it is still there.
+            model->setEntriesFromJson(entries, model->currentFile());
+            changed = true;
+        }
+        if (m_names.value(id) != name) {
+            m_names.insert(id, name);
+            changed = true;
+        }
+        if (m_modes.value(id) != mode) {
+            m_modes.insert(id, mode);
+            changed = true;
+        }
+        if (m_watchFolders.value(id) != folders) {
+            m_watchFolders.insert(id, folders);
+            m_watchedDirs.remove(id);
+            invalidateWatchScan(id);
+            rebuildFolderWatcher();
+            scheduleWatchScan(id);
+            emit watchFoldersChanged(id);
+            changed = true;
+        }
+    }
+
+    // Deletions: wait one recheck so an atomic save cannot look like one.
+    QStringList missing;
+    for (auto it = m_models.constBegin(); it != m_models.constEnd(); ++it) {
+        const QString id = it.key();
+        if (id != DEFAULT_ID && !present.contains(id))
+            missing << id;
+    }
+    for (const QString &id : missing) {
+        if (!m_missingPlaylistIds.contains(id)) {
+            m_missingPlaylistIds.insert(id);
+            QTimer::singleShot(1200, this, [this]() {
+                m_externalReloadTimer.start();
+            });
+            continue;
+        }
+
+        if (m_activeId == id)
+            setActiveId(DEFAULT_ID);
+        PlaylistModel *model = m_models.take(id);
+        if (model && m_playingModel == model)
+            m_playingModel = nullptr;
+        if (model) {
+            model->disconnect(this);
+            model->deleteLater();
+        }
+        m_names.remove(id);
+        m_modes.remove(id);
+        m_scannedPlaylists.remove(id);
+        m_order.removeAll(id);
+        stopWatchingPlaylist(id);
+        m_missingPlaylistIds.remove(id);
+        changed = true;
+    }
+
+    // Tab order: the order is stored in luma.conf by saveOrder(). Rebuild it
+    // from the configured order, then keep any playlist the config does not
+    // know yet (it can arrive from a window that has not saved the order yet).
+    QStringList newOrder;
+    for (const QString &id : playlistOrder()) {
+        if (id != DEFAULT_ID && m_models.contains(id) && !newOrder.contains(id))
+            newOrder << id;
+    }
+    for (const QString &id : m_order) {
+        if (m_models.contains(id) && !newOrder.contains(id))
+            newOrder << id;
+    }
+    QStringList extras;
+    for (auto it = m_models.constBegin(); it != m_models.constEnd(); ++it) {
+        if (it.key() != DEFAULT_ID && !newOrder.contains(it.key()))
+            extras << it.key();
+    }
+    extras.sort();
+    newOrder << extras;
+    if (newOrder != m_order) {
+        m_order = newOrder;
+        changed = true;
+    }
+
+    m_reloadingExternal = false;
+    watchPlaylistFiles();
+    if (changed)
+        emit playlistsChanged();
+
+    // A missing file may have appeared during the recheck; start once more if
+    // something is still pending so the delete decision is re-evaluated.
+    if (!m_missingPlaylistIds.isEmpty()) {
+        QTimer::singleShot(1200, this, [this]() {
+            m_externalReloadTimer.start();
+        });
+    }
+}
+
+void PlaylistManager::setupFolderWatching()
+{
+    m_folderWatcher = new QFileSystemWatcher(this);
+    m_watchScanDebounce.setSingleShot(true);
+    m_watchScanDebounce.setInterval(500);
+    connect(&m_watchScanDebounce, &QTimer::timeout, this, [this]() {
+        const QSet<QString> pending = m_watchScanPending;
+        m_watchScanPending.clear();
+        for (const QString &id : pending)
+            startWatchScan(id);
+    });
+    connect(m_folderWatcher, &QFileSystemWatcher::directoryChanged, this,
+            [this](const QString &path) {
+        const QSet<QString> ids = m_folderDirOwners.value(path);
+        for (const QString &id : ids)
+            scheduleWatchScan(id);
+    });
+
+    rebuildFolderWatcher();
+    for (auto it = m_watchFolders.cbegin(); it != m_watchFolders.cend(); ++it) {
+        if (!it.value().isEmpty())
+            scheduleWatchScan(it.key());
+    }
+}
+
+void PlaylistManager::rebuildFolderWatcher()
+{
+    if (!m_folderWatcher) return;
+
+    QHash<QString, QSet<QString>> owners;
+    auto addOwner = [&owners](const QString &dir, const QString &id) {
+        if (!dir.isEmpty() && QFileInfo(dir).isDir())
+            owners[dir].insert(id);
+    };
+
+    for (auto it = m_watchFolders.cbegin(); it != m_watchFolders.cend(); ++it) {
+        const QString &id = it.key();
+        if (id != DEFAULT_ID && !m_models.contains(id))
+            continue;
+        for (const QString &root : it.value()) {
+            addOwner(root, id);
+            // Also watch the parent, so a deleted and recreated root is seen.
+            addOwner(QFileInfo(root).absolutePath(), id);
+        }
+        for (const QString &dir : m_watchedDirs.value(id))
+            addOwner(dir, id);
+    }
+
+    const QStringList current = m_folderWatcher->directories();
+    for (const QString &dir : current) {
+        if (!owners.contains(dir))
+            m_folderWatcher->removePath(dir);
+    }
+    for (auto it = owners.cbegin(); it != owners.cend(); ++it) {
+        const QString &dir = it.key();
+        if (!m_folderWatcher->directories().contains(dir))
+            m_folderWatcher->addPath(dir);
+    }
+    m_folderDirOwners = owners;
+}
+
+void PlaylistManager::scheduleWatchScan(const QString &id)
+{
+    if (!m_watchFolders.contains(id) || m_watchFolders.value(id).isEmpty())
+        return;
+    if (id != DEFAULT_ID && !m_models.contains(id))
+        return;
+    m_watchScanPending.insert(id);
+    m_watchScanDebounce.start();
+}
+
+void PlaylistManager::invalidateWatchScan(const QString &id)
+{
+    ++m_watchScanGeneration[id];
+    m_watchScanRunning.remove(id);
+    m_watchScanQueued.remove(id);
+    m_watchScanPending.remove(id);
+}
+
+void PlaylistManager::startWatchScan(const QString &id)
+{
+    if (!m_watchFolders.contains(id) || m_watchFolders.value(id).isEmpty())
+        return;
+    if (id != DEFAULT_ID && !m_models.contains(id))
+        return;
+    if (m_watchScanRunning.contains(id)) {
+        m_watchScanQueued.insert(id);
+        return;
+    }
+
+    m_watchScanRunning.insert(id);
+    const quint64 generation = ++m_watchScanGeneration[id];
+    const QStringList roots = m_watchFolders.value(id);
+
+    auto *future = new QFutureWatcher<FolderScanResult>(this);
+    connect(future, &QFutureWatcher<FolderScanResult>::finished, this,
+            [this, id, generation, future]() {
+        const FolderScanResult result = future->result();
+        future->deleteLater();
+        if (m_watchScanGeneration.value(id, 0) != generation)
+            return;
+        m_watchScanRunning.remove(id);
+        if (!m_watchFolders.contains(id)
+                || (id != DEFAULT_ID && !m_models.contains(id)))
+            return;
+
+        QSet<QString> dirs;
+        for (const QString &dir : result.dirs) {
+            if (QFileInfo(dir).isDir())
+                dirs.insert(dir);
+        }
+        m_watchedDirs.insert(id, dirs);
+        rebuildFolderWatcher();
+
+        PlaylistModel *model = id == DEFAULT_ID
+            ? m_defaultModel : m_models.value(id, nullptr);
+        if (model) {
+            QStringList newFiles;
+            for (const QString &path : result.files) {
+                if (!model->contains(path))
+                    newFiles << path;
+            }
+            if (!newFiles.isEmpty())
+                addFilesToPlaylist(id, newFiles);
+        }
+
+        if (m_watchScanQueued.remove(id))
+            scheduleWatchScan(id);
+    });
+    future->setFuture(QtConcurrent::run([roots]() { return scanFolderTree(roots); }));
+}
+
+void PlaylistManager::stopWatchingPlaylist(const QString &id)
+{
+    invalidateWatchScan(id);
+    m_watchFolders.remove(id);
+    m_watchedDirs.remove(id);
+    rebuildFolderWatcher();
 }
 
 QString PlaylistManager::playlistsDir() const {
@@ -212,6 +605,7 @@ void PlaylistManager::loadPlaylist(const QString &id) {
     }
 
     model->setEntriesFromJson(obj.value("entries").toArray(), "");
+    m_watchFolders.insert(id, foldersFromJson(obj.value("watchFolders").toArray()));
 
     // The file came back while Luma was closed: setEntries() dropped its stale
     // "unavailable" mark, so rewrite the playlist without it.
@@ -224,8 +618,10 @@ void PlaylistManager::queuePlaylistSave(const QString &id)
     if (id == DEFAULT_ID || !m_saver) return;
     PlaylistModel *model = m_models.value(id, nullptr);
     if (!model) return;
+    ++m_pendingPlaylistSaves[id];
     m_saver->save(playlistFilePath(id), id, m_names.value(id, id),
-                  normalizedPlaylistMode(m_modes.value(id)), model->entries());
+                  normalizedPlaylistMode(m_modes.value(id)), model->entries(),
+                  m_watchFolders.value(id));
 }
 
 void PlaylistManager::savePlaylist(const QString &id) {
@@ -244,6 +640,9 @@ void PlaylistManager::savePlaylist(const QString &id) {
     obj["mode"] = normalizedPlaylistMode(m_modes.value(id));
 
     obj["entries"] = model->toJsonArray();
+    const QStringList watchFolders = m_watchFolders.value(id);
+    if (!watchFolders.isEmpty())
+        obj["watchFolders"] = QJsonArray::fromStringList(watchFolders);
 
     // Atomic replace: a crash while saving must not truncate the playlist.
     QSaveFile f(playlistFilePath(id));
@@ -377,6 +776,7 @@ void PlaylistManager::deletePlaylist(const QString &id) {
     m_modes.remove(id);
     m_scannedPlaylists.remove(id);
     m_order.removeAll(id);
+    stopWatchingPlaylist(id);
 
     saveOrder();
     emit playlistsChanged();
@@ -662,6 +1062,76 @@ void PlaylistManager::fetchUrlTitle(const QString &id, const QString &url) {
 void PlaylistManager::addFolderToPlaylist(const QString &id, const QString &folder) {
     if (!QFileInfo(folder).isDir()) return;
     addFilesToPlaylist(id, {folder});
+}
+
+QStringList PlaylistManager::watchFolders(const QString &id) const
+{
+    if (id == DEFAULT_ID)
+        return {};
+    return m_watchFolders.value(id);
+}
+
+bool PlaylistManager::addWatchFolder(const QString &id, const QString &folder)
+{
+    // The Default playlist is not saved, so it has no properties and no
+    // folder watching.
+    if (id == DEFAULT_ID || !m_models.contains(id))
+        return false;
+    const QFileInfo info(folder);
+    if (!info.exists() || !info.isDir())
+        return false;
+
+    QString canonical = info.canonicalFilePath();
+    if (canonical.isEmpty())
+        canonical = info.absoluteFilePath();
+    QStringList &folders = m_watchFolders[id];
+    if (folders.contains(canonical))
+        return false;
+    folders << canonical;
+
+    m_watchedDirs.remove(id);
+    invalidateWatchScan(id);
+    rebuildFolderWatcher();
+    if (id != DEFAULT_ID)
+        savePlaylist(id);
+    scheduleWatchScan(id);
+    emit watchFoldersChanged(id);
+    return true;
+}
+
+void PlaylistManager::removeWatchFolder(const QString &id, const QString &folder)
+{
+    auto it = m_watchFolders.find(id);
+    if (it == m_watchFolders.end())
+        return;
+
+    QString target = folder;
+    const QString canonical = QFileInfo(folder).canonicalFilePath();
+    if (!canonical.isEmpty())
+        target = canonical;
+    if (it->removeAll(target) == 0)
+        return;
+
+    m_watchedDirs.remove(id);
+    invalidateWatchScan(id);
+    rebuildFolderWatcher();
+    if (id != DEFAULT_ID)
+        savePlaylist(id);
+    if (!it.value().isEmpty())
+        scheduleWatchScan(id);
+    emit watchFoldersChanged(id);
+}
+
+void PlaylistManager::openAddWatchFolderDialog(const QString &id)
+{
+    if (id == DEFAULT_ID)
+        return;
+    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+    if (defaultDir.isEmpty()) defaultDir = QDir::homePath();
+    const QString folder = QFileDialog::getExistingDirectory(
+        nullptr, tr("playlist_watch_add_folder"), defaultDir);
+    if (!folder.isEmpty())
+        addWatchFolder(id, folder);
 }
 
 void PlaylistManager::openAddFilesDialog(const QString &id) {

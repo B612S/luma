@@ -36,7 +36,7 @@ Rectangle {
     property string pendingInfoPath: ""
 
     property bool menuVisible: contextMenu.visible
-    property bool hasOpenDialog: dialogs.nameDialog.visible || dialogs.deleteDialog.visible || dialogs.clearDialog.visible || infoDialog.visible || urlDialog.dialog.visible
+    property bool hasOpenDialog: dialogs.nameDialog.visible || dialogs.deleteDialog.visible || dialogs.clearDialog.visible || infoDialog.visible || urlDialog.dialog.visible || propertiesDialog.visible
 
     visible: opacity > 0.0; enabled: isOpen; opacity: isOpen ? 1.0 : 0.0
     Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
@@ -46,7 +46,7 @@ Rectangle {
         if (!isOpen) {
             // A drag must not survive the panel: its release may never arrive.
             panel.endDrag();
-            contextMenu.close(); tabs.closeMenus(); infoDialog.close();
+            contextMenu.close(); tabs.closeMenus(); infoDialog.close(); propertiesDialog.close();
             // Never keep keyboard focus inside the closed search field.
             searchField.focus = false;
             if (panel.parent) panel.parent.forceActiveFocus();
@@ -319,6 +319,7 @@ Rectangle {
             onDeleteRequested: (id, name) => dialogs.deleteDialog.openFor(id, name)
             onAddFilesRequested: (id) => Playlists.openAddFilesDialog(id)
             onAddFolderRequested: (id) => Playlists.openAddFolderDialog(id)
+            onPropertiesRequested: (id) => propertiesDialog.openFor(id)
             onAddUrlRequested: (id) => urlDialog.openWith(qsTranslate("PlaylistManager", "dialog_add_url"), id)
             onClearRequested: (id) => dialogs.clearDialog.openFor(id, Playlists.playlistName(id))
         }
@@ -514,6 +515,10 @@ Rectangle {
     // Dialogs
     PlaylistDialogs {
         id: dialogs
+    }
+
+    PlaylistPropertiesDialog {
+        id: propertiesDialog
     }
 
     AddUrlDialog {
