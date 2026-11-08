@@ -44,6 +44,7 @@ Dialog {
     property bool ytdlpEjsInstalling: false
     property bool denoInstalling: false
     property string ytdlpInstallMessage: ""
+    property string pluginsMessage: ""
 
     function refreshYtdlpRuntime() {
         if (typeof Media !== "undefined" && Media !== null)
@@ -190,11 +191,11 @@ Dialog {
                 }
 
                 CategoryButton { text: qsTr("settings_general"); isActive: settingsDialog.currentCategory === "general"; onClicked: settingsDialog.currentCategory = "general" }
-                CategoryButton { text: qsTr("settings_playlist"); isActive: settingsDialog.currentCategory === "playlist"; onClicked: settingsDialog.currentCategory = "playlist" }
                 CategoryButton { text: qsTr("settings_interface"); isActive: settingsDialog.currentCategory === "interface"; onClicked: settingsDialog.currentCategory = "interface" }
                 CategoryButton { text: qsTr("settings_subtitles"); isActive: settingsDialog.currentCategory === "subtitles"; onClicked: settingsDialog.currentCategory = "subtitles" }
                 CategoryButton { text: qsTr("settings_playback"); isActive: settingsDialog.currentCategory === "playback"; onClicked: settingsDialog.currentCategory = "playback" }
                 CategoryButton { text: qsTr("settings_shortcuts"); isActive: settingsDialog.currentCategory === "shortcuts"; onClicked: settingsDialog.currentCategory = "shortcuts" }
+                CategoryButton { text: qsTr("settings_plugins"); isActive: settingsDialog.currentCategory === "plugins"; onClicked: settingsDialog.currentCategory = "plugins" }
                 CategoryButton { text: qsTr("settings_debug"); isActive: settingsDialog.currentCategory === "debug"; onClicked: settingsDialog.currentCategory = "debug" }
                 CategoryButton { text: qsTr("settings_about"); isActive: settingsDialog.currentCategory === "about"; onClicked: settingsDialog.currentCategory = "about" }
 
@@ -279,64 +280,6 @@ Dialog {
                                 Layout.preferredWidth: settingsDialog.controlWidth
                                 Layout.preferredHeight: 40
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.singleInstance; onToggled: Config.singleInstance = checked }
-                            }
-                        }
-                    }
-
-                    ColumnLayout {
-                        visible: settingsDialog.currentCategory === "playlist"
-                        Layout.fillWidth: true
-                        spacing: 22
-
-                        Label { text: qsTr("settings_playlist"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
-                        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
-
-                        GridLayout {
-                            columns: 2
-                            columnSpacing: 16
-                            rowSpacing: 16
-                            Layout.fillWidth: true
-
-                            Label { text: qsTr("settings_append_playlist"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
-                            Item {
-                                Layout.preferredWidth: settingsDialog.controlWidth
-                                Layout.preferredHeight: 40
-                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.appendToPlaylist; onToggled: Config.appendToPlaylist = checked }
-                            }
-
-                            Label {
-                                text: qsTr("settings_play_mode")
-                                color: Kirigami.Theme.textColor; font.pixelSize: 14
-                                Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
-                                wrapMode: Text.WordWrap
-                            }
-                            Item {
-                                Layout.preferredWidth: settingsDialog.controlWidth
-                                Layout.preferredHeight: 40
-                                ComboBox {
-                                    anchors.fill: parent
-                                    font.pixelSize: 14
-                                    model: [
-                                        { text: qsTranslate("ContextMenu", "playback_sequential"), value: "sequential" },
-                                        { text: qsTranslate("ContextMenu", "playback_repeat"), value: "repeat" },
-                                        { text: qsTranslate("ContextMenu", "playback_shuffle"), value: "shuffle" },
-                                        { text: qsTranslate("ContextMenu", "playback_stop"), value: "stop" }
-                                    ]
-                                    textRole: "text"; valueRole: "value"
-                                    currentIndex: { let idx = model.findIndex(item => item.value === Config.playlistMode); return idx !== -1 ? idx : 0 }
-                                    // Only the Default playlist's mode is stored in the
-                                    // settings; named playlists keep their own mode.
-                                    onActivated: (index) => { Config.playlistMode = model[index].value; }
-                                }
-                            }
-
-                            Label {
-                                Layout.columnSpan: 2
-                                Layout.fillWidth: true
-                                text: qsTr("settings_play_mode_hint")
-                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.65)
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
                             }
                         }
                     }
@@ -1109,6 +1052,168 @@ Dialog {
                     }
 
                     ColumnLayout {
+                        visible: settingsDialog.currentCategory === "plugins"
+                        Layout.fillWidth: true
+                        spacing: 22
+
+                        Label { text: qsTr("settings_plugins"); font.pixelSize: 20; font.weight: Font.Bold; color: Kirigami.Theme.textColor }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.2) }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("plugins_hint")
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                           Kirigami.Theme.textColor.b, 0.65)
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Button {
+                                text: qsTr("plugins_add")
+                                onClicked: {
+                                    settingsDialog.pluginsMessage = "";
+                                    const error = Plugins.installPluginDialog();
+                                    if (error !== "")
+                                        settingsDialog.pluginsMessage = error;
+                                }
+                            }
+                            Button {
+                                text: qsTr("plugins_open_folder")
+                                onClicked: Plugins.openPluginsFolder()
+                            }
+                            Button {
+                                text: qsTr("plugins_reload")
+                                onClicked: {
+                                    settingsDialog.pluginsMessage = "";
+                                    Plugins.reload();
+                                }
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: settingsDialog.pluginsMessage !== ""
+                            text: settingsDialog.pluginsMessage
+                            color: Kirigami.Theme.negativeTextColor
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: Plugins.plugins.length === 0
+                            text: qsTr("plugins_empty")
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                                           Kirigami.Theme.textColor.b, 0.6)
+                            font.pixelSize: 13
+                        }
+
+                        Repeater {
+                            model: Plugins.plugins
+
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: pluginColumn.implicitHeight + 24
+                                radius: 6
+                                color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                                               Kirigami.Theme.backgroundColor.g,
+                                               Kirigami.Theme.backgroundColor.b, 0.55)
+
+                                ColumnLayout {
+                                    id: pluginColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 6
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+
+                                        Label {
+                                            text: modelData.name
+                                            textFormat: Text.PlainText
+                                            font.pixelSize: 15
+                                            font.weight: Font.DemiBold
+                                            color: Kirigami.Theme.textColor
+                                        }
+                                        Label {
+                                            text: "v" + modelData.version
+                                            font.pixelSize: 12
+                                            color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                                           Kirigami.Theme.textColor.g,
+                                                           Kirigami.Theme.textColor.b, 0.6)
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                        Switch {
+                                            id: pluginSwitch
+                                            checked: modelData.enabled
+                                            onToggled: {
+                                                if (checked && (modelData.mpvRequired || modelData.processRequired)) {
+                                                    // Direct mpv/process access needs
+                                                    // explicit, separate consent.
+                                                    checked = false;
+                                                    pluginAccessDialog.openFor(modelData, pluginSwitch);
+                                                } else {
+                                                    Plugins.setPluginEnabled(modelData.id, checked);
+                                                }
+                                            }
+                                        }
+                                        Button {
+                                            text: qsTranslate("SettingsDialog", "plugins_delete")
+                                            onClicked: deletePluginDialog.openFor(modelData.id, modelData.name)
+                                        }
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.description || modelData.id
+                                        textFormat: Text.PlainText
+                                        font.pixelSize: 13
+                                        color: Kirigami.Theme.textColor
+                                        wrapMode: Text.WordWrap
+                                        visible: text !== ""
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.id + (modelData.author ? " · " + modelData.author : "")
+                                        textFormat: Text.PlainText
+                                        font.pixelSize: 11
+                                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                                       Kirigami.Theme.textColor.g,
+                                                       Kirigami.Theme.textColor.b, 0.55)
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        visible: modelData.permissions.length > 0
+                                        text: qsTranslate("SettingsDialog", "plugins_permissions")
+                                              .arg(modelData.permissions.join(", "))
+                                        textFormat: Text.PlainText
+                                        font.pixelSize: 11
+                                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                                       Kirigami.Theme.textColor.g,
+                                                       Kirigami.Theme.textColor.b, 0.65)
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        visible: modelData.error !== ""
+                                        text: modelData.error
+                                        textFormat: Text.PlainText
+                                        font.pixelSize: 11
+                                        color: Kirigami.Theme.negativeTextColor
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
                         visible: settingsDialog.currentCategory === "debug"
                         Layout.fillWidth: true
                         spacing: 22
@@ -1323,6 +1428,170 @@ Dialog {
 
     property string currentCategory: "general"
 
+
+    Dialog {
+        id: pluginAccessDialog
+        title: accessCategory === "mpv"
+               ? qsTr("plugins_access_mpv_title")
+               : qsTr("plugins_access_process_title")
+        modal: true
+        focus: true
+        width: 480
+        padding: 20
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        property string targetId: ""
+        property string targetName: ""
+        property string accessCategory: "process"
+        property var targetPermissions: []
+        property var targetProcessPermissions: []
+        property bool targetProcessRequired: false
+        property var switchControl: null
+
+        function openFor(plugin, control) {
+            targetId = plugin.id;
+            targetName = plugin.name;
+            targetProcessRequired = plugin.processRequired === true;
+            targetProcessPermissions = (plugin.dangerousPermissions || [])
+                .filter(permission => permission === "process"
+                                     || permission.startsWith("process:"));
+            accessCategory = plugin.mpvRequired === true ? "mpv" : "process";
+            targetPermissions = accessCategory === "mpv"
+                ? ["mpv:raw"]
+                : targetProcessPermissions;
+            switchControl = control;
+            open();
+        }
+
+        function permissionLabel(permission) {
+            if (permission === "mpv:raw")
+                return qsTr("plugins_access_mpv");
+            if (permission === "process")
+                return qsTr("plugins_access_process");
+            return permission;
+        }
+
+        function permissionLabels() {
+            return targetPermissions.map(permissionLabel).join(", ");
+        }
+
+        function allow() {
+            if (accessCategory === "mpv") {
+                Plugins.approveMpv(targetId);
+                if (targetProcessRequired) {
+                    // Ask about external programs as a second, separate consent.
+                    accessCategory = "process";
+                    targetPermissions = targetProcessPermissions;
+                    return;
+                }
+            } else {
+                Plugins.approveProcess(targetId);
+            }
+            if (switchControl)
+                switchControl.checked = true;
+            Plugins.setPluginEnabled(targetId, true);
+            close();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Label {
+                Layout.fillWidth: true
+                text: qsTranslate("SettingsDialog",
+                                  pluginAccessDialog.accessCategory === "mpv"
+                                  ? "plugins_access_mpv_text"
+                                  : "plugins_access_process_text")
+                      .arg(pluginAccessDialog.targetName)
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                color: Kirigami.Theme.textColor
+            }
+            Label {
+                Layout.fillWidth: true
+                text: qsTranslate("SettingsDialog", "plugins_access_permissions")
+                      .arg(pluginAccessDialog.permissionLabels())
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                font.pixelSize: 12
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.7)
+            }
+            Label {
+                Layout.fillWidth: true
+                text: qsTranslate("SettingsDialog",
+                                  pluginAccessDialog.accessCategory === "mpv"
+                                  ? "plugins_access_mpv_hint"
+                                  : "plugins_access_process_hint")
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                font.pixelSize: 12
+                color: Kirigami.Theme.negativeTextColor
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: qsTr("plugins_cancel")
+                    onClicked: {
+                        if (pluginAccessDialog.switchControl)
+                            pluginAccessDialog.switchControl.checked = false;
+                        pluginAccessDialog.close();
+                    }
+                }
+                Button {
+                    text: qsTr("plugins_access_allow")
+                    onClicked: pluginAccessDialog.allow()
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: deletePluginDialog
+        title: qsTr("plugins_delete_title")
+        modal: true
+        focus: true
+        width: 440
+        padding: 20
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        property string targetId: ""
+        property string targetName: ""
+
+        function openFor(id, name) {
+            targetId = id;
+            targetName = name;
+            open();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 16
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("plugins_delete_text").arg(deletePluginDialog.targetName)
+                wrapMode: Text.WordWrap
+                color: Kirigami.Theme.textColor
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Button { text: qsTr("plugins_cancel"); onClicked: deletePluginDialog.close() }
+                Button {
+                    text: qsTr("plugins_delete")
+                    onClicked: {
+                        if (!Plugins.removePlugin(deletePluginDialog.targetId))
+                            settingsDialog.pluginsMessage = qsTr("plugins_delete_failed");
+                        else
+                            settingsDialog.pluginsMessage = "";
+                        deletePluginDialog.close();
+                    }
+                }
+            }
+        }
+    }
 
     // Subtitle font picker. The system font list is large, so
     // we don't use ComboBox: ListView only creates delegates for visible

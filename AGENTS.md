@@ -120,6 +120,12 @@ settings/menu behavior.
   prefer subclassing `MpvItem` over editing vendored code where practical. `MpvItem.*`,
   `FrameDecoder.*` and `mpvqt_export.h` are Luma additions, not upstream mpvqt.
 - `qml/` — flat directory of QML components; no Qt Quick Designer or compiled UI forms.
+- Plugins are JavaScript integrations auto-loaded from
+  `~/.local/share/luma/plugins/<id>/`; the host lives in `core/Plugin*.{hpp,cpp}`
+  and `qml/Plugin*.qml`. **Settings → Plugins** can enable/disable plugins,
+  show descriptions/versions/permissions and add or delete plugin folders.
+  New plugins start disabled; direct `mpv:raw` and `process` permissions
+  require an explicit warning-gated approval. See [`docs/PLUGINS.md`](docs/PLUGINS.md).
 - Keyboard handling is `ShortcutHandler::eventFilter`. Bindings are loaded from
   `~/.config/luma/shortcuts.conf` (local and global) and matched by evdev keycode
   (Wayland native scan code); `core/ShortcutAction.hpp` holds the action metadata

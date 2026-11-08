@@ -8,6 +8,18 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- New plugins start disabled. Direct `mpv` access (`mpv:raw`) and external
+  programs (`process`, through `luma.process.run(program, ...)`) use separate
+  warning dialogs and separate approvals; both are requested before the plugin
+  is enabled. Raw mpv process/script commands stay blocked. Plugins otherwise
+  work through Luma's media API.
+- JavaScript plugin system: plugins are auto-loaded from
+  `~/.local/share/luma/plugins/<id>/` and can control playback and playlists,
+  add native Kirigami menu actions, open host-rendered native windows, use
+  plugin-scoped config/storage, and make permission-checked HTTP requests.
+  Settings → Plugins can enable/disable plugins, show descriptions and
+  versions, and add or delete plugin folders. See
+  [`docs/PLUGINS.md`](docs/PLUGINS.md).
 - Playlist properties (right-click a playlist tab): a playlist can watch
   folders. Existing media files are imported in the background when a folder
   is added and new files are appended automatically. Watching uses filesystem
@@ -136,6 +148,10 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Playlist settings moved out of Settings: the Default playlist's append
+  switch and playback mode now live in its Properties dialog. Properties is
+  available for the Default playlist again, and every playlist now exposes its
+  own playback mode there.
 - Selected playlist rows, tabs, Settings categories and checked menu entries
   use the semibold (DemiBold) weight, which is visibly lighter than Bold but
   still distinct from Normal.
@@ -271,6 +287,22 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Plugin windows no longer disable player shortcuts. Shortcuts stay active while
+  a host-rendered plugin window is open; text fields still suppress them while
+  focused.
+- Plugin storage and external-process executable lookup now honor their
+  declared permissions; a plugin without `filesystem:plugin` or `process`
+  gets no path and cannot read/write plugin storage through the API.
+- Hardened plugin execution: raw mpv process/script/media-open commands are
+  blocked, direct mpv/process access requires explicit approval, and
+  plugin-provided UI text is rendered as plain text to prevent markup
+  injection.
+- Plugin windows now receive live `positionChanged`, `pausedChanged` and
+  `volumeChanged` events; the Now Playing example updates its position, state
+  and Play/Pause label instead of freezing the snapshot taken at open time.
+- Shuffle playback mode now actually reorders named playlists immediately
+  (including when the mode is chosen in Properties or restored on startup);
+  previously only the Default playlist was shuffled.
 - The active playlist tab underline now spans the tab width instead of the
   label width, so short playlist names no longer get a shorter bar.
 - The playlist tab menu hides **Properties**, **Rename** and **Delete** for

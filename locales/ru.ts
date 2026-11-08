@@ -119,6 +119,30 @@
 <message><source>settings_show_panels_fullscreen</source><translation>Показывать панель управления в полноэкранном режиме</translation></message>
 <message><source>settings_chapter_markers</source><translation>Показывать маркеры глав на полосе перемотки</translation></message>
 <message><source>settings_playback</source><translation>Воспроизведение</translation></message>
+<message><source>settings_plugins</source><translation>Плагины</translation></message>
+<message><source>plugins_add</source><translation>Добавить плагин…</translation></message>
+<message><source>plugins_open_folder</source><translation>Открыть папку</translation></message>
+<message><source>plugins_reload</source><translation>Перезагрузить плагины</translation></message>
+<message><source>plugins_empty</source><translation>Плагины не установлены.</translation></message>
+<message><source>plugins_delete</source><translation>Удалить</translation></message>
+<message><source>plugins_delete_title</source><translation>Удалить плагин</translation></message>
+<message><source>plugins_delete_text</source><translation>Удалить «%1» с диска? Отменить это нельзя.</translation></message>
+<message><source>plugins_cancel</source><translation>Отмена</translation></message>
+<message><source>plugins_permissions</source><translation>Разрешения: %1</translation></message>
+<message><source>plugins_delete_failed</source><translation>Не удалось удалить плагин.</translation></message>
+<message><source>plugins_hint</source><translation>Плагины загружаются из ~/.local/share/luma/plugins. Каждый плагин лежит в своей папке; добавленные плагины по умолчанию выключены.</translation></message>
+<message><source>plugins_access_permissions</source><translation>Запрошен прямой доступ: %1</translation></message>
+<message><source>plugins_access_mpv</source><translation>mpv</translation></message>
+<message><source>plugins_access_process</source><translation>внешние программы</translation></message>
+<message><source>plugins_access_ffmpeg</source><translation>ffmpeg</translation></message>
+<message><source>plugins_access_ytdlp</source><translation>yt-dlp</translation></message>
+<message><source>plugins_access_mpv_title</source><translation>Разрешить прямой доступ к mpv?</translation></message>
+<message><source>plugins_access_mpv_text</source><translation>«%1» запрашивает прямое управление mpv.</translation></message>
+<message><source>plugins_access_mpv_hint</source><translation>Плагин сможет читать и менять любые свойства mpv и выполнять команды mpv (кроме запуска процессов и скриптов) в обход API воспроизведения Luma. Включайте только если доверяете плагину.</translation></message>
+<message><source>plugins_access_process_title</source><translation>Разрешить внешние программы?</translation></message>
+<message><source>plugins_access_process_text</source><translation>«%1» запрашивает прямой доступ к программам на этом компьютере.</translation></message>
+<message><source>plugins_access_process_hint</source><translation>Плагин сможет запускать любые исполняемые программы на этом компьютере, включая shell, с доступом к файлам и сети в обход обычных ограничений Luma. Включайте только если доверяете плагину.</translation></message>
+<message><source>plugins_access_allow</source><translation>Разрешить доступ</translation></message>
 <message><source>settings_debug</source><translation>Отладка</translation></message>
 <message><source>settings_debug_hint</source><translation>Каждый компонент пишет свой файл в ~/.cache/luma/: luma.log, mpv.log и yt-dlp.log.</translation></message>
 <message><source>settings_shortcuts</source><translation>Клавиши</translation></message>
@@ -194,6 +218,8 @@
 
 <message><source>playlist_play_new_window</source><translation>Воспроизвести в другом окне</translation></message>
 <message><source>playlist_properties_title</source><translation>Свойства плейлиста</translation></message>
+<message><source>playlist_playback_mode</source><translation>Режим воспроизведения</translation></message>
+<message><source>playlist_mode_hint</source><translation>Применяется, когда плейлист заканчивается.</translation></message>
 <message><source>playlist_watch_folders</source><translation>Отслеживаемые папки</translation></message>
 <message><source>playlist_watch_hint</source><translation>Медиафайлы в этих папках добавляются автоматически. При добавлении папки импортируются существующие файлы, новые подхватываются в фоне.</translation></message>
 <message><source>playlist_add_watch_folder</source><translation>Добавить папку…</translation></message>
@@ -247,6 +273,14 @@
 <message><source>dialog_add_url</source><translation>Добавить ссылку</translation></message>
 <message><source>playlist_default</source><translation>По умолчанию</translation></message>
 <message><source>playlist_files_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
+</context>
+
+<context>
+<name>PluginManager</name>
+<message><source>plugins_choose_directory</source><translation>Выберите папку плагина</translation></message>
+<message><source>plugins_requires_approval</source><translation>Для прямого внешнего доступа требуется явное разрешение</translation></message>
+<message><source>plugins_already_installed</source><translation>Плагин %1 уже установлен</translation></message>
+<message><source>plugins_install_failed</source><translation>Не удалось скопировать плагин</translation></message>
 </context>
 
 <context>

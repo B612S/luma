@@ -119,6 +119,30 @@
 <message><source>settings_show_panels_fullscreen</source><translation>Show the control bar in fullscreen</translation></message>
 <message><source>settings_chapter_markers</source><translation>Show chapter markers on the seek bar</translation></message>
 <message><source>settings_playback</source><translation>Playback</translation></message>
+<message><source>settings_plugins</source><translation>Plugins</translation></message>
+<message><source>plugins_add</source><translation>Add plugin…</translation></message>
+<message><source>plugins_open_folder</source><translation>Open folder</translation></message>
+<message><source>plugins_reload</source><translation>Reload plugins</translation></message>
+<message><source>plugins_empty</source><translation>No plugins installed.</translation></message>
+<message><source>plugins_delete</source><translation>Delete</translation></message>
+<message><source>plugins_delete_title</source><translation>Delete plugin</translation></message>
+<message><source>plugins_delete_text</source><translation>Remove “%1” from disk? This cannot be undone.</translation></message>
+<message><source>plugins_cancel</source><translation>Cancel</translation></message>
+<message><source>plugins_permissions</source><translation>Permissions: %1</translation></message>
+<message><source>plugins_delete_failed</source><translation>Could not delete the plugin.</translation></message>
+<message><source>plugins_hint</source><translation>Plugins are loaded from ~/.local/share/luma/plugins. Each plugin lives in its own folder; newly added plugins start disabled.</translation></message>
+<message><source>plugins_access_permissions</source><translation>Requested access: %1</translation></message>
+<message><source>plugins_access_mpv</source><translation>mpv</translation></message>
+<message><source>plugins_access_process</source><translation>external programs</translation></message>
+<message><source>plugins_access_ffmpeg</source><translation>ffmpeg</translation></message>
+<message><source>plugins_access_ytdlp</source><translation>yt-dlp</translation></message>
+<message><source>plugins_access_mpv_title</source><translation>Allow direct mpv access?</translation></message>
+<message><source>plugins_access_mpv_text</source><translation>“%1” requests direct control of mpv.</translation></message>
+<message><source>plugins_access_mpv_hint</source><translation>This lets the plugin read or change any mpv property and run mpv commands (except process/script commands), bypassing Luma's playback API. Enable it only if you trust this plugin.</translation></message>
+<message><source>plugins_access_process_title</source><translation>Allow external programs?</translation></message>
+<message><source>plugins_access_process_text</source><translation>“%1” requests direct access to programs on this computer.</translation></message>
+<message><source>plugins_access_process_hint</source><translation>This lets the plugin start any executable program on this computer, including a shell, with access to files and the network outside Luma's normal restrictions. Enable it only if you trust this plugin.</translation></message>
+<message><source>plugins_access_allow</source><translation>Allow access</translation></message>
 <message><source>settings_debug</source><translation>Debug</translation></message>
 <message><source>settings_debug_hint</source><translation>Each component writes its own file to ~/.cache/luma/: luma.log, mpv.log and yt-dlp.log.</translation></message>
 <message><source>settings_shortcuts</source><translation>Shortcuts</translation></message>
@@ -194,6 +218,8 @@
 
 <message><source>playlist_play_new_window</source><translation>Play in another window</translation></message>
 <message><source>playlist_properties_title</source><translation>Playlist properties</translation></message>
+<message><source>playlist_playback_mode</source><translation>Playback mode</translation></message>
+<message><source>playlist_mode_hint</source><translation>Used when this playlist reaches the end.</translation></message>
 <message><source>playlist_watch_folders</source><translation>Watched folders</translation></message>
 <message><source>playlist_watch_hint</source><translation>Media files in these folders are added automatically. Existing files are imported when a folder is added; new files are picked up in the background.</translation></message>
 <message><source>playlist_add_watch_folder</source><translation>Add folder…</translation></message>
@@ -247,6 +273,14 @@
 <message><source>dialog_add_url</source><translation>Add link</translation></message>
 <message><source>playlist_default</source><translation>Default</translation></message>
 <message><source>playlist_files_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
+</context>
+
+<context>
+<name>PluginManager</name>
+<message><source>plugins_choose_directory</source><translation>Select plugin folder</translation></message>
+<message><source>plugins_requires_approval</source><translation>Direct external access requires explicit approval</translation></message>
+<message><source>plugins_already_installed</source><translation>Plugin %1 is already installed</translation></message>
+<message><source>plugins_install_failed</source><translation>Could not copy the plugin</translation></message>
 </context>
 
 <context>

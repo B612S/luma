@@ -57,6 +57,7 @@ public:
     Q_INVOKABLE bool addWatchFolder(const QString &id, const QString &folder);
     Q_INVOKABLE void removeWatchFolder(const QString &id, const QString &folder);
     Q_INVOKABLE void openAddWatchFolderDialog(const QString &id);
+    Q_INVOKABLE bool isDefaultPlaylist(const QString &id) const;
     Q_INVOKABLE void openAddFilesDialog(const QString &id);
     Q_INVOKABLE void openAddFolderDialog(const QString &id);
     Q_INVOKABLE void addUrlToPlaylist(const QString &id, const QString &url);
@@ -81,6 +82,7 @@ signals:
     void playlistsChanged();
     void activeIdChanged();
     void playingIdChanged();
+    void playlistModeChanged(const QString &id, const QString &mode);
     void activeModelChanged();
     void watchFoldersChanged(const QString &id);
 

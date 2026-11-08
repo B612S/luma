@@ -51,6 +51,7 @@ Rectangle {
         width: osd.width - 32
         horizontalAlignment: Text.AlignHCenter
         color: Kirigami.Theme.textColor
+        textFormat: Text.PlainText
         font.pixelSize: 16
         wrapMode: Text.NoWrap
         elide: Text.ElideMiddle

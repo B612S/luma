@@ -68,6 +68,7 @@ Rectangle {
         id: label
         text: item.text
         color: item.labelColor
+        textFormat: Text.PlainText
         font.pixelSize: 14
         font.weight: item.checked ? Font.DemiBold : Font.Normal
         elide: Text.ElideRight

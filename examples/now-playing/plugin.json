@@ -1,0 +1,11 @@
+{
+  "id": "com.example.now-playing",
+  "name": "Now Playing",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "main": "main.js",
+  "description": "Shows the current title in a native window and toggles playback.",
+  "author": "Luma examples",
+  "license": "MIT",
+  "permissions": ["menus", "windows", "media:read", "media:control"]
+}

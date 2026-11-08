@@ -66,10 +66,17 @@ LumaMenu {
 
             LumaMenuSeparator {}
 
+            PluginMenu {
+                id: tabPluginMenu
+                location: "tab"
+                context: ({ playlistId: tabContextMenu.targetId })
+                closeMenu: () => tabContextMenu.close()
+            }
+
+            LumaMenuSeparator { visible: tabPluginMenu.visible }
+
             LumaMenuButton {
                 text: qsTranslate("PlaylistTabs", "tabs_properties")
-                // The Default playlist is not saved and has no properties.
-                visible: !tabContextMenu.targetIsDefault
                 onClicked: {
                     tabContextMenu.close();
                     tabContextMenu.propertiesRequested(tabContextMenu.targetId);

@@ -232,7 +232,8 @@ ApplicationWindow {
     playlistPanel.hasOpenDialog ||
     infoDialog.visible ||
     fileUnavailableDialog.visible ||
-    urlDialog.dialog.visible
+    urlDialog.dialog.visible ||
+    (typeof Plugins !== "undefined" && Plugins && Plugins.windows.length > 0)
 
     Component.onCompleted: {
         root.requestActivate()
@@ -520,6 +521,17 @@ ApplicationWindow {
     EqualizerDialog { id: equalizerDialog }
     MediaInfoDialog { id: infoDialog }
     FileUnavailableDialog { id: fileUnavailableDialog }
+
+    Repeater {
+        model: typeof Plugins !== "undefined" && Plugins ? Plugins.windows : []
+        // Repeater delegates must be Items; the Dialog itself anchors to the
+        // window overlay.
+        delegate: Item {
+            PluginWindowDialog {
+                pluginWindow: modelData
+            }
+        }
+    }
 
     Connections {
         target: Media

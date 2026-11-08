@@ -4,10 +4,9 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 // Per-playlist properties, using the same layout as the Settings dialog:
-// categories on the left, their contents on the right, Close in the footer.
-// Currently a playlist can watch folders: existing media is imported in the
-// background when a folder is added and new files are appended when they
-// appear.
+// categories on the left, their contents on the right.
+// The Default playlist gets the append switch and its playback mode; named
+// playlists get their playback mode and watched folders.
 Dialog {
     id: dialog
     modal: true
@@ -30,6 +29,11 @@ Dialog {
     property string playlistId: ""
     property string playlistName: ""
     property var folders: []
+    property string playlistMode: "sequential"
+    property string currentCategory: "playback"
+
+    readonly property bool isDefault: typeof Playlists !== "undefined" && Playlists
+                                      && Playlists.isDefaultPlaylist(playlistId)
 
     // Same selection style as Settings: 0.35 body, opaque side bar.
     readonly property color selectionBackgroundColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
@@ -45,12 +49,18 @@ Dialog {
             return;
         folders = Playlists.watchFolders(playlistId);
         playlistName = Playlists.playlistName(playlistId);
+        playlistMode = Playlists.playlistMode(playlistId);
+        if (isDefault && currentCategory === "watched")
+            currentCategory = "playback";
     }
 
     function openFor(id) {
         playlistId = id;
         playlistName = (typeof Playlists !== "undefined" && Playlists)
                        ? Playlists.playlistName(id) : "";
+        const defaultPlaylist = typeof Playlists !== "undefined" && Playlists
+                                && Playlists.isDefaultPlaylist(id);
+        currentCategory = defaultPlaylist ? "playback" : "watched";
         refresh();
         open();
     }
@@ -87,11 +97,19 @@ Dialog {
                 return;
             if (dialog.playlistId === "")
                 return;
-            if (Playlists.modelById(dialog.playlistId) === null) {
+            if (!dialog.isDefault && Playlists.modelById(dialog.playlistId) === null) {
                 dialog.close();
                 return;
             }
             dialog.refresh();
+        }
+    }
+
+    Connections {
+        target: typeof Config !== "undefined" ? Config : null
+        function onPlaylistModeChanged() {
+            if (dialog.isDefault)
+                dialog.refresh();
         }
     }
 
@@ -121,13 +139,23 @@ Dialog {
 
                 Item { Layout.preferredHeight: 8 }
 
-                Rectangle {
+                component CategoryButton: Rectangle {
+                    id: btn
+                    property string text: ""
+                    property bool isActive: false
+                    signal clicked()
+
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
                     radius: 4
-                    color: dialog.selectionBackgroundColor
+                    color: isActive ? dialog.selectionBackgroundColor :
+                    (catHover.containsMouse ? Qt.rgba(Kirigami.Theme.textColor.r,
+                                                      Kirigami.Theme.textColor.g,
+                                                      Kirigami.Theme.textColor.b, 0.08)
+                                            : "transparent")
 
                     Rectangle {
+                        visible: btn.isActive
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -142,35 +170,55 @@ Dialog {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         anchors.leftMargin: 12
-                        text: qsTranslate("PlaylistPanel", "playlist_watch_folders")
+                        text: btn.text
                         color: Kirigami.Theme.textColor
                         font.pixelSize: 14
-                        font.weight: Font.DemiBold
+                        font.weight: btn.isActive ? Font.DemiBold : Font.Normal
                     }
+
+                    MouseArea {
+                        id: catHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: btn.clicked()
+                    }
+                }
+
+                CategoryButton {
+                    text: qsTranslate("PlaylistPanel", "playlist_watch_folders")
+                    isActive: dialog.currentCategory === "watched"
+                    visible: !dialog.isDefault
+                    onClicked: dialog.currentCategory = "watched"
+                }
+                CategoryButton {
+                    text: qsTranslate("SettingsDialog", "settings_playback")
+                    isActive: dialog.currentCategory === "playback"
+                    onClicked: dialog.currentCategory = "playback"
                 }
 
                 Item { Layout.fillHeight: true }
             }
         }
 
-        // ---- Watched folders (right) ----
+        // ---- Watched folders (named playlists) ----
         Flickable {
+            visible: dialog.currentCategory === "watched" && !dialog.isDefault
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: 24
             clip: true
             contentWidth: width
-            contentHeight: contentLayout.implicitHeight
+            contentHeight: foldersColumn.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
 
             Item {
                 width: parent.width - 22
-                implicitHeight: contentLayout.implicitHeight
+                implicitHeight: foldersColumn.implicitHeight
 
                 ColumnLayout {
-                    id: contentLayout
+                    id: foldersColumn
                     width: parent.width
                     spacing: 22
 
@@ -258,6 +306,118 @@ Dialog {
                                     onClicked: Playlists.removeWatchFolder(dialog.playlistId, modelData)
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Playback ----
+        Flickable {
+            visible: dialog.currentCategory === "playback"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.margins: 24
+            clip: true
+            contentWidth: width
+            contentHeight: playbackColumn.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
+
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            Item {
+                width: parent.width - 22
+                implicitHeight: playbackColumn.implicitHeight
+
+                ColumnLayout {
+                    id: playbackColumn
+                    width: parent.width
+                    spacing: 22
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTranslate("SettingsDialog", "settings_playback")
+                        font.pixelSize: 20
+                        font.weight: Font.Bold
+                        color: Kirigami.Theme.textColor
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                       Kirigami.Theme.textColor.g,
+                                       Kirigami.Theme.textColor.b, 0.2)
+                    }
+
+                    GridLayout {
+                        columns: 2
+                        columnSpacing: 16
+                        rowSpacing: 16
+                        Layout.fillWidth: true
+
+                        Label {
+                            visible: dialog.isDefault
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            text: qsTranslate("SettingsDialog", "settings_append_playlist")
+                            color: Kirigami.Theme.textColor
+                            font.pixelSize: 14
+                            wrapMode: Text.WordWrap
+                        }
+                        Item {
+                            visible: dialog.isDefault
+                            Layout.preferredWidth: 200
+                            Layout.preferredHeight: 40
+                            Switch {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                checked: Config.appendToPlaylist
+                                onToggled: Config.appendToPlaylist = checked
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            text: qsTranslate("PlaylistPanel", "playlist_playback_mode")
+                            color: Kirigami.Theme.textColor
+                            font.pixelSize: 14
+                            wrapMode: Text.WordWrap
+                        }
+                        Item {
+                            Layout.preferredWidth: 200
+                            Layout.preferredHeight: 40
+                            ComboBox {
+                                anchors.fill: parent
+                                font.pixelSize: 14
+                                model: [
+                                    { text: qsTranslate("ContextMenu", "playback_sequential"), value: "sequential" },
+                                    { text: qsTranslate("ContextMenu", "playback_repeat"), value: "repeat" },
+                                    { text: qsTranslate("ContextMenu", "playback_shuffle"), value: "shuffle" },
+                                    { text: qsTranslate("ContextMenu", "playback_stop"), value: "stop" }
+                                ]
+                                textRole: "text"; valueRole: "value"
+                                currentIndex: {
+                                    const idx = model.findIndex(item => item.value === dialog.playlistMode);
+                                    return idx !== -1 ? idx : 0;
+                                }
+                                onActivated: (index) => {
+                                    dialog.playlistMode = model[index].value;
+                                    Playlists.setPlaylistMode(dialog.playlistId, dialog.playlistMode);
+                                }
+                            }
+                        }
+
+                        Label {
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            text: qsTranslate("PlaylistPanel", "playlist_mode_hint")
+                            color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                           Kirigami.Theme.textColor.g,
+                                           Kirigami.Theme.textColor.b, 0.65)
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }

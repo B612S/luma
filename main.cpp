@@ -34,6 +34,7 @@
 #include "core/PlaylistManager.hpp"
 #include "core/MprisManager.hpp"
 #include "core/MediaManager.hpp"
+#include "core/PluginManager.hpp"
 #include "core/OsdManager.hpp"
 #include "core/KWinBridge.hpp"
 #include "core/ShortcutHandler.hpp"
@@ -309,6 +310,8 @@ int main(int argc, char *argv[]) {
 
     OsdManager osd(nullptr, &app);
 
+    PluginManager plugins(&config, &media, &playlists, &osd, &app);
+
     CastManager castManager;
     castManager.setEqualizer(&equalizer);
 
@@ -349,6 +352,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("Playlists", &playlists);
     engine.rootContext()->setContextProperty("Osd", &osd);
     engine.rootContext()->setContextProperty("CastManager", &castManager);
+    engine.rootContext()->setContextProperty("Plugins", &plugins);
     engine.rootContext()->setContextProperty("KWinBridge", &kwinBridge);
 
     auto *shortcuts = new ShortcutHandler(nullptr, nullptr, nullptr, nullptr, &app,

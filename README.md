@@ -29,8 +29,8 @@
 
 - **mpv inside** — plays virtually any video/audio format without extra codecs.
 - **Multiple playlists** — tabs with create/rename/delete/clear, drag & drop reordering,
-  add files or a whole folder, “Add to playlist” from the track menu. A playlist can
-  watch folders (right-click its tab → **Properties**): existing media is imported in
+  add files or a whole folder, “Add to playlist” from the track menu. Named playlists
+  can watch folders (right-click a tab → **Properties**): existing media is imported in
   the background and new files are added automatically. With
   `single_instance=false`, the track menu can also play an entry in another window.
 - **Subtitle tuning** — font, size, weight, text/outline colors, outline width,
@@ -208,16 +208,22 @@ proxy). It is skipped unless `LUMA_TEST_YOUTUBE_URL` is set, e.g.
   and is kept at the live edge.
 - **Playlists** — the playlist button in the control bar opens the panel. Tabs at the
   top switch playlists; the playlist-menu button on the left opens a dropdown with every
-  playlist at once. Right-click a tab for *Add files…*, *Add folder…*,
+  playlist at once. Right-click a tab for *Add files…*, *Add folder…*, *Properties*,
   *Clear playlist*, *Rename*, *Delete*. Right-click a track for playback, shuffle,
   “Add to playlist”, properties, opening the containing folder and removal. The search
   bar at the bottom filters the current playlist by title, artist or file name; clear it
   with the × button or Escape. Radio links show the station name fetched from the stream
   instead of the URL; while a station plays, its current track is shown.
-  Each named playlist keeps its own playback mode (changed in *Playback → Playback
-  mode*); the mode chosen in the settings applies only to the Default playlist.
+  Each playlist's playback mode is set in its *Properties*. For the Default playlist
+  Properties also contains the “append files” switch.
 - **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.
 - **Casting** — *Playback → Screen output* in the context menu.
+- **Plugins** — JavaScript integrations are loaded automatically from
+  `~/.local/share/luma/plugins/<id>/` (each plugin in its own folder) and can
+  add native menu actions, OSD messages, playlist/media controls and
+  host-rendered windows. New plugins start disabled; manage them in
+  **Settings → Plugins**: enable/disable, see description/version/permissions,
+  add or delete a plugin. See [docs/PLUGINS.md](docs/PLUGINS.md).
 
 ## Keyboard shortcuts
 

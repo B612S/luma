@@ -67,6 +67,11 @@ qt_add_executable(luma
     core/MediaNotifier.cpp
     core/TrailingSilenceDetector.cpp
     core/MediaFileActions.cpp
+    core/PluginManifest.cpp
+    core/PluginApi.cpp
+    core/PluginRuntime.cpp
+    core/PluginManager.cpp
+    core/PluginWindow.cpp
     core/IcyMetadataReader.cpp
     core/IcyMetadataReader.hpp
     core/RadioNameResolver.cpp
@@ -100,6 +105,9 @@ qt_add_qml_module(luma
         qml/PlaylistPanel.qml
         qml/PlaylistPropertiesDialog.qml
         qml/PlaylistTabs.qml
+        qml/PluginMenu.qml
+        qml/PluginWindowDialog.qml
+        qml/PluginWindowField.qml
         qml/PlaylistTabsContextMenu.qml
         qml/PlaylistDelegate.qml
         qml/PlaylistContextMenu.qml

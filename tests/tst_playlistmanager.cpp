@@ -29,6 +29,7 @@ private slots:
     void addAudioAndVideoFiles();
     void addFolderAddsContents();
     void syncsNamedPlaylistsAcrossInstances();
+    void shuffleModeReordersNamedPlaylist();
     void watchesFolderForNewFiles();
     void unavailableMarkPersists();
     void unavailableMarkClearedAtRuntime();
@@ -448,6 +449,24 @@ void TestPlaylistManager::syncsNamedPlaylistsAcrossInstances()
     a.deletePlaylist(id);
     QTRY_COMPARE_WITH_TIMEOUT(b.activeId(), PlaylistManager::DEFAULT_ID, 6000);
     QTRY_VERIFY_WITH_TIMEOUT(b.modelById(id) == nullptr, 6000);
+}
+
+void TestPlaylistManager::shuffleModeReordersNamedPlaylist()
+{
+    ConfigManager config;
+    PlaylistManager manager(&config);
+    const QString id = manager.createPlaylist(QStringLiteral("Shuffle"));
+    PlaylistModel *model = manager.modelById(id);
+    QVERIFY(model);
+
+    // setFiles(..., current) records the playing file; shuffle keeps it first
+    // and randomises the rest. Before shuffle it is at index 2.
+    model->setFiles({"a.mp4", "b.mp4", "c.mp4", "d.mp4"}, "c.mp4");
+    QCOMPARE(model->currentIndex(), 2);
+    manager.setPlaylistMode(id, QStringLiteral("shuffle"));
+    QCOMPARE(manager.playlistMode(id), QStringLiteral("shuffle"));
+    QCOMPARE(model->currentIndex(), 0);
+    QCOMPARE(model->fileAt(0), QStringLiteral("c.mp4"));
 }
 
 void TestPlaylistManager::watchesFolderForNewFiles()

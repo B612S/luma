@@ -272,10 +272,12 @@ void PlaylistManager::reloadExternalPlaylists()
             m_names.insert(id, name);
             m_modes.insert(id, mode);
             connect(model, &PlaylistModel::modified, this, [this, id]() {
-                if (m_loading) return;
+                if (m_loading || m_reloadingExternal) return;
                 scheduleSave(id);
             });
             model->setEntriesFromJson(entries, QString());
+            if (mode == QLatin1String("shuffle"))
+                model->setShuffle(true);
             if (!m_order.contains(id)) m_order << id;
             m_watchFolders.insert(id, folders);
             rebuildFolderWatcher();
@@ -285,19 +287,25 @@ void PlaylistManager::reloadExternalPlaylists()
             continue;
         }
 
+        bool entriesChanged = false;
         if (model->toJsonArray() != entries) {
             // Keep the currently playing file selected if it is still there.
             model->setEntriesFromJson(entries, model->currentFile());
+            entriesChanged = true;
             changed = true;
         }
         if (m_names.value(id) != name) {
             m_names.insert(id, name);
             changed = true;
         }
+        bool modeChanged = false;
         if (m_modes.value(id) != mode) {
             m_modes.insert(id, mode);
+            modeChanged = true;
             changed = true;
         }
+        if (entriesChanged || modeChanged)
+            model->setShuffle(mode == QLatin1String("shuffle"));
         if (m_watchFolders.value(id) != folders) {
             m_watchFolders.insert(id, folders);
             m_watchedDirs.remove(id);
@@ -601,13 +609,17 @@ void PlaylistManager::loadPlaylist(const QString &id) {
 
         // Autosave on changes
         connect(model, &PlaylistModel::modified, this, [this, id]() {
-            if (m_loading) return;
+            if (m_loading || m_reloadingExternal) return;
             scheduleSave(id);
         });
     }
 
     model->setEntriesFromJson(obj.value("entries").toArray(), "");
     m_watchFolders.insert(id, foldersFromJson(obj.value("watchFolders").toArray()));
+    // A named playlist with shuffle mode must start shuffled. This happens
+    // while m_loading is true, so the shuffled order is not written to disk.
+    if (playlistMode(id) == QLatin1String("shuffle"))
+        model->setShuffle(true);
 
     // The file came back while Luma was closed: setEntries() dropped its stale
     // "unavailable" mark, so rewrite the playlist without it.
@@ -800,12 +812,19 @@ void PlaylistManager::setPlaylistMode(const QString &id, const QString &mode)
     if (id == DEFAULT_ID) {
         // The Default playlist's mode is the one edited in the settings.
         if (m_config) m_config->setPlaylistMode(normalized);
+        if (m_defaultModel)
+            m_defaultModel->setShuffle(normalized == QLatin1String("shuffle"));
         return;
     }
     if (!m_models.contains(id)) return;
     if (m_modes.value(id) == normalized) return;
     m_modes.insert(id, normalized);
+    // Applying shuffle to a named playlist used to be skipped to protect the
+    // saved order, which meant the playlist was never actually shuffled.
+    if (PlaylistModel *model = m_models.value(id, nullptr))
+        model->setShuffle(normalized == QLatin1String("shuffle"));
     savePlaylist(id);
+    emit playlistModeChanged(id, normalized);
 }
 
 void PlaylistManager::retranslate()
@@ -1087,6 +1106,11 @@ QStringList PlaylistManager::watchFolders(const QString &id) const
     if (id == DEFAULT_ID)
         return {};
     return m_watchFolders.value(id);
+}
+
+bool PlaylistManager::isDefaultPlaylist(const QString &id) const
+{
+    return id == DEFAULT_ID;
 }
 
 bool PlaylistManager::addWatchFolder(const QString &id, const QString &folder)

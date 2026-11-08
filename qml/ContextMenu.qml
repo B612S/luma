@@ -102,6 +102,15 @@ LumaMenu {
 
             LumaMenuSeparator {}
 
+            PluginMenu {
+                id: mainPluginMenu
+                location: "main"
+                context: ({ path: Media.playlist ? Media.playlist.currentFile() : "" })
+                closeMenu: () => menu.close()
+            }
+
+            LumaMenuSeparator { visible: mainPluginMenu.visible }
+
             LumaMenuButton { text: qsTr("menu_settings"); onClicked: { menu.close(); settingsDialog.open() } }
 
             LumaMenuSeparator {}

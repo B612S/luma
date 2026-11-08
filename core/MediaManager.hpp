@@ -124,6 +124,21 @@ public:
     Q_INVOKABLE void setAspectRatio(const QString &mode);
     Q_INVOKABLE QString getAspectRatio() const;
 
+    // Narrow API used by the JavaScript plugin runtime. Keeping these on
+    // MediaManager means plugins do not need access to MpvItem or QML.
+    Q_INVOKABLE QVariantMap pluginState() const;
+    Q_INVOKABLE void pluginTogglePause();
+    Q_INVOKABLE void pluginSetPaused(bool paused);
+    Q_INVOKABLE void pluginSeek(double position);
+    Q_INVOKABLE void pluginSetVolume(int volume);
+    Q_INVOKABLE void pluginStop();
+    Q_INVOKABLE bool pluginOpen(const QString &path);
+    // Raw mpv access for privileged plugins. getProperty may block briefly on
+    // the mpv thread; the media API above is preferred for normal use.
+    Q_INVOKABLE QVariant pluginMpvGetProperty(const QString &name) const;
+    Q_INVOKABLE void pluginMpvSetProperty(const QString &name, const QVariant &value);
+    Q_INVOKABLE void pluginMpvCommand(const QStringList &args);
+
 signals:
     void fileChanged(const QString &path);
     void playModeChanged();
@@ -139,6 +154,11 @@ signals:
     // Result of refreshYtdlpRuntime(), including the asynchronous ejs probe.
     void ytdlpRuntimeReady(const QVariantMap &info);
     void loadingChanged();
+    // Plugin-facing playback state changes. Position is throttled to about
+    // once per second by MediaManager.
+    void pluginPositionChanged(double position, double duration);
+    void pluginPausedChanged(bool paused);
+    void pluginVolumeChanged(double volume);
     // Text for the OSD while a URL is being opened via yt-dlp.
     void downloadStatus(const QString &message);
     // Result of the asynchronous file-properties request.
@@ -229,6 +249,7 @@ private:
 
     QString m_lastPlayedFile;
     QElapsedTimer m_lastPlayedTimer;
+    QElapsedTimer m_pluginPositionTimer;
     QString m_lastStreamTitle;
     bool m_liveStream = false;
     bool m_loading = false;

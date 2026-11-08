@@ -308,7 +308,21 @@ void MediaManager::setMpv(MpvItem *mpv) {
                 maybeAdvancePastSilence(m_mpv->position());
         });
         connect(m_mpv, &MpvItem::pausedChanged, this, [this]() {
-            if (m_mpv && m_mpv->paused()) saveCurrentPosition();
+            if (!m_mpv) return;
+            emit pluginPausedChanged(m_mpv->paused());
+            if (m_mpv->paused()) saveCurrentPosition();
+        });
+        connect(m_mpv, &MpvItem::volumeChanged, this, [this]() {
+            if (m_mpv)
+                emit pluginVolumeChanged(m_mpv->volume());
+        });
+        connect(m_mpv, &MpvItem::positionChanged, this, [this]() {
+            if (!m_mpv) return;
+            // Do not flood plugins with a signal for every frame.
+            if (m_pluginPositionTimer.isValid() && m_pluginPositionTimer.elapsed() < 1000)
+                return;
+            m_pluginPositionTimer.restart();
+            emit pluginPositionChanged(m_mpv->position(), m_mpv->duration());
         });
         connect(m_mpv, &QObject::destroyed, this, [this]() { m_mpv = nullptr; });
     }
@@ -449,6 +463,16 @@ void MediaManager::setPlaylistManager(PlaylistManager *pm) {
             m_playMode = mode;
             emit playModeChanged();
         });
+        // A playlist's mode can also be changed from its Properties dialog
+        // while that playlist is active.
+        connect(m_playlists, &PlaylistManager::playlistModeChanged, this,
+                [this](const QString &id, const QString &mode) {
+            if (!m_playlists || id != m_playlists->activeId())
+                return;
+            if (m_playMode == mode) return;
+            m_playMode = mode;
+            emit playModeChanged();
+        });
     }
     emit playlistChanged();
 }
@@ -471,13 +495,8 @@ void MediaManager::setPlayMode(const QString &mode) {
         // playlist stores its own mode in its playlist file.
         m_playlists->setPlaylistMode(m_playlists->activeId(), normalized);
 
-        // Shuffling reorders the entries, so only do it for the Default
-        // playlist: a named playlist's saved order must not be destroyed just
-        // by selecting a playback mode.
-        if (m_playlists->activeId() == PlaylistManager::DEFAULT_ID) {
-            if (PlaylistModel *def = m_playlists->defaultModel())
-                def->setShuffle(normalized == QLatin1String("shuffle"));
-        }
+        // Applying the mode (including the shuffle order) is owned by
+        // PlaylistManager::setPlaylistMode.
     }
 
     emit playModeChanged();
@@ -520,6 +539,81 @@ QString MediaManager::defaultFileManagerName() const
 {
     return m_fileActions ? m_fileActions->defaultFileManagerName()
                          : QStringLiteral("File Manager");
+}
+
+QVariantMap MediaManager::pluginState() const
+{
+    QVariantMap state;
+    state.insert(QStringLiteral("hasMedia"), m_hasMedia);
+    state.insert(QStringLiteral("loading"), m_loading);
+    state.insert(QStringLiteral("live"), m_liveStream);
+    state.insert(QStringLiteral("path"), m_mpv ? m_mpv->source() : QString());
+    state.insert(QStringLiteral("title"), m_mpv ? m_mpv->mediaTitle() : QString());
+    state.insert(QStringLiteral("position"), m_mpv ? m_mpv->position() : 0.0);
+    state.insert(QStringLiteral("duration"), m_mpv ? m_mpv->duration() : 0.0);
+    state.insert(QStringLiteral("paused"), m_mpv ? m_mpv->paused() : true);
+    state.insert(QStringLiteral("volume"), m_mpv ? m_mpv->volume() : 0.0);
+    state.insert(QStringLiteral("muted"), m_mpv ? m_mpv->muted() : false);
+    state.insert(QStringLiteral("hasVideo"), hasVideo());
+    return state;
+}
+
+void MediaManager::pluginTogglePause()
+{
+    if (m_mpv)
+        m_mpv->setPaused(!m_mpv->paused());
+}
+
+void MediaManager::pluginSetPaused(bool paused)
+{
+    if (m_mpv)
+        m_mpv->setPaused(paused);
+}
+
+void MediaManager::pluginSeek(double position)
+{
+    if (m_mpv && position >= 0.0)
+        m_mpv->seekExact(position);
+}
+
+void MediaManager::pluginSetVolume(int volume)
+{
+    if (m_mpv)
+        m_mpv->setVolume(qBound(0, volume, 100));
+}
+
+void MediaManager::pluginStop()
+{
+    stopPlayback();
+}
+
+bool MediaManager::pluginOpen(const QString &path)
+{
+    if (path.trimmed().isEmpty())
+        return false;
+    openFile(path);
+    return true;
+}
+
+QVariant MediaManager::pluginMpvGetProperty(const QString &name) const
+{
+    if (!m_mpv || name.isEmpty())
+        return {};
+    return m_mpv->property(name);
+}
+
+void MediaManager::pluginMpvSetProperty(const QString &name, const QVariant &value)
+{
+    if (!m_mpv || name.isEmpty())
+        return;
+    m_mpv->setProperty(name, value);
+}
+
+void MediaManager::pluginMpvCommand(const QStringList &args)
+{
+    if (!m_mpv || args.isEmpty())
+        return;
+    m_mpv->command(args);
 }
 
 QString MediaManager::currentFileName() const {

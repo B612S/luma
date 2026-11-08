@@ -110,6 +110,19 @@ LumaMenu {
 
             LumaMenuSeparator {}
 
+            PluginMenu {
+                id: playlistPluginMenu
+                location: "playlist"
+                context: ({
+                    playlistId: Playlists.activeId,
+                    path: trackContextMenu.trackPath(),
+                    index: trackContextMenu.trackIndex
+                })
+                closeMenu: () => trackContextMenu.close()
+            }
+
+            LumaMenuSeparator { visible: playlistPluginMenu.visible }
+
             LumaMenuButton {
                 text: qsTranslate("PlaylistPanel", "playlist_remove")
                 destructive: true
