@@ -6,6 +6,8 @@ pkgver="$(tr -d '[:space:]' < "${startdir:-$PWD}/VERSION" 2>/dev/null || true)"
 pkgver="${pkgver:-1.0.0}"
 # Increment for a packaging-only rebuild; reset to 1 when pkgver changes.
 pkgrel=1
+# Keep the package small; debug packages are not published.
+options=('strip' '!debug')
 pkgdesc="Lightweight audio and video player based on mpv and Qt/QML"
 arch=('x86_64' 'aarch64')
 url="https://github.com/B612S/luma"
