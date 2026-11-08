@@ -52,10 +52,13 @@ jobs:
             exit 1
           fi
           echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
 
       - name: Build Debian package and AppImage
         run: |
           chmod +x build-deb.sh build-appimage.sh
+          export DEB_VERSION="$RELEASE_VERSION"
+          export APPIMAGE_VERSION="$RELEASE_VERSION"
           ./build-deb.sh
           ./build-appimage.sh
 

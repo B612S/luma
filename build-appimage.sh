@@ -23,7 +23,7 @@ DIST_DIR="${DIST_DIR:-dist}"
 TOOLS_DIR="${TOOLS_DIR:-$SCRIPT_DIR/.appimage-tools}"
 ARCH="${ARCH:-$(uname -m)}"
 VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || true)"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${APPIMAGE_VERSION:-${VERSION:-1.0.0}}"
 
 if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
     echo "Unsupported architecture: $ARCH (expected x86_64 or aarch64)" >&2
