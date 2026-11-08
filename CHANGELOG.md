@@ -148,6 +148,9 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Plugin-scoped data now lives under
+  `~/.local/share/luma/plugins/data/<id>/` instead of `plugin-data/<id>/`;
+  existing data is migrated on first load.
 - Playlist settings moved out of Settings: the Default playlist's append
   switch and playback mode now live in its Properties dialog. Properties is
   available for the Default playlist again, and every playlist now exposes its

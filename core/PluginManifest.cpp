@@ -68,7 +68,8 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
     static const QRegularExpression idPattern(
         QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]*$"));
     if (manifest.id.isEmpty() || !idPattern.match(manifest.id).hasMatch()
-            || manifest.id.contains(QStringLiteral(".."))) {
+            || manifest.id.contains(QStringLiteral(".."))
+            || manifest.id.compare(QStringLiteral("data"), Qt::CaseInsensitive) == 0) {
         manifest.error = QStringLiteral("invalid plugin id");
         return manifest;
     }

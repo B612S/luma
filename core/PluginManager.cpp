@@ -410,6 +410,9 @@ void PluginManager::scan()
     const QFileInfoList entries = dir.entryInfoList(
         QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
     for (const QFileInfo &entry : entries) {
+        // Plugin-scoped data lives at plugins/data/<id>; it is not a plugin.
+        if (entry.fileName() == QLatin1String("data"))
+            continue;
         if (!QFileInfo::exists(entry.absoluteFilePath() + QStringLiteral("/plugin.json")))
             continue;
         PluginManifest manifest = PluginManifest::fromDirectory(entry.absoluteFilePath(), false);

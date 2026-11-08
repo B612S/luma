@@ -88,7 +88,7 @@ The host creates one `luma` object. Payloads are plain JSON-compatible values.
 luma.apiVersion      // 1
 luma.id              // plugin id
 luma.version         // plugin version
-luma.dataDir         // writable plugin data directory
+luma.dataDir         // ~/.local/share/luma/plugins/data/<id>/
 ```
 
 ### Events
@@ -289,8 +289,9 @@ luma.storage.writeText("notes.txt", "text");
 luma.storage.exists("notes.txt");
 ```
 
-Storage names are single file names inside `luma.dataDir`; slashes and `..`
-are rejected.
+Storage names are single file names inside `luma.dataDir`
+(`~/.local/share/luma/plugins/data/<id>/`); slashes and `..` are rejected.
+Existing data from the old `plugin-data` location is migrated on first load.
 
 ### Network
 
