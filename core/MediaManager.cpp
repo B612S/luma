@@ -17,6 +17,8 @@
 #include <QUrl>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QProcess>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -539,6 +541,31 @@ QString MediaManager::defaultFileManagerName() const
 {
     return m_fileActions ? m_fileActions->defaultFileManagerName()
                          : QStringLiteral("File Manager");
+}
+
+QVariantMap MediaManager::pluginStats() const
+{
+    QVariantMap result = pluginState();
+    if (!m_mpv)
+        return result;
+    const QStringList properties = {
+        QStringLiteral("container-fps"), QStringLiteral("estimated-vf-fps"),
+        QStringLiteral("display-fps"), QStringLiteral("video-codec"),
+        QStringLiteral("audio-codec"), QStringLiteral("width"),
+        QStringLiteral("height"), QStringLiteral("video-bitrate"),
+        QStringLiteral("audio-bitrate"), QStringLiteral("hwdec-current"),
+        QStringLiteral("frame-drop-count"), QStringLiteral("avsync"),
+        QStringLiteral("demuxer-cache-duration"), QStringLiteral("vf")
+    };
+    for (const QString &property : properties)
+        result.insert(property, m_mpv->observedProperty(property));
+    // mpv's display-fps is often unavailable under libmpv/Wayland. Qt knows
+    // the compositor-reported refresh rate and gives the plugin a useful
+    // fallback instead of reporting n/a.
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    if (screen)
+        result.insert(QStringLiteral("screen-refresh-rate"), screen->refreshRate());
+    return result;
 }
 
 QVariantMap MediaManager::pluginState() const

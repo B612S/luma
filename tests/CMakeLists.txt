@@ -28,6 +28,8 @@ add_library(luma_testcore STATIC
     ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.hpp
     ${CMAKE_SOURCE_DIR}/core/PluginManifest.cpp
     ${CMAKE_SOURCE_DIR}/core/PluginManifest.hpp
+    ${CMAKE_SOURCE_DIR}/core/PluginLocalization.cpp
+    ${CMAKE_SOURCE_DIR}/core/PluginLocalization.hpp
     ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.cpp
     ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.hpp
     ${CMAKE_SOURCE_DIR}/core/TagScanner.cpp

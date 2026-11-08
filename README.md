@@ -241,12 +241,14 @@ proxy). It is skipped unless `LUMA_TEST_YOUTUBE_URL` is set, e.g.
   Properties also contains the “append files” switch.
 - **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.
 - **Casting** — *Playback → Screen output* in the context menu.
-- **Plugins** — JavaScript integrations are loaded automatically from
-  `~/.local/share/luma/plugins/<id>/` (each plugin in its own folder) and can
-  add native menu actions, OSD messages, playlist/media controls and
-  host-rendered windows. New plugins start disabled; manage them in
-  **Settings → Plugins**: enable/disable, see description/version/permissions,
-  add or delete a plugin. See [docs/PLUGINS.md](docs/PLUGINS.md).
+- **Plugins** — JavaScript integrations (including a bundled resource monitor
+  that draws CPU/RAM/GPU charts in its own SVG stats page) are loaded from
+  `~/.local/share/luma/plugins/<id>/` and the bundled read-only
+  `/usr/share/luma/plugins/<id>/` directory. They can add native menu actions,
+  OSD messages, playlist/media controls, host-rendered windows and native
+  settings. New plugins start disabled; manage them in **Settings → Plugins**:
+  enable/disable, configure, see description/version/permissions, add or delete
+  a plugin. See [docs/PLUGINS.md](docs/PLUGINS.md).
 
 ## Keyboard shortcuts
 
@@ -270,6 +272,7 @@ intentionally fixed.
 | `PageUp` / `PageDown` | Previous / next chapter |
 | `S` | Toggle the playlist panel |
 | `I` | Toggle the media information panel |
+| `1`-`0` | Switch Stats pages while Stats is open (fixed, cannot be reassigned) |
 | `F` | Toggle fullscreen |
 | `T` | Pin the time counter on screen |
 | `P` | Picture in picture |

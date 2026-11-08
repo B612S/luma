@@ -1,0 +1,41 @@
+{
+  "id": "com.luma.hdr",
+  "name": "HDR Output",
+  "version": "1.0.1",
+  "apiVersion": 1,
+  "main": "main.js",
+  "description": "Requests HDR passthrough and peak computation from mpv when the display and compositor support HDR.",
+  "permissions": [
+    "mpv:raw",
+    "media:read"
+  ],
+  "settings": [
+    {
+      "key": "enabled",
+      "type": "switch",
+      "label": "Enable HDR output",
+      "default": true
+    },
+    {
+      "key": "toneMapping",
+      "type": "select",
+      "label": "Tone mapping",
+      "options": [
+        {
+          "label": "Auto",
+          "value": "auto"
+        },
+        {
+          "label": "Clip",
+          "value": "clip"
+        },
+        {
+          "label": "BT.2390",
+          "value": "bt.2390"
+        }
+      ],
+      "default": "auto"
+    }
+  ],
+  "info": "Requests HDR passthrough and peak computation from mpv.\nWorks only when the display, compositor and driver support HDR.\nThere is no stats page; enable the plugin and play HDR content."
+}

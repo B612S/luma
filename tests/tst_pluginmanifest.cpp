@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include "PluginManifest.hpp"
+#include "PluginLocalization.hpp"
 
 class TestPluginManifest : public QObject {
     Q_OBJECT
@@ -15,6 +16,9 @@ private slots:
     void rejectsMissingEntry();
     void rejectsReservedDataId();
     void acceptsProcessPermission();
+    void acceptsPluginSettings();
+    void rejectsInvalidPluginSetting();
+    void loadsPluginLocale();
 };
 
 static void writeFile(const QString &path, const QByteArray &data)
@@ -129,6 +133,57 @@ void TestPluginManifest::acceptsProcessPermission()
     })");
     const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
     QVERIFY2(manifest.valid, qPrintable(manifest.error));
+}
+
+void TestPluginManifest::acceptsPluginSettings()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    writeFile(dir.path() + "/main.js", "");
+    writeFile(dir.path() + "/plugin.json", R"({
+        "id": "com.example.settings", "apiVersion": 1, "main": "main.js",
+        "settings": [
+            { "key": "enabled", "type": "switch", "label": "Enabled", "default": true },
+            { "key": "mode", "type": "select", "label": "Mode",
+              "options": [{ "label": "A", "value": "a" }, { "label": "B", "value": "b" }],
+              "default": "b" }
+        ]
+    })");
+    const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
+    QVERIFY2(manifest.valid, qPrintable(manifest.error));
+    QCOMPARE(manifest.settings.size(), 2);
+    QCOMPARE(manifest.settings.first().toMap().value(QStringLiteral("key")).toString(),
+             QStringLiteral("enabled"));
+    QCOMPARE(manifest.settings.first().toMap().value(QStringLiteral("type")).toString(),
+             QStringLiteral("switch"));
+    QCOMPARE(manifest.settings.first().toMap().value(QStringLiteral("default")).toBool(), true);
+    QCOMPARE(manifest.settings.last().toMap().value(QStringLiteral("options")).toList().size(), 2);
+}
+
+void TestPluginManifest::rejectsInvalidPluginSetting()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    writeFile(dir.path() + "/main.js", "");
+    writeFile(dir.path() + "/plugin.json", R"({
+        "id": "com.example.bad-settings", "apiVersion": 1, "main": "main.js",
+        "settings": [{ "key": "mode", "type": "select", "label": "Mode", "options": [] }]
+    })");
+    const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
+    QVERIFY(!manifest.valid);
+    QVERIFY(manifest.error.contains(QStringLiteral("setting")));
+}
+
+void TestPluginManifest::loadsPluginLocale()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    writeFile(dir.path() + "/locales/ru.json", R"({"Hello":"Привет"})");
+    const QVariantMap translations = loadPluginTranslations(dir.path(), QStringLiteral("ru"));
+    QCOMPARE(translatedPluginText(translations, QStringLiteral("Hello")),
+             QStringLiteral("Привет"));
+    QCOMPARE(translatedPluginText(translations, QStringLiteral("Missing")),
+             QStringLiteral("Missing"));
 }
 
 QTEST_MAIN(TestPluginManifest)

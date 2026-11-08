@@ -13,6 +13,7 @@
 
 class CastManager;
 class GlobalShortcuts;
+class PluginManager;
 
 class ShortcutHandler : public QObject {
     Q_OBJECT
@@ -30,6 +31,7 @@ public:
     void setOsd(OsdManager *osd) { m_osd = osd; }
     void setMedia(MediaManager *media) { m_media = media; }
     void setCastManager(CastManager *cast) { m_castManager = cast; }
+    void setPluginManager(PluginManager *plugins) { m_pluginManager = plugins; }
     // Called from QML while the user drags the seek slider.
     Q_INVOKABLE void setSliderSeeking(bool seeking);
 
@@ -63,6 +65,7 @@ public slots:
 signals:
     void togglePlaylist();
     void toggleStats();
+    void statsSelected();
     void togglePip();
     void fitWindowToVideo();
     void toggleEqualizerRequested();
@@ -97,6 +100,7 @@ private:
     OsdManager *m_osd = nullptr;
     MediaManager *m_media = nullptr;
     CastManager *m_castManager = nullptr;
+    PluginManager *m_pluginManager = nullptr;
     QPointer<QQuickWindow> m_window;
 
     QTimer *m_seekTimer = nullptr;

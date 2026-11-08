@@ -143,6 +143,10 @@
 <message><source>plugins_access_process_text</source><translation>“%1” requests direct access to programs on this computer.</translation></message>
 <message><source>plugins_access_process_hint</source><translation>This lets the plugin start any executable program on this computer, including a shell, with access to files and the network outside Luma's normal restrictions. Enable it only if you trust this plugin.</translation></message>
 <message><source>plugins_access_allow</source><translation>Allow access</translation></message>
+<message><source>plugins_info</source><translation>Plugin information</translation></message>
+<message><source>plugins_settings</source><translation>Settings</translation></message>
+<message><source>plugins_settings_title</source><translation>%1 settings</translation></message>
+<message><source>plugins_settings_close</source><translation>Close</translation></message>
 <message><source>settings_debug</source><translation>Debug</translation></message>
 <message><source>settings_debug_hint</source><translation>Each component writes its own file to ~/.cache/luma/: luma.log, mpv.log and yt-dlp.log.</translation></message>
 <message><source>settings_shortcuts</source><translation>Shortcuts</translation></message>
@@ -291,6 +295,7 @@
 <message><source>stats_duration</source><translation>Duration</translation></message>
 <message><source>stats_video</source><translation>Video codec</translation></message>
 <message><source>stats_resolution</source><translation>Resolution</translation></message>
+<message><source>stats_plugins</source><translation>Plugins</translation></message>
 <message><source>stats_fps</source><translation>Frame rate</translation></message>
 <message><source>stats_vid_bitrate</source><translation>Video bitrate</translation></message>
 <message><source>stats_hwdec</source><translation>Hardware decoding</translation></message>

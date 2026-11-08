@@ -14,6 +14,7 @@ Rectangle {
 
     property var mpv: null
     property bool isOpen: false
+    property string activePage: "luma"
     property real maxHeight: 600
 
     property string _staticFile: ""
@@ -44,6 +45,17 @@ Rectangle {
     property string _tagsInfoPath: ""
     property string _tagsSignature: ""
     property var statLines: []
+    readonly property var pluginStats:
+        (typeof Plugins !== "undefined" && Plugins) ? Plugins.statsLines : []
+    readonly property var statsPages:
+        (typeof Plugins !== "undefined" && Plugins) ? Plugins.statsPages : []
+    readonly property var activePageData: {
+        for (let i = 0; i < statsPages.length; ++i) {
+            if (statsPages[i].id === activePage)
+                return statsPages[i];
+        }
+        return null;
+    }
 
     readonly property bool audioOrRadio: !hasVideo
     readonly property bool isRadio: typeof Media !== "undefined" && Media.liveStream === true
@@ -57,7 +69,9 @@ Rectangle {
     // Size to the content; maxHeight is the playlist panel's height, so when
     // the statistics are long they stop at the same bottom line and scroll
     // instead of growing past the playlist.
-    readonly property real contentHeight: contentColumn.implicitHeight + 32
+    readonly property real contentHeight:
+        activePage === "luma" ? contentColumn.implicitHeight + 32
+                              : pluginColumn.implicitHeight + 32
     height: Math.min(contentHeight, maxHeight)
 
     // The height animation is enabled only during the loading window (opening
@@ -112,6 +126,7 @@ Rectangle {
             updateTimer.start()
         } else {
             statsPanel.opacity = 0.0
+            statsPanel.activePage = "luma"
             updateTimer.stop()
             statsContextMenu.close()
         }
@@ -123,6 +138,21 @@ Rectangle {
             flickable.contentY = 0
             startHeightAnimation()
             resetStaticCache()
+        }
+    }
+
+    Connections {
+        target: (typeof Plugins !== "undefined") ? Plugins : null
+        function onStatsPageRequested(pageId) {
+            // Numeric keys and plugin requests may switch pages only after the
+            // user has explicitly opened Stats; they never open it themselves.
+            if (statsPanel.isOpen)
+                statsPanel.activePage = pageId
+        }
+        function onStatsPagesChanged() {
+            if (statsPanel.activePage !== "luma"
+                    && statsPanel.activePageData === null)
+                statsPanel.activePage = "luma"
         }
     }
 
@@ -169,6 +199,10 @@ Rectangle {
             if (Math.abs(position - mpv.position) > 5) return;
             if (videoBps > 0) statsPanel._liveVideoBitrate = videoBps;
         }
+    }
+
+    function selectCoreStats() {
+        activePage = "luma";
     }
 
     function resetStaticCache() {
@@ -303,6 +337,7 @@ Rectangle {
             avsyncLabel.text = "<b>" + qsTr("stats_avsync") + ":</b> " + safeNumber(statsProperty("avsync"), 3) + " s"
             cacheLabel.text = "<b>" + qsTr("stats_cache") + ":</b> " + safeNumber(statsProperty("demuxer-cache-duration"), 1) + " s"
 
+
             const video = _staticWidth > 0 && _staticHeight > 0 && !_staticImageTrack;
             let lines = [];
             lines.push(qsTr("stats_file") + ": " + shownTitle);
@@ -326,6 +361,10 @@ Rectangle {
             if (video)
                 lines.push(qsTr("stats_avsync") + ": " + safeNumber(statsProperty("avsync"), 3) + " s");
             lines.push(qsTr("stats_cache") + ": " + safeNumber(statsProperty("demuxer-cache-duration"), 1) + " s");
+            for (let i = 0; i < statsPanel.pluginStats.length; ++i) {
+                const item = statsPanel.pluginStats[i];
+                lines.push(item.label + ": " + item.value);
+            }
             statLines = lines;
         }
     }
@@ -343,6 +382,7 @@ Rectangle {
     Flickable {
         id: flickable
         anchors.fill: parent
+        visible: statsPanel.activePage === "luma"
         anchors.margins: 12
         clip: true
         contentWidth: width
@@ -360,6 +400,7 @@ Rectangle {
             id: contentColumn
             width: flickable.width - 16
             spacing: 4
+            visible: statsPanel.activePage === "luma"
 
             Label { id: fileLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
 
@@ -441,6 +482,118 @@ Rectangle {
 
             Label { id: avsyncLabel; visible: statsPanel.hasVideo; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
             Label { id: cacheLabel; textFormat: Text.RichText; color: Kirigami.Theme.textColor; width: parent.width; wrapMode: Text.Wrap; text: "" }
+
+            Rectangle {
+                id: pluginStatsSeparator
+                width: parent.width; height: 1
+                visible: statsPanel.pluginStats.length > 0
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.2)
+            }
+            Label {
+                id: pluginStatsHeader
+                text: qsTr("stats_plugins")
+                textFormat: Text.PlainText
+                font.weight: Font.DemiBold
+                color: Kirigami.Theme.textColor
+                visible: statsPanel.pluginStats.length > 0
+            }
+            Repeater {
+                model: statsPanel.pluginStats
+                Label {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    color: Kirigami.Theme.textColor
+                    wrapMode: Text.Wrap
+                    text: modelData.label + ": " + modelData.value
+                }
+            }
+        }
+    }
+
+    // Plugin statistics pages use the same panel and controls; plugins only
+    // provide host-rendered heading/label/separator content.
+    Rectangle {
+        id: pluginPage
+        anchors.fill: parent
+        radius: statsPanel.radius
+        color: "transparent"
+        border.color: "transparent"
+        visible: statsPanel.activePage !== "luma"
+                 && statsPanel.activePageData !== null
+        z: 2
+
+        Flickable {
+            id: pluginFlickable
+            anchors.fill: parent
+            anchors.margins: 12
+            clip: true
+            contentWidth: width
+            contentHeight: pluginColumn.height
+            boundsBehavior: Flickable.StopAtBounds
+
+            ScrollBar.vertical: ScrollBar {
+                policy: pluginColumn.height > pluginFlickable.height
+                        ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+                stepSize: 0.1
+            }
+
+            Column {
+                id: pluginColumn
+                width: pluginFlickable.width - 16
+                spacing: 4
+
+                Label {
+                    width: parent.width
+                    text: statsPanel.activePageData
+                          ? statsPanel.activePageData.key + " · "
+                            + statsPanel.activePageData.title : ""
+                    textFormat: Text.PlainText
+                    font.bold: true
+                    color: Kirigami.Theme.textColor
+                    wrapMode: Text.Wrap
+                }
+
+                Repeater {
+                    model: statsPanel.activePageData
+                           ? statsPanel.activePageData.content : []
+                    delegate: Item {
+                        width: parent.width
+                        height: modelData.type === "separator"
+                                ? 1
+                                : (modelData.type === "svg"
+                                   ? (modelData.height || 150)
+                                   : pageText.implicitHeight)
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: modelData.type === "separator"
+                            color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                           Kirigami.Theme.textColor.g,
+                                           Kirigami.Theme.textColor.b, 0.2)
+                        }
+                        Label {
+                            id: pageText
+                            visible: modelData.type !== "separator"
+                                     && modelData.type !== "svg"
+                            width: parent.width
+                            text: modelData.text || ""
+                            textFormat: Text.PlainText
+                            font.bold: modelData.type === "heading"
+                            color: Kirigami.Theme.textColor
+                            wrapMode: Text.Wrap
+                        }
+                        Image {
+                            anchors.fill: parent
+                            visible: modelData.type === "svg"
+                            source: modelData.type === "svg"
+                                    ? "data:image/svg+xml;base64," + modelData.svg
+                                    : ""
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                        }
+                    }
+                }
+            }
         }
     }
 

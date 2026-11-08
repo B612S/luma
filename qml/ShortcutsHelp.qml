@@ -13,7 +13,7 @@ Dialog {
     visible: helpVisible
     modal: true
     focus: true
-    closePolicy: Popup.NoAutoClose
+    closePolicy: Popup.CloseOnEscape
     parent: Overlay.overlay
     anchors.centerIn: Overlay.overlay
     width: Math.min(620, Overlay.overlay ? Overlay.overlay.width - 64 : 620)
@@ -44,6 +44,7 @@ Dialog {
 
     contentItem: Item {
         Flickable {
+            id: helpFlickable
             anchors.fill: parent
             anchors.margins: 20
             clip: true
@@ -53,6 +54,8 @@ Dialog {
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            FocusScroller { flickable: helpFlickable }
 
             Column {
                 id: contentColumn

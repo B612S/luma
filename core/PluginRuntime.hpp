@@ -45,6 +45,19 @@ public:
 
     void log(const QString &level, const QString &message) const;
 
+    QVariantList statsLines() const;
+    QVariantList statsPages() const;
+    QVariantMap setStatsPage(const QString &id, const QString &title,
+                             const QVariantList &content, int preferredSlot = 0);
+    void removeStatsPage(const QString &id);
+    void clearStatsPages();
+    void setStat(const QString &key, const QString &label, const QVariant &value);
+    void removeStat(const QString &key);
+    void clearStats();
+    bool addShortcut(const QString &key, const QJSValue &callback);
+    void removeShortcut(const QString &key);
+    bool invokeShortcut(int key, Qt::KeyboardModifiers modifiers);
+
 private:
     struct EventHandler {
         QJSValue handler;
@@ -52,7 +65,6 @@ private:
     };
 
     bool fail(const QString &message);
-    QJSValue toScript(const QVariant &value) const;
 
     PluginManager *m_manager;
     PluginManifest m_manifest;
@@ -61,6 +73,9 @@ private:
     bool m_loaded = false;
     QString m_error;
     QHash<QString, QVector<EventHandler>> m_handlers;
+    QHash<QString, QVariantMap> m_stats;
+    QHash<QString, QVariantMap> m_statsPages;
+    QHash<QString, QJSValue> m_shortcuts;
     QHash<QString, QJSValue> m_menuCallbacks;
     QHash<QString, QVariantMap> m_menuSpecs;
     QVector<PluginWindow *> m_windows;

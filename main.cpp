@@ -357,6 +357,7 @@ int main(int argc, char *argv[]) {
 
     auto *shortcuts = new ShortcutHandler(nullptr, nullptr, nullptr, nullptr, &app,
                                           config.singleInstance());
+    shortcuts->setPluginManager(&plugins);
     engine.rootContext()->setContextProperty("shortcuts", shortcuts);
 
     QObject::connect(shortcuts, &ShortcutHandler::toggleEqualizerRequested, &equalizer,
@@ -531,6 +532,14 @@ int main(int argc, char *argv[]) {
                 if (root->property("pipMode").toBool() || !media.hasMedia()) return;
                 auto *panel = root->findChild<QObject*>("statsPanel");
                 if (panel) panel->setProperty("isOpen", !panel->property("isOpen").toBool());
+            });
+            QObject::connect(shortcuts, &ShortcutHandler::statsSelected, root, [root]() {
+                if (root->property("pipMode").toBool()) return;
+                auto *panel = root->findChild<QObject*>("statsPanel");
+                if (panel && panel->property("isOpen").toBool()) {
+                    panel->setProperty("activePage", "luma");
+                    QMetaObject::invokeMethod(panel, "selectCoreStats");
+                }
             });
                 QObject::connect(shortcuts, &ShortcutHandler::togglePip, root, [root, &media]() {
                     // The menu entry is hidden when nothing is loaded; keep the

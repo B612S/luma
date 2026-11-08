@@ -127,6 +127,7 @@ public:
     // Narrow API used by the JavaScript plugin runtime. Keeping these on
     // MediaManager means plugins do not need access to MpvItem or QML.
     Q_INVOKABLE QVariantMap pluginState() const;
+    Q_INVOKABLE QVariantMap pluginStats() const;
     Q_INVOKABLE void pluginTogglePause();
     Q_INVOKABLE void pluginSetPaused(bool paused);
     Q_INVOKABLE void pluginSeek(double position);

@@ -14,6 +14,12 @@ plugin is unloaded immediately. Newly installed plugins start disabled;
 enable one explicitly. Permissions declared in the manifest are enforced by the
 host.
 
+Bundled optional plugins are installed read-only in
+`/usr/share/luma/plugins/<id>/`; they can be enabled and configured but not
+deleted. User-installed plugins live in `~/.local/share/luma/plugins/<id>/`
+and take precedence over a bundled plugin with the same id. Plugin data is
+always per-user in `~/.local/share/luma/plugins/data/<id>/`.
+
 ## Language
 
 v1 uses JavaScript (ECMAScript 2020) through Qt's `QJSEngine`.
@@ -272,6 +278,157 @@ commands, load external config or load yt-dlp plugins (`--exec`,
 `--load-info-json`, `--update`, `--rm-cache-dir`, `--downloader`,
 `--plugin-dirs`).
 
+### Plugin information
+
+A plugin can add a short `info` text (5-6 lines) to `plugin.json`. The Plugins
+page shows an information icon that opens a separate dialog with this text;
+the value can be translated through the plugin's own `locales/` files just
+like its name and description.
+
+```json
+"info": "Samples CPU/RAM and draws SVG graphs.\nOpen Stats and press the assigned number."
+```
+
+If `info` is omitted, the dialog falls back to the description.
+
+### Plugin settings
+
+A plugin can declare native settings in `plugin.json`. Luma renders the
+controls itself; plugins do not provide QML:
+
+```json
+"settings": [
+  { "key": "enabled", "type": "switch", "label": "Enabled", "default": true },
+  { "key": "mode", "type": "select", "label": "Mode",
+    "options": [{ "label": "Auto", "value": "auto" },
+                { "label": "60 fps", "value": "60" }],
+    "default": "auto",
+    "description": "Shown below the control." },
+  { "key": "target", "type": "number", "label": "Target",
+    "min": 1, "max": 240, "step": 1, "default": 60 }
+]
+```
+
+Supported types are `switch`, `select`, `text`, `textarea` and `number`.
+If a plugin has settings, **Settings → Plugins** shows a **Settings** button.
+Values are stored in the plugin's own `config.ini`; changing one dispatches the
+`settingsChanged` event to a loaded plugin.
+
+### Translations
+
+Plugins keep their own translations in a `locales/` directory, separate from
+Luma's root `locales/`:
+
+```
+com.example.plugin/
+  plugin.json
+  main.js
+  locales/
+    en.json
+    ru.json
+```
+
+Keys are the English strings used by the plugin:
+
+```json
+{
+  "Smooth Motion": "Плавное движение",
+  "Frame rate": "Частота кадров"
+}
+```
+
+The host picks the language of the player (`Config.language`, or the system
+locale for `auto`) and falls back to `en.json`, then to the key itself. Plugin
+names, descriptions, settings labels/options/descriptions are translated by
+the host. JavaScript can translate its own labels with:
+
+```js
+luma.i18n.t("Frame rate", "Frame rate");
+```
+
+Plugin translations must not be added to Luma's root `locales/*.ts`.
+
+### Statistics
+
+Permission: `stats`.
+
+```js
+const stats = luma.stats.snapshot();
+stats["estimated-vf-fps"];
+
+luma.stats.set("custom", "My value", 42);
+luma.stats.remove("custom");
+luma.stats.clear();
+```
+
+Plugin stats appear in the native Stats panel under a **Plugins** section.
+`snapshot()` returns the current media/playback values, including
+`container-fps`, `estimated-vf-fps`, `display-fps`, codecs, bitrates and cache
+state.
+
+A plugin can also add a full page to the same native Stats window:
+
+```js
+const result = luma.stats.setPage("smooth", "Smooth Motion stats", [
+    { type: "heading", text: "Smooth Motion" },
+    { type: "label", text: "Output FPS: 120" },
+    { type: "separator" }
+]);
+
+if (!result.ok)
+    luma.log.warn(result.error);
+```
+
+Page content supports `heading`, `label`, `separator` and `svg`. The `svg`
+item contains base64 SVG markup and a `height`; the plugin draws the graphics
+itself and the host only displays the image:
+
+```js
+luma.stats.setPage("resources", "Resource usage", [
+    { type: "svg", svg: base64Svg, height: 330 }
+], 3);
+```
+
+The optional fourth argument is a preferred slot. The host assigns the first
+free statistics key automatically, preferring the requested slot when it is
+available: `2`, `3`, ..., `9`, then `0` for the tenth slot. Key `1` is always
+Luma's own page. There are at most ten slots; after that `setPage()` returns
+`{ ok: false, error: ... }` and the plugin should continue without a statistics
+page.
+
+Keys `1`-`0` only switch pages while Stats is already open. They never open
+the panel; use the normal Stats menu item or shortcut for that. Plugins cannot
+reassign these numeric keys. The plugin does not create another QML window.
+
+### Keyboard shortcuts
+
+Permission: `shortcuts`.
+
+```js
+luma.shortcuts.add("F2", () => {
+    luma.stats.showPage("smooth");
+});
+
+let win = null;
+luma.shortcuts.add("F3", () => {
+    win = luma.ui.window({
+        title: "Plugin window",
+        content: [{ type: "label", text: "Opened with F3" }],
+        actions: [{ id: "close", label: "Close" }]
+    }, (event) => {
+        if (event.action === "close")
+            win.close();
+    });
+});
+```
+
+Use portable key names such as `F2`, `F3` or `F5`. The bare number keys
+`1`-`0` are reserved for statistics pages and rejected by the shortcut API and
+by the shortcut settings. They only switch pages while Stats is already open;
+they do not open the panel. Luma's own shortcuts always take priority; plugin
+shortcuts only receive unhandled keys and are disabled while a modal dialog is
+open or while a text field has focus.
+
 ### Configuration and storage
 
 Permission: `filesystem:plugin` for storage.
@@ -367,6 +524,8 @@ plugin.
 | `network` | `luma.net.fetch` |
 | `filesystem:plugin` | `luma.storage` |
 | `mpv:raw` | raw mpv properties and commands (requires approval warning) |
+| `stats` | publish extra rows in the Stats panel and read a stats snapshot |
+| `shortcuts` | register non-numeric shortcuts for otherwise unhandled keys |
 | `process` | run external programs via `luma.process` (requires approval warning) |
 
 Denied calls return an empty value or `false` and are logged. Enabling a
@@ -378,8 +537,9 @@ deliberately powerful; review a plugin's manifest before enabling it.
 
 ```
 core/PluginManifest.*      plugin.json parsing and validation
-core/PluginManager.*       discovery in ~/.local/share/luma/plugins,
-                           runtimes, event fan-out, windows
+core/PluginManager.*       discovery in ~/.local/share/luma/plugins and
+                           /usr/share/luma/plugins, runtimes, event fan-out,
+                           windows and plugin settings
 core/PluginRuntime.*       one QJSEngine, lifecycle, menu callbacks
 core/PluginApi.*           API namespaces and permission checks
 core/PluginWindow.*        host-rendered window object
@@ -392,8 +552,8 @@ Plugins are scanned at startup; **Settings → Plugins** shows the installed
 plugins and can reload, add or delete them. The switch is persisted in
 `luma.conf` and synchronized across instances.
 
-Remaining ideas (not implemented): plugin-scoped settings pages, dynamic menu
-predicates, track events, notifications and installation from archives.
+Remaining ideas (not implemented): dynamic menu predicates, track events,
+notifications and installation from archives.
 
 ## Example
 

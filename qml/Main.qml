@@ -235,6 +235,15 @@ ApplicationWindow {
     urlDialog.dialog.visible ||
     (typeof Plugins !== "undefined" && Plugins && Plugins.windows.length > 0)
 
+    onIsDialogOpenChanged: {
+        if (typeof shortcuts !== "undefined" && shortcuts !== null)
+            shortcuts.setShortcutsEnabled(!isDialogOpen);
+        // Any dialog may have left active focus on a hidden button or text
+        // field. Give it back to the video surface so Space reaches playback.
+        if (!isDialogOpen && typeof videoMouseArea !== "undefined")
+            videoMouseArea.forceActiveFocus();
+    }
+
     Component.onCompleted: {
         root.requestActivate()
         if (root.controlBarPinnedMode) root.controlsVisible = true

@@ -1,0 +1,69 @@
+{
+  "id": "com.luma.fps",
+  "name": "Smooth Motion",
+  "version": "1.0.1",
+  "apiVersion": 1,
+  "main": "main.js",
+  "description": "Generates frames for the display refresh rate or a fixed target frame rate.",
+  "permissions": [
+    "mpv:raw",
+    "media:read",
+    "stats"
+  ],
+  "settings": [
+    {
+      "key": "mode",
+      "type": "select",
+      "label": "Frame rate",
+      "options": [
+        {
+          "label": "Display refresh rate",
+          "value": "display"
+        },
+        {
+          "label": "60 fps",
+          "value": "60"
+        },
+        {
+          "label": "120 fps",
+          "value": "120"
+        },
+        {
+          "label": "144 fps",
+          "value": "144"
+        },
+        {
+          "label": "165 fps",
+          "value": "165"
+        }
+      ],
+      "default": "display",
+      "description": "Generates frames to the detected display refresh rate."
+    },
+    {
+      "key": "interpolation",
+      "type": "switch",
+      "label": "Motion interpolation",
+      "default": true,
+      "description": "Generate intermediate frames with minterpolate. Disable to leave the video at its source rate."
+    },
+    {
+      "key": "quality",
+      "type": "select",
+      "label": "Interpolation quality",
+      "options": [
+        {
+          "label": "Smooth (MCI)",
+          "value": "mci"
+        },
+        {
+          "label": "Fast (blend)",
+          "value": "blend"
+        }
+      ],
+      "default": "mci",
+      "description": "Smooth uses motion-compensated interpolation; Fast uses less CPU."
+    }
+  ],
+  "info": "Generates frames with mpv minterpolate.\nOpen Statistics (I), then press its number key (usually 2).\nSettings chooses display/fixed FPS and MCI/Blend quality.\nRequires mpv raw access; MCI is CPU-heavy."
+}

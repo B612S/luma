@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QProcess>
+#include <QPointer>
 #include <memory>
 #include <QTimer>
 #include <QStandardPaths>
@@ -293,7 +294,19 @@ PluginConfigApi::PluginConfigApi(PluginRuntime *runtime, const QString &dataDir,
 
 QVariant PluginConfigApi::get(const QString &key, const QVariant &fallback) const
 {
-    return m_settings.value(key, fallback);
+    QVariant value = m_settings.value(key, fallback);
+    // INI files store booleans as text; plugins expect a real bool when the
+    // declared fallback is bool.
+    if (fallback.userType() == QMetaType::Bool && value.userType() == QMetaType::QString) {
+        const QString text = value.toString().trimmed();
+        if (text.compare(QLatin1String("true"), Qt::CaseInsensitive) == 0
+                || text == QLatin1String("1"))
+            value = true;
+        else if (text.compare(QLatin1String("false"), Qt::CaseInsensitive) == 0
+                 || text == QLatin1String("0"))
+            value = false;
+    }
+    return value;
 }
 
 void PluginConfigApi::set(const QString &key, const QVariant &value)
@@ -496,11 +509,24 @@ QString PluginProcessApi::path(const QString &program) const
     return QStandardPaths::findExecutable(program);
 }
 
+void PluginProcessApi::abortAll()
+{
+    m_aborted = true;
+    const QList<QProcess *> processes = findChildren<QProcess *>();
+    for (QProcess *process : processes) {
+        process->disconnect();
+        process->kill();
+        process->deleteLater();
+    }
+}
+
 void PluginProcessApi::run(const QString &program, const QStringList &args,
                            const QVariantMap &options, const QJSValue &callback)
 {
-    if (!allowed() || !isCallable(callback))
+    if (!allowed() || !isCallable(callback) || m_aborted)
         return;
+    const QPointer<PluginProcessApi> apiGuard(this);
+    const QPointer<PluginRuntime> runtimeGuard(m_runtime);
     if (!supported(program)) {
         QVariantMap response;
         response.insert(QStringLiteral("ok"), false);
@@ -577,7 +603,8 @@ void PluginProcessApi::run(const QString &program, const QStringList &args,
                      [collect]() { collect(false); });
 
     QObject::connect(proc, &QProcess::errorOccurred, proc,
-                     [this, proc, callback, reported, program](QProcess::ProcessError error) {
+                     [this, proc, callback, reported, program, apiGuard, runtimeGuard]
+                     (QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart || *reported)
             return;
         *reported = true;
@@ -587,12 +614,18 @@ void PluginProcessApi::run(const QString &program, const QStringList &args,
         response.insert(QStringLiteral("stdout"), QString());
         response.insert(QStringLiteral("stderr"), QString());
         response.insert(QStringLiteral("error"), QStringLiteral("failed to start %1").arg(program));
-        callJs(callback, m_runtime->engine()->toScriptValue(response),
-               m_runtime->manifest().id);
+        if (!apiGuard || apiGuard->m_aborted || !runtimeGuard
+                || !runtimeGuard->engine()) {
+            proc->deleteLater();
+            return;
+        }
+        callJs(callback, runtimeGuard->engine()->toScriptValue(response),
+               runtimeGuard->manifest().id);
         proc->deleteLater();
     });
     QObject::connect(proc, &QProcess::finished, proc,
-                     [this, proc, callback, output, errors, maxBytes, reported, timedOut, collect]
+                     [this, proc, callback, output, errors, maxBytes, reported, timedOut,
+                      collect, apiGuard, runtimeGuard]
                      (int code, QProcess::ExitStatus status) {
         if (*reported)
             return;
@@ -609,8 +642,13 @@ void PluginProcessApi::run(const QString &program, const QStringList &args,
                         ? QStringLiteral("timeout")
                         : (status == QProcess::NormalExit ? QString()
                                                           : proc->errorString()));
-        callJs(callback, m_runtime->engine()->toScriptValue(response),
-               m_runtime->manifest().id);
+        if (!apiGuard || apiGuard->m_aborted || !runtimeGuard
+                || !runtimeGuard->engine()) {
+            proc->deleteLater();
+            return;
+        }
+        callJs(callback, runtimeGuard->engine()->toScriptValue(response),
+               runtimeGuard->manifest().id);
         proc->deleteLater();
     });
 
@@ -626,6 +664,114 @@ void PluginProcessApi::run(const QString &program, const QStringList &args,
         proc->write(options.value(QStringLiteral("stdin")).toByteArray());
         proc->closeWriteChannel();
     }
+}
+
+// ---------------------------------------------------------------- i18n
+
+PluginI18nApi::PluginI18nApi(PluginRuntime *runtime, QObject *parent)
+    : QObject(parent), m_runtime(runtime)
+{
+}
+
+QString PluginI18nApi::t(const QString &key, const QString &fallback) const
+{
+    if (!m_runtime->manager())
+        return fallback.isEmpty() ? key : fallback;
+    const QString translated = m_runtime->manager()->pluginTranslate(
+        m_runtime->manifest(), key);
+    if (translated == key && !fallback.isEmpty())
+        return fallback;
+    return translated;
+}
+
+// ---------------------------------------------------------------- stats
+
+PluginStatsApi::PluginStatsApi(PluginRuntime *runtime, QObject *parent)
+    : QObject(parent), m_runtime(runtime)
+{
+}
+
+bool PluginStatsApi::allowed() const
+{
+    return m_runtime->api() && m_runtime->api()->hasPermission("stats");
+}
+
+QVariantMap PluginStatsApi::snapshot() const
+{
+    if (!allowed() || !m_runtime->manager()->media())
+        return {};
+    return m_runtime->manager()->media()->pluginStats();
+}
+
+void PluginStatsApi::set(const QString &key, const QString &label,
+                         const QVariant &value)
+{
+    if (!allowed() || key.isEmpty())
+        return;
+    m_runtime->setStat(key, label, value);
+}
+
+void PluginStatsApi::remove(const QString &key)
+{
+    if (allowed())
+        m_runtime->removeStat(key);
+}
+
+void PluginStatsApi::clear()
+{
+    if (allowed())
+        m_runtime->clearStats();
+}
+
+QVariantMap PluginStatsApi::setPage(const QString &id, const QString &title,
+                                    const QVariantList &content,
+                                    int preferredSlot)
+{
+    if (!allowed())
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("missing stats permission")}};
+    return m_runtime->setStatsPage(id, title, content, preferredSlot);
+}
+
+void PluginStatsApi::removePage(const QString &id)
+{
+    if (allowed())
+        m_runtime->removeStatsPage(id);
+}
+
+void PluginStatsApi::clearPages()
+{
+    if (allowed())
+        m_runtime->clearStatsPages();
+}
+
+void PluginStatsApi::showPage(const QString &id)
+{
+    if (allowed())
+        m_runtime->manager()->showStatsPage(id);
+}
+
+// ---------------------------------------------------------------- shortcuts
+
+PluginShortcutsApi::PluginShortcutsApi(PluginRuntime *runtime, QObject *parent)
+    : QObject(parent), m_runtime(runtime)
+{
+}
+
+bool PluginShortcutsApi::allowed() const
+{
+    return m_runtime->api() && m_runtime->api()->hasPermission("shortcuts");
+}
+
+bool PluginShortcutsApi::add(const QString &key, const QJSValue &callback)
+{
+    return allowed() && m_runtime->addShortcut(key, callback);
+}
+
+void PluginShortcutsApi::remove(const QString &key)
+{
+    if (allowed())
+        m_runtime->removeShortcut(key);
 }
 
 // ---------------------------------------------------------------- UI
@@ -685,6 +831,9 @@ PluginApi::PluginApi(PluginRuntime *runtime, const PluginManifest &manifest,
     m_net = new PluginNetApi(runtime, this);
     m_mpv = new PluginMpvApi(runtime, this);
     m_process = new PluginProcessApi(runtime, this);
+    m_i18n = new PluginI18nApi(runtime, this);
+    m_stats = new PluginStatsApi(runtime, this);
+    m_shortcuts = new PluginShortcutsApi(runtime, this);
     m_ui = new PluginUiApi(runtime, this);
 }
 

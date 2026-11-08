@@ -143,6 +143,10 @@
 <message><source>plugins_access_process_text</source><translation>«%1» запрашивает прямой доступ к программам на этом компьютере.</translation></message>
 <message><source>plugins_access_process_hint</source><translation>Плагин сможет запускать любые исполняемые программы на этом компьютере, включая shell, с доступом к файлам и сети в обход обычных ограничений Luma. Включайте только если доверяете плагину.</translation></message>
 <message><source>plugins_access_allow</source><translation>Разрешить доступ</translation></message>
+<message><source>plugins_info</source><translation>Информация о плагине</translation></message>
+<message><source>plugins_settings</source><translation>Настройки</translation></message>
+<message><source>plugins_settings_title</source><translation>Настройки «%1»</translation></message>
+<message><source>plugins_settings_close</source><translation>Закрыть</translation></message>
 <message><source>settings_debug</source><translation>Отладка</translation></message>
 <message><source>settings_debug_hint</source><translation>Каждый компонент пишет свой файл в ~/.cache/luma/: luma.log, mpv.log и yt-dlp.log.</translation></message>
 <message><source>settings_shortcuts</source><translation>Клавиши</translation></message>
@@ -291,6 +295,7 @@
 <message><source>stats_duration</source><translation>Длительность</translation></message>
 <message><source>stats_video</source><translation>Видеокодек</translation></message>
 <message><source>stats_resolution</source><translation>Разрешение</translation></message>
+<message><source>stats_plugins</source><translation>Плагины</translation></message>
 <message><source>stats_fps</source><translation>Частота кадров</translation></message>
 <message><source>stats_vid_bitrate</source><translation>Битрейт видео</translation></message>
 <message><source>stats_hwdec</source><translation>Аппаратное декодирование</translation></message>

@@ -27,10 +27,8 @@ Item {
         }
 
         onOpened: {
-            if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(false);
             Qt.callLater(() => urlField.forceActiveFocus());
         }
-        onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
 
         contentItem: Item {
             implicitHeight: layout.implicitHeight + 40

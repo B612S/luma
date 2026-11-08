@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSet>
 
 namespace {
 
@@ -23,7 +24,9 @@ const QStringList &knownPermissions()
         QStringLiteral("filesystem:plugin"),
         QStringLiteral("notifications"),
         QStringLiteral("mpv:raw"),
-        QStringLiteral("process")
+        QStringLiteral("process"),
+        QStringLiteral("stats"),
+        QStringLiteral("shortcuts")
     };
     return permissions;
 }
@@ -57,6 +60,7 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
     manifest.name = obj.value(QStringLiteral("name")).toString().trimmed();
     manifest.version = obj.value(QStringLiteral("version")).toString().trimmed();
     manifest.description = obj.value(QStringLiteral("description")).toString().trimmed();
+    manifest.info = obj.value(QStringLiteral("info")).toString().trimmed();
     manifest.author = obj.value(QStringLiteral("author")).toString().trimmed();
     manifest.license = obj.value(QStringLiteral("license")).toString().trimmed();
     manifest.apiVersion = obj.value(QStringLiteral("apiVersion")).toInt(0);
@@ -103,6 +107,86 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
         manifest.permissions << permission;
     }
     manifest.permissions.removeDuplicates();
+
+    const QJsonArray settings = obj.value(QStringLiteral("settings")).toArray();
+    QSet<QString> settingKeys;
+    static const QRegularExpression keyPattern(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]*$"));
+    static const QStringList settingTypes = {
+        QStringLiteral("switch"), QStringLiteral("select"),
+        QStringLiteral("text"), QStringLiteral("textarea"),
+        QStringLiteral("number")
+    };
+    for (const QJsonValue &value : settings) {
+        if (!value.isObject()) {
+            manifest.error = QStringLiteral("invalid plugin setting");
+            return manifest;
+        }
+        const QJsonObject setting = value.toObject();
+        const QString key = setting.value(QStringLiteral("key")).toString().trimmed();
+        const QString type = setting.value(QStringLiteral("type")).toString().trimmed();
+        const QString label = setting.value(QStringLiteral("label")).toString().trimmed();
+        if (key.isEmpty() || !keyPattern.match(key).hasMatch()
+                || settingKeys.contains(key)
+                || !settingTypes.contains(type) || label.isEmpty()) {
+            manifest.error = QStringLiteral("invalid plugin setting: %1").arg(key);
+            return manifest;
+        }
+        settingKeys.insert(key);
+
+        QVariantMap parsed;
+        parsed.insert(QStringLiteral("key"), key);
+        parsed.insert(QStringLiteral("type"), type);
+        parsed.insert(QStringLiteral("label"), label);
+        const QString description = setting.value(QStringLiteral("description")).toString().trimmed();
+        if (!description.isEmpty())
+            parsed.insert(QStringLiteral("description"), description);
+        const QString placeholder = setting.value(QStringLiteral("placeholder")).toString();
+        if (!placeholder.isEmpty())
+            parsed.insert(QStringLiteral("placeholder"), placeholder);
+
+        if (type == QLatin1String("switch")) {
+            parsed.insert(QStringLiteral("default"), setting.value(QStringLiteral("default")).toBool(false));
+        } else if (type == QLatin1String("text") || type == QLatin1String("textarea")) {
+            parsed.insert(QStringLiteral("default"), setting.value(QStringLiteral("default")).toString());
+        } else if (type == QLatin1String("number")) {
+            const double defaultValue = setting.value(QStringLiteral("default")).toDouble(0);
+            parsed.insert(QStringLiteral("default"), defaultValue);
+            if (setting.contains(QStringLiteral("min")))
+                parsed.insert(QStringLiteral("min"), setting.value(QStringLiteral("min")).toDouble());
+            if (setting.contains(QStringLiteral("max")))
+                parsed.insert(QStringLiteral("max"), setting.value(QStringLiteral("max")).toDouble());
+            if (setting.contains(QStringLiteral("step")))
+                parsed.insert(QStringLiteral("step"), setting.value(QStringLiteral("step")).toDouble(1));
+        } else {
+            const QJsonArray options = setting.value(QStringLiteral("options")).toArray();
+            QVariantList parsedOptions;
+            for (const QJsonValue &optionValue : options) {
+                if (!optionValue.isObject())
+                    continue;
+                const QJsonObject option = optionValue.toObject();
+                const QString optionLabel = option.value(QStringLiteral("label")).toString().trimmed();
+                const QJsonValue optionData = option.value(QStringLiteral("value"));
+                if (optionLabel.isEmpty() || optionData.isUndefined())
+                    continue;
+                QVariantMap parsedOption;
+                parsedOption.insert(QStringLiteral("label"), optionLabel);
+                parsedOption.insert(QStringLiteral("value"), optionData.toVariant());
+                parsedOptions << parsedOption;
+            }
+            if (parsedOptions.isEmpty()) {
+                manifest.error = QStringLiteral("plugin setting has no options: %1").arg(key);
+                return manifest;
+            }
+            parsed.insert(QStringLiteral("options"), parsedOptions);
+            QVariant defaultValue = setting.value(QStringLiteral("default")).toVariant();
+            if (!defaultValue.isValid())
+                defaultValue = parsedOptions.first().toMap().value(QStringLiteral("value"));
+            parsed.insert(QStringLiteral("default"), defaultValue);
+        }
+        manifest.settings << parsed;
+    }
+
     manifest.valid = true;
     return manifest;
 }

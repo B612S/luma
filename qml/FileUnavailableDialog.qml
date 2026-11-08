@@ -26,14 +26,7 @@ Dialog {
         border.color: "transparent"
     }
 
-    onOpened: {
-        if (typeof shortcuts !== "undefined" && shortcuts !== null)
-            shortcuts.setShortcutsEnabled(false);
-    }
-    onClosed: {
-        if (typeof shortcuts !== "undefined" && shortcuts !== null)
-            shortcuts.setShortcutsEnabled(true);
-    }
+    onOpened: Qt.callLater(() => unavailableOk.forceActiveFocus())
 
     function openWith(path) {
         dialog.filePath = path;
@@ -74,6 +67,7 @@ Dialog {
         alignment: Qt.AlignRight
 
         Button {
+            id: unavailableOk
             text: qsTranslate("FileUnavailableDialog", "unavailable_ok")
             DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
             onClicked: dialog.close()

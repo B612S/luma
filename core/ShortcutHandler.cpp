@@ -1,4 +1,6 @@
 #include "ShortcutHandler.hpp"
+#include "PluginManager.hpp"
+#include <QKeySequence>
 #include "CastManager.hpp"
 #include "GlobalShortcuts.hpp"
 #include <QKeyEvent>
@@ -263,11 +265,20 @@ QString ShortcutHandler::keyText(int keycode, int key, int modifiers) const
     return QKeySequence(key | static_cast<int>(mods)).toString(QKeySequence::PortableText);
 }
 
+static bool isReservedStatsShortcut(const QString &text)
+{
+    const QKeySequence sequence = QKeySequence::fromString(
+        text.trimmed(), QKeySequence::PortableText);
+    const QString normalized = sequence.toString(QKeySequence::PortableText);
+    return normalized.size() == 1 && normalized.at(0).isDigit();
+}
+
 void ShortcutHandler::setShortcut(const QString &id, int keycode, int modifiers,
                                   const QString &text, bool global)
 {
     const ShortcutAction action = shortcutActionFromId(id);
-    if (action == ShortcutAction::None || keycode <= 0 || text.trimmed().isEmpty())
+    if (action == ShortcutAction::None || keycode <= 0 || text.trimmed().isEmpty()
+            || isReservedStatsShortcut(text))
         return;
 
     ShortcutBinding binding;
@@ -341,7 +352,8 @@ void ShortcutHandler::loadShortcuts()
         const QString localKey = QStringLiteral("local/") + id;
         if (settings.contains(localKey)) {
             const ShortcutBinding binding = parseBinding(settings.value(localKey).toString(), info.action);
-            if (binding.isValid()) m_localBindings.insert(info.action, binding);
+            if (binding.isValid() && !isReservedStatsShortcut(binding.text))
+                m_localBindings.insert(info.action, binding);
         } else {
             const ShortcutBinding binding = defaultBindingFor(info.action);
             if (binding.isValid()) m_localBindings.insert(info.action, binding);
@@ -820,6 +832,9 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
         if (!m_mpv) return false;
+        // The help dialog is modal for the player: let QML handle Tab, Space,
+        // Escape and its close button; only the ? key is handled on release.
+        if (m_helpVisible) return false;
 
         // Ignore when focus is in a text field (TextField, TextInput, etc.)
         QObject *focus = QGuiApplication::focusObject();
@@ -837,14 +852,52 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
             }
         }
 
+        // Numeric keys are reserved for statistics pages. They never open
+        // Stats themselves; when the panel is closed they are simply
+        // swallowed. Key 1 is Luma's page, 2-9 are plugin pages, and 0 is the
+        // tenth stats slot.
+        if (key->modifiers() == Qt::NoModifier && !key->isAutoRepeat()
+                && ((key->key() >= Qt::Key_1 && key->key() <= Qt::Key_9)
+                    || key->key() == Qt::Key_0)) {
+            if (m_window && !m_statsItem)
+                m_statsItem = m_window->findChild<QQuickItem*>("statsPanel");
+            const bool statsOpen = m_statsItem && m_statsItem->isVisible();
+            if (statsOpen) {
+                if (key->key() == Qt::Key_1) {
+                    emit statsSelected();
+                } else if (m_pluginManager) {
+                    const QString digit = key->key() == Qt::Key_0
+                        ? QStringLiteral("0")
+                        : QString::number(key->key() - Qt::Key_1 + 1);
+                    m_pluginManager->showStatsPageForKey(digit);
+                }
+            }
+            return true;
+        }
+
         ShortcutAction action = matchAction(key);
-        if (action == ShortcutAction::None) return false;
+        if (action == ShortcutAction::None) {
+            // Core bindings always win. Plugin shortcuts only run for otherwise
+            // unhandled keys, and never while a modal dialog is open.
+            if (m_pluginManager && !key->isAutoRepeat()
+                    && !(m_window && m_window->property("isDialogOpen").toBool())
+                    && m_pluginManager->handleShortcut(key->key(), key->modifiers()))
+                return true;
+            return false;
+        }
 
         executeAction(action, key->isAutoRepeat());
         return true;
     }
     else if (event->type() == QEvent::KeyRelease) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
+        if (m_helpVisible) {
+            if (matchAction(key) == ShortcutAction::ShowShortcutsHelp) {
+                emit shortcutsHelpVisibleChanged(false);
+                return true;
+            }
+            return false;
+        }
         if (!key->isAutoRepeat()) {
             ShortcutAction action = matchAction(key);
             switch (action) {

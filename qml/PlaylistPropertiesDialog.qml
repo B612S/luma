@@ -65,15 +65,7 @@ Dialog {
         open();
     }
 
-    onOpened: {
-        if (typeof shortcuts !== "undefined" && shortcuts !== null)
-            shortcuts.setShortcutsEnabled(false);
-        content.forceActiveFocus();
-    }
-    onClosed: {
-        if (typeof shortcuts !== "undefined" && shortcuts !== null)
-            shortcuts.setShortcutsEnabled(true);
-    }
+    onOpened: content.forceActiveFocus()
 
     background: Rectangle {
         // Same translucency as the Settings dialog.
@@ -147,6 +139,9 @@ Dialog {
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
+                    activeFocusOnTab: true
+                    border.width: activeFocus ? 1 : 0
+                    border.color: Kirigami.Theme.highlightColor
                     radius: 4
                     color: isActive ? dialog.selectionBackgroundColor :
                     (catHover.containsMouse ? Qt.rgba(Kirigami.Theme.textColor.r,
@@ -176,11 +171,27 @@ Dialog {
                         font.weight: btn.isActive ? Font.DemiBold : Font.Normal
                     }
 
+                    Keys.onSpacePressed: (event) => {
+                        btn.clicked();
+                        event.accepted = true;
+                    }
+                    Keys.onReturnPressed: (event) => {
+                        btn.clicked();
+                        event.accepted = true;
+                    }
+                    Keys.onEnterPressed: (event) => {
+                        btn.clicked();
+                        event.accepted = true;
+                    }
+
                     MouseArea {
                         id: catHover
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: btn.clicked()
+                        onClicked: {
+                            btn.forceActiveFocus();
+                            btn.clicked();
+                        }
                     }
                 }
 
@@ -202,6 +213,7 @@ Dialog {
 
         // ---- Watched folders (named playlists) ----
         Flickable {
+            id: foldersFlickable
             visible: dialog.currentCategory === "watched" && !dialog.isDefault
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -212,6 +224,8 @@ Dialog {
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            FocusScroller { flickable: foldersFlickable }
 
             Item {
                 width: parent.width - 22
@@ -308,6 +322,7 @@ Dialog {
 
         // ---- Playback ----
         Flickable {
+            id: playbackFlickable
             visible: dialog.currentCategory === "playback"
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -318,6 +333,8 @@ Dialog {
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            FocusScroller { flickable: playbackFlickable }
 
             Item {
                 width: parent.width - 22

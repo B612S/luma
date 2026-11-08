@@ -69,6 +69,8 @@ Dialog {
             dialog.open();
     }
 
+    onOpened: Qt.callLater(() => contentFlick.forceActiveFocus())
+
     Connections {
         target: dialog.pluginWindow
         function onChanged() {
@@ -97,14 +99,19 @@ Dialog {
         implicitHeight: Math.min(column.implicitHeight + 40, 560)
 
         Flickable {
+            id: contentFlick
             anchors.fill: parent
             anchors.margins: 20
             clip: true
+            focus: true
+            activeFocusOnTab: true
             contentWidth: width
             contentHeight: column.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            FocusScroller { flickable: contentFlick }
 
             ColumnLayout {
                 id: column

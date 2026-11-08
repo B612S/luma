@@ -137,10 +137,56 @@ public:
     // callback({ ok, exitCode, stdout, stderr, error })
     Q_INVOKABLE void run(const QString &program, const QStringList &args,
                          const QVariantMap &options, const QJSValue &callback);
+    void abortAll();
 
 private:
     bool allowed() const;
     bool supported(const QString &program) const;
+    PluginRuntime *m_runtime;
+    bool m_aborted = false;
+};
+
+class PluginI18nApi : public QObject {
+    Q_OBJECT
+public:
+    explicit PluginI18nApi(PluginRuntime *runtime, QObject *parent = nullptr);
+    Q_INVOKABLE QString t(const QString &key,
+                          const QString &fallback = QString()) const;
+
+private:
+    PluginRuntime *m_runtime;
+};
+
+class PluginStatsApi : public QObject {
+    Q_OBJECT
+public:
+    explicit PluginStatsApi(PluginRuntime *runtime, QObject *parent = nullptr);
+    Q_INVOKABLE QVariantMap snapshot() const;
+    Q_INVOKABLE void set(const QString &key, const QString &label,
+                         const QVariant &value);
+    Q_INVOKABLE void remove(const QString &key);
+    Q_INVOKABLE void clear();
+    Q_INVOKABLE QVariantMap setPage(const QString &id, const QString &title,
+                                    const QVariantList &content,
+                                    int preferredSlot = 0);
+    Q_INVOKABLE void removePage(const QString &id);
+    Q_INVOKABLE void clearPages();
+    Q_INVOKABLE void showPage(const QString &id);
+
+private:
+    bool allowed() const;
+    PluginRuntime *m_runtime;
+};
+
+class PluginShortcutsApi : public QObject {
+    Q_OBJECT
+public:
+    explicit PluginShortcutsApi(PluginRuntime *runtime, QObject *parent = nullptr);
+    Q_INVOKABLE bool add(const QString &key, const QJSValue &callback);
+    Q_INVOKABLE void remove(const QString &key);
+
+private:
+    bool allowed() const;
     PluginRuntime *m_runtime;
 };
 
@@ -177,6 +223,9 @@ public:
     PluginNetApi *netApi() const { return m_net; }
     PluginMpvApi *mpvApi() const { return m_mpv; }
     PluginProcessApi *processApi() const { return m_process; }
+    PluginI18nApi *i18nApi() const { return m_i18n; }
+    PluginStatsApi *statsApi() const { return m_stats; }
+    PluginShortcutsApi *shortcutsApi() const { return m_shortcuts; }
     PluginUiApi *uiApi() const { return m_ui; }
 
 private:
@@ -192,5 +241,8 @@ private:
     PluginNetApi *m_net;
     PluginMpvApi *m_mpv;
     PluginProcessApi *m_process;
+    PluginI18nApi *m_i18n;
+    PluginStatsApi *m_stats;
+    PluginShortcutsApi *m_shortcuts;
     PluginUiApi *m_ui;
 };

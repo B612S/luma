@@ -1,0 +1,10 @@
+{
+  "HDR Output": "HDR-вывод",
+  "Requests HDR passthrough and peak computation from mpv when the display and compositor support HDR.": "Запрашивает у mpv HDR-вывод и вычисление пиковой яркости, если дисплей и compositor поддерживают HDR.",
+  "Enable HDR output": "Включить HDR-вывод",
+  "Tone mapping": "Тональная компрессия",
+  "Auto": "Авто",
+  "Clip": "Clip",
+  "BT.2390": "BT.2390",
+  "Requests HDR passthrough and peak computation from mpv.\nWorks only when the display, compositor and driver support HDR.\nThere is no stats page; enable the plugin and play HDR content.": "Запрашивает HDR-вывод и вычисление пиковой яркости у mpv.\nРаботает, только если дисплей, compositor и драйвер поддерживают HDR.\nСтраницы статистики нет: включите плагин и играйте HDR-контент."
+}

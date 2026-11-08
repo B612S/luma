@@ -68,6 +68,7 @@ qt_add_executable(luma
     core/TrailingSilenceDetector.cpp
     core/MediaFileActions.cpp
     core/PluginManifest.cpp
+    core/PluginLocalization.cpp
     core/PluginApi.cpp
     core/PluginRuntime.cpp
     core/PluginManager.cpp
@@ -106,6 +107,7 @@ qt_add_qml_module(luma
         qml/PlaylistPropertiesDialog.qml
         qml/PlaylistTabs.qml
         qml/PluginMenu.qml
+        qml/PluginSettingsDialog.qml
         qml/PluginWindowDialog.qml
         qml/PluginWindowField.qml
         qml/PlaylistTabsContextMenu.qml
@@ -126,6 +128,7 @@ qt_add_qml_module(luma
         qml/EqualizerDialog.qml
         qml/MediaInfoDialog.qml
         qml/FileUnavailableDialog.qml
+        qml/FocusScroller.qml
     SOURCES
         mpvqt/MpvItem.hpp
         mpvqt/FrameDecoder.hpp
@@ -170,6 +173,9 @@ install(FILES
 
 install(FILES luma.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES assets/luma.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+# Optional bundled JavaScript plugins. Their data stays in the user's data
+# directory; only the plugin code is installed here.
+install(DIRECTORY plugins/ DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/plugins)
 
 target_include_directories(luma PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core

@@ -8,6 +8,34 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- A plugin information button in Settings opens a compact, plugin-localized
+  dialog with an optional 5-6 line `info` text explaining what the plugin does
+  and how to open its UI.
+- Bundled Resource Monitor plugin: plugin-drawn SVG charts for the player's
+  CPU and RAM plus system GPU usage on its own native Stats page, preferring
+  key `3`. GPU monitoring follows the DRM/render node opened by Luma (not the
+  busiest GPU) and is vendor-aware: DRM sysfs on AMD/Intel and `nvidia-smi`
+  on NVIDIA. Stats pages now support plugin-provided SVG content and an
+  optional preferred key.
+- Smooth Motion exposes a native Stats page with source, generated and display
+  FPS plus the active mpv filter; it receives the first free statistics key.
+  The core Stats panel no longer duplicates the output-FPS row.
+- Number keys `1`-`0` are reserved for Stats pages: `1` is Luma's page, plugin
+  pages receive the first free key from `2`-`9`/`0` (maximum ten pages). They
+  only switch pages while Stats is open, never open it, and cannot be
+  reassigned. Registration fails with a clear error when all slots are used.
+- Plugin APIs for the Stats panel (`luma.stats`) and for extra keyboard
+  shortcuts (`luma.shortcuts`); plugin stats appear under a native Plugins
+  section and shortcuts only receive keys not handled by Luma.
+- Per-plugin translations from `locales/<language>.json`, matching the player
+  language; `luma.i18n.t()` is available to plugin JavaScript. Host-rendered
+  plugin settings labels and descriptions use the same translations.
+- Plugin settings declared in `plugin.json` and rendered natively by Luma,
+  with a Settings button in the Plugins page.
+- Bundled optional plugins installed read-only in `/usr/share/luma/plugins`:
+  Smooth Motion (display-refresh/fixed-FPS playback) and HDR Output.
+- Context menus hide track and video-only entries when they do not apply
+  instead of showing disabled rows.
 - GitHub Actions builds the Debian package, AppImage and Arch package on
   published releases or on manual request. Local `makepkg` remains available
   for on-demand rebuilds.
@@ -293,6 +321,33 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Dialog keyboard handling is consistent across Settings, plugin dialogs,
+  Media Info, playlist dialogs, Equalizer and file-unavailable prompts:
+  Escape closes, Tab moves between controls, Space activates the focused
+  control, and player shortcuts are disabled while any dialog is open. Focus
+  returns to the video after closing so Space plays again. Scrolling dialogs
+  now scroll to keep the focused control visible.
+- The plugin information dialog no longer leaves keyboard focus on its icon or
+  on hidden Settings controls: Space does not reopen the dialog or get
+  swallowed after closing it.
+- Disabling a plugin while one of its external processes is still running no
+  longer leaves a callback pointing at the destroyed JavaScript engine; all
+  plugin processes are aborted during unload.
+- Resource Monitor charts now use the full SVG width instead of a zero-width
+  span that collapsed every sample onto the left edge.
+- Resource Monitor now tells the parser when the opened GPU is NVIDIA, so the
+  card name and load are not shown as `n/a`.
+- Resource Monitor CPU percentage uses the sample start timestamps instead of
+  the delayed process-callback timestamp, avoiding inflated CPU spikes, and
+  reports both per-core and normalized system CPU so multi-threaded playback
+  is not capped at one core.
+- Plugin boolean settings stored as INI text (`true`/`false`) are now read as
+  booleans, so Smooth Motion no longer reports interpolation as disabled.
+- Plugin stats pages no longer overlap the core Stats contents or show the
+  core scrollbar, and their own scrollbar is hidden when the page fits.
+- Smooth Motion delays and deduplicates filter application at playback start,
+  uses a screen-refresh fallback when mpv lacks `display-fps`, and defaults to
+  MCI interpolation with a faster Blend option.
 - Disabling an audio or subtitle track from the player menu no longer leaves it
   marked as selected; the track ids are observed as nodes so `aid`/`sid` report
   `"no"` and the track can be selected again.

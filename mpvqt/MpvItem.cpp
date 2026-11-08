@@ -122,6 +122,8 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
         QStringLiteral("audio-codec"), QStringLiteral("current-ao"),
         QStringLiteral("width"),
         QStringLiteral("height"), QStringLiteral("container-fps"),
+        QStringLiteral("estimated-vf-fps"), QStringLiteral("display-fps"),
+        QStringLiteral("vf"),
         QStringLiteral("video-bitrate"), QStringLiteral("hwdec-current"),
         QStringLiteral("frame-drop-count"), QStringLiteral("audio-bitrate"),
         QStringLiteral("audio-params/channel-count"),

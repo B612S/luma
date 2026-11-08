@@ -99,16 +99,14 @@ Dialog {
         }
     }
 
-    // While the dialog is open, shortcuts (including wheel = volume) are disabled.
+    // While the dialog is open, shortcuts (including wheel = volume) are disabled
+    // centrally by Main.isDialogOpen.
     onOpened: {
-        if (typeof shortcuts !== "undefined" && shortcuts !== null)
-            shortcuts.setShortcutsEnabled(false);
         settingsDialog.refreshYtdlpRuntime();
         // The dialog's custom content is not focusable by default; without
         // active focus Escape is not delivered to the popup.
         settingsContent.forceActiveFocus();
     }
-    onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
 
     // Validate color in mpv format: #RRGGBB or #AARRGGBB.
     function validColor(value) {
@@ -156,6 +154,9 @@ Dialog {
 
                     Layout.fillWidth: true
                     height: 36
+                    activeFocusOnTab: true
+                    border.width: activeFocus ? 1 : 0
+                    border.color: Kirigami.Theme.highlightColor
                     color: isActive ? settingsDialog.selectionBackgroundColor :
                     (catHover.containsMouse ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08) : "transparent")
                     radius: 4
@@ -182,11 +183,27 @@ Dialog {
                         anchors.leftMargin: 12
                     }
 
+                    Keys.onSpacePressed: (event) => {
+                        btn.clicked();
+                        event.accepted = true;
+                    }
+                    Keys.onReturnPressed: (event) => {
+                        btn.clicked();
+                        event.accepted = true;
+                    }
+                    Keys.onEnterPressed: (event) => {
+                        btn.clicked();
+                        event.accepted = true;
+                    }
+
                     MouseArea {
                         id: catHover
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: btn.clicked()
+                        onClicked: {
+                            btn.forceActiveFocus();
+                            btn.clicked();
+                        }
                     }
                 }
 
@@ -204,6 +221,7 @@ Dialog {
         }
 
         Flickable {
+            id: settingsFlickable
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: 24
@@ -215,6 +233,8 @@ Dialog {
             // Set the bar width explicitly: in some styles it has a wide
             // transparent area that overlapped the fields on the right.
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            FocusScroller { flickable: settingsFlickable }
 
             Item {
                 // Leave room on the right for the scrollbar, otherwise the elements
@@ -765,6 +785,15 @@ Dialog {
                                     font.pixelSize: 14
                                     text: Config.subtitleFont
                                     rightPadding: 24
+                                    activeFocusOnTab: true
+                                    Keys.onSpacePressed: (event) => {
+                                        fontDialog.open();
+                                        event.accepted = true;
+                                    }
+                                    Keys.onReturnPressed: (event) => {
+                                        fontDialog.open();
+                                        event.accepted = true;
+                                    }
                                 }
                                 Text {
                                     anchors.right: parent.right; anchors.rightMargin: 10
@@ -1162,7 +1191,25 @@ Dialog {
                                                 }
                                             }
                                         }
+                                        ToolButton {
+                                            icon.name: "help-about-symbolic"
+                                            display: AbstractButton.IconOnly
+                                            implicitWidth: 32
+                                            implicitHeight: 32
+                                            flat: true
+                                            focusPolicy: Qt.StrongFocus
+                                            activeFocusOnTab: true
+                                            onClicked: pluginInfoDialog.openFor(modelData)
+                                            ToolTip.visible: hovered
+                                            ToolTip.text: qsTranslate("SettingsDialog", "plugins_info")
+                                        }
                                         Button {
+                                            visible: modelData.hasSettings === true
+                                            text: qsTranslate("SettingsDialog", "plugins_settings")
+                                            onClicked: pluginSettingsDialog.openFor(modelData)
+                                        }
+                                        Button {
+                                            visible: modelData.system !== true
                                             text: qsTranslate("SettingsDialog", "plugins_delete")
                                             onClicked: deletePluginDialog.openFor(modelData.id, modelData.name)
                                         }
@@ -1429,6 +1476,51 @@ Dialog {
     property string currentCategory: "general"
 
 
+    PluginSettingsDialog {
+        id: pluginSettingsDialog
+    }
+
+    Dialog {
+        id: pluginInfoDialog
+        title: pluginInfoDialog.plugin ? pluginInfoDialog.plugin.name : ""
+        modal: true
+        focus: true
+        width: Math.min(460, settingsDialog.maxDialogWidth)
+        padding: 20
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        property var plugin: null
+
+        function openFor(value) {
+            plugin = value;
+            open();
+        }
+
+        onOpened: forceActiveFocus()
+        onClosed: {
+            if (settingsDialog.visible)
+                settingsDialog.contentItem.forceActiveFocus();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Label {
+                Layout.fillWidth: true
+                text: pluginInfoDialog.plugin
+                      ? (pluginInfoDialog.plugin.info
+                         || pluginInfoDialog.plugin.description || "") : ""
+                textFormat: Text.PlainText
+                font.pixelSize: 13
+                color: Kirigami.Theme.textColor
+                wrapMode: Text.WordWrap
+                maximumLineCount: 6
+                elide: Text.ElideRight
+            }
+        }
+    }
+
     Dialog {
         id: pluginAccessDialog
         title: accessCategory === "mpv"
@@ -1448,6 +1540,8 @@ Dialog {
         property var targetProcessPermissions: []
         property bool targetProcessRequired: false
         property var switchControl: null
+
+        onOpened: Qt.callLater(() => accessCancel.forceActiveFocus())
 
         function openFor(plugin, control) {
             targetId = plugin.id;
@@ -1533,6 +1627,7 @@ Dialog {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 Button {
+                    id: accessCancel
                     text: qsTr("plugins_cancel")
                     onClicked: {
                         if (pluginAccessDialog.switchControl)
@@ -1567,6 +1662,8 @@ Dialog {
             open();
         }
 
+        onOpened: Qt.callLater(() => deleteCancel.forceActiveFocus())
+
         contentItem: ColumnLayout {
             spacing: 16
             Label {
@@ -1578,7 +1675,7 @@ Dialog {
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
-                Button { text: qsTr("plugins_cancel"); onClicked: deletePluginDialog.close() }
+                Button { id: deleteCancel; text: qsTr("plugins_cancel"); onClicked: deletePluginDialog.close() }
                 Button {
                     text: qsTr("plugins_delete")
                     onClicked: {
@@ -1615,6 +1712,15 @@ Dialog {
             shownFonts = q.length === 0
                 ? allFonts
                 : allFonts.filter(f => f.toLowerCase().indexOf(q) !== -1);
+            fontList.currentIndex = shownFonts.length > 0 ? 0 : -1;
+        }
+
+        function acceptCurrent() {
+            if (fontList.currentIndex < 0
+                    || fontList.currentIndex >= shownFonts.length)
+                return;
+            Config.subtitleFont = shownFonts[fontList.currentIndex];
+            close();
         }
 
         onOpened: {
@@ -1662,12 +1768,25 @@ Dialog {
             }
 
             ListView {
+                id: fontList
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
+                focus: true
+                activeFocusOnTab: true
+                keyNavigationEnabled: true
                 boundsBehavior: Flickable.StopAtBounds
                 model: fontDialog.shownFonts
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+                Keys.onSpacePressed: (event) => {
+                    fontDialog.acceptCurrent();
+                    event.accepted = true;
+                }
+                Keys.onReturnPressed: (event) => {
+                    fontDialog.acceptCurrent();
+                    event.accepted = true;
+                }
 
                 // If the wanted font isn't in the list, the typed name can still be applied.
                 header: Rectangle {
@@ -1705,9 +1824,13 @@ Dialog {
                     width: ListView.view ? ListView.view.width - 12 : 0
                     height: 34
                     radius: 4
-                    color: fontRowHover.containsMouse
-                           ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-                           : "transparent"
+                    color: ListView.isCurrentItem
+                           ? Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                     Kirigami.Theme.highlightColor.g,
+                                     Kirigami.Theme.highlightColor.b, 0.22)
+                           : (fontRowHover.containsMouse
+                              ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+                              : "transparent")
 
                     Text {
                         anchors.fill: parent

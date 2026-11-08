@@ -141,6 +141,7 @@ Dialog {
         implicitHeight: Math.min(column.implicitHeight + 40, 620)
 
         Flickable {
+            id: infoFlickable
             anchors.fill: parent
             anchors.margins: 20
             clip: true
@@ -150,6 +151,8 @@ Dialog {
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 10 }
+
+            FocusScroller { flickable: infoFlickable }
 
             ColumnLayout {
                 id: column

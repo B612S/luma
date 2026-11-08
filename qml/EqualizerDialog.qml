@@ -98,6 +98,12 @@ Dialog {
 
         implicitWidth: 24
         implicitHeight: 200
+        activeFocusOnTab: true
+
+        Keys.onUpPressed: (event) => { slider.moved(Math.min(to, value + 0.5)); event.accepted = true; }
+        Keys.onDownPressed: (event) => { slider.moved(Math.max(from, value - 0.5)); event.accepted = true; }
+        Keys.onRightPressed: (event) => { slider.moved(Math.min(to, value + 0.5)); event.accepted = true; }
+        Keys.onLeftPressed: (event) => { slider.moved(Math.max(from, value - 0.5)); event.accepted = true; }
 
         readonly property real handleHeight: 12
         readonly property real travel: Math.max(1, height - handleHeight)
@@ -144,7 +150,8 @@ Dialog {
             color: sliderMouse.containsMouse || sliderMouse.pressed
                    ? Qt.lighter(Kirigami.Theme.highlightColor, 1.15)
                    : Kirigami.Theme.highlightColor
-            border.width: 0
+            border.width: slider.activeFocus ? 1 : 0
+            border.color: Kirigami.Theme.highlightColor
         }
 
         MouseArea {
@@ -501,6 +508,8 @@ Dialog {
             border.color: "transparent"
         }
 
+        onOpened: Qt.callLater(() => resetCancel.forceActiveFocus())
+
         contentItem: ColumnLayout {
             spacing: 16
 
@@ -517,6 +526,7 @@ Dialog {
                 spacing: 8
 
                 Button {
+                    id: resetCancel
                     text: qsTr("eq_cancel")
                     onClicked: resetDialog.close()
                 }

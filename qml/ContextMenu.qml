@@ -14,6 +14,8 @@ LumaMenu {
     property var mpv: null
     property string currentAspect: "original"
     property bool hasVideo: false
+    property bool hasAudio: false
+    property bool playbackAvailable: false
 
     signal toggleCropRequested()
     signal togglePlaylistRequested()
@@ -27,6 +29,8 @@ LumaMenu {
 
     onOpened: {
         hasVideo = Media.hasVideo();
+        hasAudio = Media.getTracks("audio").length > 0;
+        playbackAvailable = menu.mpv !== null && menu.mpv.duration > 0;
     }
 
     onCurrentPageChanged: {
@@ -52,7 +56,7 @@ LumaMenu {
             LumaMenuButton { text: qsTr("menu_open"); hasArrow: true; onClicked: menu.showPage("open") }
 
             LumaMenuButton {
-                text: qsTr("menu_audio"); hasArrow: true; isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false
+                text: qsTr("menu_audio"); hasArrow: true; visible: menu.hasAudio
                 onClicked: {
                     menu.tracksList = Media.getTracks("audio")
                     menu.currentTrackId = Media.currentTrackId("aid")
@@ -61,7 +65,7 @@ LumaMenu {
             }
 
             LumaMenuButton {
-                text: qsTr("menu_video"); hasArrow: true; isEnabled: menu.hasVideo
+                text: qsTr("menu_video"); hasArrow: true; visible: menu.hasVideo
                 onClicked: {
                     menu.tracksList = Media.getTracks("video")
                     menu.currentTrackId = Media.currentTrackId("vid")
@@ -70,7 +74,7 @@ LumaMenu {
             }
 
             LumaMenuButton {
-                text: qsTr("menu_subtitles"); hasArrow: true; isEnabled: menu.hasVideo
+                text: qsTr("menu_subtitles"); hasArrow: true; visible: menu.hasVideo
                 onClicked: {
                     menu.tracksList = Media.getTracks("sub")
                     menu.currentTrackId = Media.currentTrackId("sid")
@@ -78,11 +82,11 @@ LumaMenu {
                 }
             }
 
-            LumaMenuSeparator {}
+            LumaMenuSeparator { visible: menu.hasAudio || menu.hasVideo }
 
-            LumaMenuButton { text: qsTr("menu_playback"); hasArrow: true; isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false; onClicked: menu.showPage("playback") }
+            LumaMenuButton { text: qsTr("menu_playback"); hasArrow: true; visible: menu.playbackAvailable; onClicked: menu.showPage("playback") }
 
-            LumaMenuSeparator {}
+            LumaMenuSeparator { visible: menu.playbackAvailable }
 
             LumaMenuButton {
                 text: qsTr("menu_playlist")
@@ -93,8 +97,7 @@ LumaMenu {
                 text: qsTr("menu_pip")
                 // Album art is shown in PiP as well, so keep the entry for any
                 // loaded media and hide it only in the idle state.
-                visible: Media.hasMedia
-                isEnabled: menu.mpv ? (menu.mpv.duration > 0) : false
+                visible: Media.hasMedia && menu.mpv !== null && menu.mpv.duration > 0
                 onClicked: { menu.togglePipRequested(); menu.close() }
             }
 
@@ -204,21 +207,21 @@ LumaMenu {
                 onClicked: { menu.close(); menu.openEqualizerRequested() }
             }
             LumaMenuButton { text: qsTr("menu_renderer"); hasArrow: true; onClicked: menu.showPage("renderer") }
-            LumaMenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; isEnabled: menu.hasVideo; onClicked: menu.showPage("aspect_ratio") }
+            LumaMenuButton { text: qsTr("menu_aspect_ratio"); hasArrow: true; visible: menu.hasVideo; onClicked: menu.showPage("aspect_ratio") }
             LumaMenuButton {
                 text: qsTr("menu_fit_window")
-                isEnabled: menu.hasVideo
+                visible: menu.hasVideo
                 onClicked: { menu.fitWindowRequested(); menu.close() }
             }
 
             LumaMenuButton {
                 text: qsTr("menu_crop")
                 checked: menu.mpv && menu.mpv.cropEnabled
-                isEnabled: menu.hasVideo
+                visible: menu.hasVideo
                 onClicked: { menu.toggleCropRequested(); menu.close() }
             }
 
-            LumaMenuSeparator {}
+            LumaMenuSeparator { visible: menu.hasVideo }
 
             LumaMenuButton { text: qsTr("menu_back"); onClicked: menu.showPage("main") }
         }

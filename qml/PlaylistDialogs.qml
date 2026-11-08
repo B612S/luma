@@ -30,11 +30,9 @@ Item {
         }
 
         onOpened: {
-            if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(false);
             nameField.forceActiveFocus();
             Qt.callLater(() => { nameField.forceActiveFocus(); nameField.selectAll(); });
         }
-        onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
 
         contentItem: Item {
             implicitHeight: layout.implicitHeight + 40
@@ -96,8 +94,7 @@ Item {
             radius: 8; border.color: "transparent"
         }
 
-        onOpened: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(false); }
-        onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
+        onOpened: Qt.callLater(() => deleteCancel.forceActiveFocus())
 
         contentItem: Item {
             implicitHeight: layoutDelete.implicitHeight + 40
@@ -109,7 +106,7 @@ Item {
                 }
                 RowLayout {
                     Layout.alignment: Qt.AlignRight; spacing: 8
-                    Button { text: qsTranslate("PlaylistPanel", "playlist_cancel"); onClicked: deleteDialog.close() }
+                    Button { id: deleteCancel; text: qsTranslate("PlaylistPanel", "playlist_cancel"); onClicked: deleteDialog.close() }
                     Button { text: qsTranslate("PlaylistPanel", "playlist_delete"); onClicked: { Playlists.deletePlaylist(deleteDialog.targetId); deleteDialog.close(); } }
                 }
             }
@@ -132,8 +129,7 @@ Item {
             radius: 8; border.color: "transparent"
         }
 
-        onOpened: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(false); }
-        onClosed: { if (typeof shortcuts !== "undefined" && shortcuts !== null) shortcuts.setShortcutsEnabled(true); }
+        onOpened: Qt.callLater(() => clearCancel.forceActiveFocus())
 
         contentItem: Item {
             implicitHeight: layoutClear.implicitHeight + 40
@@ -145,7 +141,7 @@ Item {
                 }
                 RowLayout {
                     Layout.alignment: Qt.AlignRight; spacing: 8
-                    Button { text: qsTranslate("PlaylistPanel", "playlist_cancel"); onClicked: clearDialog.close() }
+                    Button { id: clearCancel; text: qsTranslate("PlaylistPanel", "playlist_cancel"); onClicked: clearDialog.close() }
                     Button {
                         text: qsTranslate("PlaylistPanel", "playlist_clear")
                         onClicked: {

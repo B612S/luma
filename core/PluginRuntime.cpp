@@ -4,6 +4,8 @@
 #include "PluginWindow.hpp"
 #include <QFile>
 #include <QJSEngine>
+#include <QKeySequence>
+#include <QKeyCombination>
 #include <QJSValueIterator>
 #include <QDebug>
 
@@ -48,6 +50,9 @@ bool PluginRuntime::load()
     luma.setProperty(QStringLiteral("net"), m_engine->newQObject(m_api->netApi()));
     luma.setProperty(QStringLiteral("mpv"), m_engine->newQObject(m_api->mpvApi()));
     luma.setProperty(QStringLiteral("process"), m_engine->newQObject(m_api->processApi()));
+    luma.setProperty(QStringLiteral("i18n"), m_engine->newQObject(m_api->i18nApi()));
+    luma.setProperty(QStringLiteral("stats"), m_engine->newQObject(m_api->statsApi()));
+    luma.setProperty(QStringLiteral("shortcuts"), m_engine->newQObject(m_api->shortcutsApi()));
     luma.setProperty(QStringLiteral("ui"), m_engine->newQObject(m_api->uiApi()));
     m_engine->globalObject().setProperty(QStringLiteral("luma"), luma);
 
@@ -74,6 +79,147 @@ bool PluginRuntime::load()
     return true;
 }
 
+static QString normalizedPluginShortcut(const QString &key)
+{
+    const QKeySequence sequence = QKeySequence::fromString(
+        key.trimmed(), QKeySequence::PortableText);
+    if (sequence.isEmpty())
+        return {};
+    return sequence.toString(QKeySequence::PortableText);
+}
+
+QVariantList PluginRuntime::statsLines() const
+{
+    QVariantList result;
+    for (const QVariantMap &line : m_stats)
+        result.append(line);
+    return result;
+}
+
+QVariantList PluginRuntime::statsPages() const
+{
+    QVariantList result;
+    for (const QVariantMap &page : m_statsPages)
+        result.append(page);
+    return result;
+}
+
+QVariantMap PluginRuntime::setStatsPage(const QString &id, const QString &title,
+                                        const QVariantList &content,
+                                        int preferredSlot)
+{
+    if (id.isEmpty() || !m_manager)
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"), QStringLiteral("invalid statistics page")}};
+
+    const int slot = m_manager->allocateStatsPageSlot(m_manifest.id, id, preferredSlot);
+    if (slot < 0) {
+        return {{QStringLiteral("ok"), false},
+                {QStringLiteral("error"),
+                 QStringLiteral("No free statistics key (2-9, 0 for the tenth slot). "
+                                "Register the plugin without a statistics page.")}};
+    }
+
+    QVariantMap page;
+    page.insert(QStringLiteral("id"), id);
+    page.insert(QStringLiteral("pluginId"), m_manifest.id);
+    page.insert(QStringLiteral("title"), title);
+    page.insert(QStringLiteral("slot"), slot);
+    page.insert(QStringLiteral("key"),
+                slot == 10 ? QStringLiteral("0") : QString::number(slot));
+    page.insert(QStringLiteral("content"), content);
+    m_statsPages.insert(id, page);
+    m_manager->notifyStatsPagesChanged();
+    return {{QStringLiteral("ok"), true},
+            {QStringLiteral("key"), page.value(QStringLiteral("key"))},
+            {QStringLiteral("slot"), slot}};
+}
+
+void PluginRuntime::removeStatsPage(const QString &id)
+{
+    if (m_statsPages.remove(id)) {
+        if (m_manager) {
+            m_manager->releaseStatsPageSlot(m_manifest.id, id);
+            m_manager->notifyStatsPagesChanged();
+        }
+    }
+}
+
+void PluginRuntime::clearStatsPages()
+{
+    if (m_statsPages.isEmpty())
+        return;
+    if (m_manager) {
+        for (auto it = m_statsPages.cbegin(); it != m_statsPages.cend(); ++it)
+            m_manager->releaseStatsPageSlot(m_manifest.id, it.key());
+    }
+    m_statsPages.clear();
+    if (m_manager)
+        m_manager->notifyStatsPagesChanged();
+}
+
+void PluginRuntime::setStat(const QString &key, const QString &label,
+                            const QVariant &value)
+{
+    if (key.isEmpty())
+        return;
+    QVariantMap line;
+    line.insert(QStringLiteral("pluginId"), m_manifest.id);
+    line.insert(QStringLiteral("key"), key);
+    line.insert(QStringLiteral("label"), label.isEmpty() ? key : label);
+    line.insert(QStringLiteral("value"), value);
+    m_stats.insert(key, line);
+    if (m_manager)
+        m_manager->notifyStatsChanged();
+}
+
+void PluginRuntime::removeStat(const QString &key)
+{
+    if (m_stats.remove(key) && m_manager)
+        m_manager->notifyStatsChanged();
+}
+
+void PluginRuntime::clearStats()
+{
+    if (m_stats.isEmpty())
+        return;
+    m_stats.clear();
+    if (m_manager)
+        m_manager->notifyStatsChanged();
+}
+
+bool PluginRuntime::addShortcut(const QString &key, const QJSValue &callback)
+{
+    const QString normalized = normalizedPluginShortcut(key);
+    if (normalized.isEmpty()
+            || (normalized.size() == 1 && normalized.at(0).isDigit())
+            || !callback.isCallable())
+        return false;
+    m_shortcuts.insert(normalized, callback);
+    return true;
+}
+
+void PluginRuntime::removeShortcut(const QString &key)
+{
+    m_shortcuts.remove(normalizedPluginShortcut(key));
+}
+
+bool PluginRuntime::invokeShortcut(int key, Qt::KeyboardModifiers modifiers)
+{
+    const QKeySequence pressed(QKeyCombination(modifiers, static_cast<Qt::Key>(key)));
+    const QString normalized = pressed.toString(QKeySequence::PortableText);
+    const QJSValue callback = m_shortcuts.value(normalized);
+    if (!callback.isCallable())
+        return false;
+    QVariantMap payload;
+    payload.insert(QStringLiteral("key"), normalized);
+    const QJSValue result = callback.call({m_engine->toScriptValue(payload)});
+    if (result.isError())
+        qWarning().noquote() << "[plugin:" << m_manifest.id << "] shortcut:"
+                             << result.toString();
+    return true;
+}
+
 void PluginRuntime::unload()
 {
 
@@ -86,6 +232,17 @@ void PluginRuntime::unload()
                                      << "] deactivate():" << value.toString();
         }
     }
+    m_shortcuts.clear();
+    if (!m_stats.isEmpty()) {
+        m_stats.clear();
+        if (m_manager)
+            m_manager->notifyStatsChanged();
+    }
+    if (!m_statsPages.isEmpty()) {
+        m_statsPages.clear();
+        if (m_manager)
+            m_manager->notifyStatsPagesChanged();
+    }
     for (PluginWindow *window : std::as_const(m_windows)) {
         delete window;
     }
@@ -94,6 +251,8 @@ void PluginRuntime::unload()
     m_menuCallbacks.clear();
     m_menuSpecs.clear();
     if (m_api) {
+        if (m_api->processApi())
+            m_api->processApi()->abortAll();
         m_api->deleteLater();
         m_api = nullptr;
     }
