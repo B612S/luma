@@ -146,6 +146,29 @@ A `PKGBUILD` is included:
 makepkg -si
 ```
 
+## Debian package
+
+Build a best-effort portable `.deb` with:
+
+```bash
+./build-deb.sh
+# -> dist/luma_<version>_amd64.deb
+```
+
+The package installs the same binary, QML module, translations, desktop file
+and icon as the CMake install. It expects a Qt 6.9 + Kirigami runtime on the
+target system; the Luma project is Arch-first.
+
+## CI packages
+
+[`.github/workflows/packages.yml`](.github/workflows/packages.yml) builds the
+`.deb` and AppImage on every published GitHub release and can also be started
+manually from the Actions tab, optionally attaching the files to an existing
+release tag.
+
+The Arch package is intentionally not built by CI; build it locally on request
+with `makepkg -si`.
+
 ## AppImage
 
 Build a portable AppImage with:

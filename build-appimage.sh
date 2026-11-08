@@ -62,6 +62,26 @@ download_tool "https://github.com/linuxdeploy/linuxdeploy/releases/download/cont
 download_tool "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-$ARCH.AppImage" "$QT_PLUGIN"
 download_tool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage" "$APPIMAGETOOL"
 
+# appimagetool tries to download its runtime on every run. Cache it here and
+# fall back to the runtime embedded in appimagetool if GitHub is unavailable.
+RUNTIME="$TOOLS_DIR/runtime-$ARCH"
+if [[ ! -x "$RUNTIME" ]]; then
+    echo "Downloading AppImage runtime..."
+    if ! curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 \
+            -o "$RUNTIME.part" \
+            "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-$ARCH"; then
+        echo "Runtime download failed; extracting it from appimagetool..."
+        RUNTIME_OFFSET="$(APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" --appimage-offset 2>/dev/null | tail -n1)"
+        if [[ ! "$RUNTIME_OFFSET" =~ ^[0-9]+$ ]] || [[ "$RUNTIME_OFFSET" -le 0 ]]; then
+            echo "Could not determine the AppImage runtime offset" >&2
+            exit 1
+        fi
+        head -c "$RUNTIME_OFFSET" "$APPIMAGETOOL" > "$RUNTIME.part"
+    fi
+    mv "$RUNTIME.part" "$RUNTIME"
+    chmod +x "$RUNTIME"
+fi
+
 # Run AppImage tools without FUSE (useful in containers/CI).
 export APPIMAGE_EXTRACT_AND_RUN=1
 # The linuxdeploy bundle ships an older strip that cannot handle .relr.dyn.
@@ -295,7 +315,7 @@ chmod +x "$APPDIR/AppRun"
 OUTPUT="$DIST_DIR/luma-$VERSION-$ARCH.AppImage"
 rm -f "$OUTPUT"
 echo "Packing $OUTPUT..."
-ARCH="$ARCH" "$APPIMAGETOOL" "$APPDIR" "$OUTPUT"
+ARCH="$ARCH" "$APPIMAGETOOL" "$APPDIR" "$OUTPUT" --runtime-file "$RUNTIME"
 
 echo
 echo "Done: $OUTPUT"

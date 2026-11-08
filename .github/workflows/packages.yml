@@ -1,0 +1,61 @@
+name: Build packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag to attach the builds to (optional)
+        required: false
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deb-appimage:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel git cmake ninja pkgconf curl \
+            qt6-base qt6-declarative qt6-svg qt6-wayland qt6-tools \
+            wayland libxkbcommon mpv ffmpeg taglib kirigami \
+            hicolor-icon-theme plasma-integration qqc2-desktop-style \
+            avahi dpkg patchelf github-cli
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Debian package and AppImage
+        run: |
+          chmod +x build-deb.sh build-appimage.sh
+          ./build-deb.sh
+          ./build-appimage.sh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luma-packages
+          path: |
+            dist/*.deb
+            dist/*.AppImage
+          if-no-files-found: error
+
+      - name: Attach packages to release
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          gh release upload "$TAG" dist/*.deb dist/*.AppImage --clobber

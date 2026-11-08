@@ -146,6 +146,8 @@ settings/menu behavior.
   AppImage script and `PKGBUILD` read it too. `pkgrel` is packaging-only. Bump
   rules and rebuild rules are in `VERSIONING.md`. `luma.desktop`'s `Version`
   key is the desktop-entry spec version, not the app version.
-- Packaging is Arch-only: `PKGBUILD` copies the working tree (excluding `src/`, `build/`)
-  and installs `luma.desktop` and `assets/luma.png` itself; `.gitignore` covers `src/`,
-  `pkg/`, `AppDir/`, AppImage/deb artifacts.
+- Packaging: `PKGBUILD` (Arch, local) copies the working tree and installs
+  `luma.desktop` and `assets/luma.png`; `build-deb.sh` creates a best-effort
+  Debian package, and `.github/workflows/packages.yml` builds the `.deb` and
+  AppImage on release/manual request. `.gitignore` covers `src/`, `pkg/`,
+  `AppDir/`, and package artifacts.
