@@ -152,7 +152,7 @@ Build a portable AppImage with:
 
 ```bash
 ./build-appimage.sh
-# -> dist/Luma-<version>-x86_64.AppImage
+# -> dist/luma-<version>-x86_64.AppImage
 ```
 
 The script builds a Release AppDir and bundles Qt/QML (including Kirigami and

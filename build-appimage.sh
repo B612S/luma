@@ -292,7 +292,7 @@ exec "$HERE/usr/bin/luma" "$@"
 RUN
 chmod +x "$APPDIR/AppRun"
 
-OUTPUT="$DIST_DIR/Luma-$VERSION-$ARCH.AppImage"
+OUTPUT="$DIST_DIR/luma-$VERSION-$ARCH.AppImage"
 rm -f "$OUTPUT"
 echo "Packing $OUTPUT..."
 ARCH="$ARCH" "$APPIMAGETOOL" "$APPDIR" "$OUTPUT"

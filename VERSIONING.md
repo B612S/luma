@@ -5,7 +5,7 @@ is the [`VERSION`](VERSION) file: edit that file, not the places that consume it
 
 - `CMakeLists.txt` reads `VERSION`, defines `LUMA_VERSION`, and passes it to
   `QCoreApplication::applicationVersion()`.
-- `build-appimage.sh` uses it for `Luma-<version>-<arch>.AppImage`.
+- `build-appimage.sh` uses it for `luma-<version>-<arch>.AppImage`.
 - `PKGBUILD` uses it for `pkgver`; `pkgrel` remains a packaging-only counter.
 - `luma.desktop`'s `Version` key is the Desktop Entry Specification version, not
   the application version. It is deliberately not set.
@@ -34,7 +34,7 @@ Guidelines:
 - **Rebuild** — the application version stays the same. Use this for packaging
   changes (PKGBUILD, AppImage script, desktop entry, build flags) or for
   rebuilding the same sources. For Arch, increment `pkgrel`; for the AppImage,
-  rebuild the same `Luma-<version>-<arch>.AppImage`.
+  rebuild the same `luma-<version>-<arch>.AppImage`.
 
 When `pkgver` changes, reset `pkgrel` to `1`.
 

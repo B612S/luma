@@ -151,7 +151,7 @@ makepkg -si
 
 ```bash
 ./build-appimage.sh
-# -> dist/Luma-<version>-x86_64.AppImage
+# -> dist/luma-<version>-x86_64.AppImage
 ```
 
 Скрипт собирает Release-версию в AppDir и включает Qt/QML (в том числе Kirigami и
