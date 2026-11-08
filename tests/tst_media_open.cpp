@@ -30,6 +30,7 @@ private slots:
     void musicCrossfadeSkipsTrailingSilence();
     void musicCrossfadeKeepsShortTrailingSilence();
     void externalAudioStartsWithFile();
+    void audioTrackCanBeDisabledAndEnabled();
     void endOfPlaylistStopsPlayback();
     void missingFileReportsUnavailable();
     void fileAvailability();
@@ -415,6 +416,20 @@ void TestMediaOpen::openVideo()
     QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("16:9"), 5000);
     m_media->setAspectRatio("original");
     QTRY_COMPARE_WITH_TIMEOUT(m_media->getAspectRatio(), QStringLiteral("original"), 5000);
+}
+
+void TestMediaOpen::audioTrackCanBeDisabledAndEnabled()
+{
+    stopPlayback();
+    m_media->openFile(QStringLiteral(LUMA_TEST_DATA_DIR "/test_video.mp4"));
+    QTRY_VERIFY_WITH_TIMEOUT(m_media->currentTrackId("aid") > 0, 5000);
+    const int audioId = m_media->currentTrackId("aid");
+
+    m_media->setTrackOff("aid");
+    QTRY_COMPARE_WITH_TIMEOUT(m_media->currentTrackId("aid"), 0, 5000);
+
+    m_media->setTrack("aid", audioId);
+    QTRY_COMPARE_WITH_TIMEOUT(m_media->currentTrackId("aid"), audioId, 5000);
 }
 
 void TestMediaOpen::externalAudioStartsWithFile()

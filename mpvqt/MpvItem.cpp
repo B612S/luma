@@ -96,8 +96,10 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
     observeProperty("volume", MPV_FORMAT_DOUBLE);
     observeProperty("mute", MPV_FORMAT_FLAG);
     observeProperty("vid", MPV_FORMAT_NODE);
-    observeProperty("aid", MPV_FORMAT_INT64);
-    observeProperty("sid", MPV_FORMAT_INT64);
+    // NODE preserves the string value "no" when a track is disabled; with
+    // INT64 mpv reports the property as unavailable and the old id sticks.
+    observeProperty("aid", MPV_FORMAT_NODE);
+    observeProperty("sid", MPV_FORMAT_NODE);
     observeProperty("track-list", MPV_FORMAT_NODE);
     observeProperty("video-aspect-override", MPV_FORMAT_NODE);
     observeProperty("deinterlace", MPV_FORMAT_STRING);

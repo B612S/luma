@@ -293,6 +293,9 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Disabling an audio or subtitle track from the player menu no longer leaves it
+  marked as selected; the track ids are observed as nodes so `aid`/`sid` report
+  `"no"` and the track can be selected again.
 - Plugin windows no longer disable player shortcuts. Shortcuts stay active while
   a host-rendered plugin window is open; text fields still suppress them while
   focused.
