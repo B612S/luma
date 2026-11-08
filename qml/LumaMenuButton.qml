@@ -16,6 +16,10 @@ Rectangle {
     property bool destructive: false
     // Selected entry (playback mode, aspect ratio, track, active playlist).
     property bool checked: false
+    // Selected entries get a subtle background and an opaque bar.
+    readonly property color selectionBackgroundColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                              Kirigami.Theme.highlightColor.g,
+                                                              Kirigami.Theme.highlightColor.b, 0.35)
     // Label width with margins and arrow, so a popup can be sized to its text.
     readonly property real contentWidth: leftMargin + label.implicitWidth
                                           + (arrow.visible ? 8 + arrow.implicitWidth : 0)
@@ -39,16 +43,33 @@ Rectangle {
     width: parent ? parent.width : 0
     height: 32
     radius: 4
-    color: (hoverArea.containsMouse && item.isEnabled)
-           ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
-                     Kirigami.Theme.textColor.b, 0.1)
-           : "transparent"
+    color: item.checked
+           ? item.selectionBackgroundColor
+           : ((hoverArea.containsMouse && item.isEnabled)
+              ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                        Kirigami.Theme.textColor.b, 0.1)
+              : "transparent")
+
+    // A selected entry is shown with a Kirigami bar and bold text instead of
+    // a check mark.
+    Rectangle {
+        visible: item.checked
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: 4
+        anchors.bottomMargin: 4
+        width: 3
+        radius: 1.5
+        color: Kirigami.Theme.highlightColor
+    }
 
     Text {
         id: label
-        text: (item.checked ? "✓ " : "") + item.text
+        text: item.text
         color: item.labelColor
         font.pixelSize: 14
+        font.weight: item.checked ? Font.DemiBold : Font.Normal
         elide: Text.ElideRight
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left

@@ -407,10 +407,6 @@ Dialog {
                 enabled: Equalizer.customPresets.length > 0
                 onClicked: resetDialog.open()
             }
-            Button {
-                text: qsTr("eq_close")
-                onClicked: equalizerDialog.close()
-            }
         }
     }
 

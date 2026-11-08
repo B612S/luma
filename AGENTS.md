@@ -104,8 +104,11 @@ settings/menu behavior.
 - C++↔QML wiring is partly by `objectName`: the C++ side looks up `"mpv"`,
   `"playlistPanel"` and `"statsPanel"`. Renaming those QML objects silently breaks
   shortcuts and panel toggles.
-- `core/` — application logic: `MediaManager` (open/next/prev, tracks, DBus
-  notifications, file dialogs), `OsdManager` (OSD state machine), `PlaylistManager` +
+- `core/` — application logic: `MediaManager` (playback orchestration: open/next/prev,
+  tracks, stream URL resolution, file dialogs; delegates yt-dlp runtime to
+  `YtDlpRuntime`, file info/tags/bitrate to `MediaInfoService`, notifications to
+  `MediaNotifier`, trailing-silence detection to `TrailingSilenceDetector`, and file
+  actions to `MediaFileActions`), `OsdManager` (OSD state machine), `PlaylistManager` +
   `PlaylistModel` (JSON playlists), `MprisManager` (MPRIS D-Bus), `Cast*` (Cast V2 over
   TLS + local HLS server), `ConfigManager`, `Logger`.
 - `mpvqt/` — vendored KDE mpvqt v1.2.1 (LGPL-2.1-only OR LGPL-3.0-only OR

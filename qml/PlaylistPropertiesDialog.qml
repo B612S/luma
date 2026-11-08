@@ -31,6 +31,11 @@ Dialog {
     property string playlistName: ""
     property var folders: []
 
+    // Same selection style as Settings: 0.35 body, opaque side bar.
+    readonly property color selectionBackgroundColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                              Kirigami.Theme.highlightColor.g,
+                                                              Kirigami.Theme.highlightColor.b, 0.35)
+
     title: playlistName !== ""
            ? qsTranslate("PlaylistPanel", "playlist_properties_title") + " — " + playlistName
            : qsTranslate("PlaylistPanel", "playlist_properties_title")
@@ -120,9 +125,18 @@ Dialog {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
                     radius: 4
-                    color: Qt.rgba(Kirigami.Theme.highlightColor.r,
-                                   Kirigami.Theme.highlightColor.g,
-                                   Kirigami.Theme.highlightColor.b, 0.15)
+                    color: dialog.selectionBackgroundColor
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 4
+                        anchors.bottomMargin: 4
+                        width: 3
+                        radius: 1.5
+                        color: Kirigami.Theme.highlightColor
+                    }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
@@ -131,7 +145,7 @@ Dialog {
                         text: qsTranslate("PlaylistPanel", "playlist_watch_folders")
                         color: Kirigami.Theme.textColor
                         font.pixelSize: 14
-                        font.weight: Font.Bold
+                        font.weight: Font.DemiBold
                     }
                 }
 
@@ -249,17 +263,5 @@ Dialog {
                 }
             }
         }
-    }
-
-    footer: DialogButtonBox {
-        alignment: Qt.AlignRight
-
-        Button {
-            text: qsTranslate("PlaylistPanel", "playlist_close")
-            DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-            onClicked: dialog.close()
-        }
-
-        Item { implicitWidth: 16; implicitHeight: 1 }
     }
 }

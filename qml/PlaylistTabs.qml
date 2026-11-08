@@ -7,6 +7,14 @@ Item {
     id: root
     implicitHeight: 36
     property string activeId: Playlists.activeId
+    // The active tab gets a subtle background and an opaque bar; a dragged
+    // tab keeps the strong translucent background.
+    readonly property color selectionColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                    Kirigami.Theme.highlightColor.g,
+                                                    Kirigami.Theme.highlightColor.b, 0.85)
+    readonly property color selectionBackgroundColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                              Kirigami.Theme.highlightColor.g,
+                                                              Kirigami.Theme.highlightColor.b, 0.35)
 
     function closeMenus() { tabContextMenu.close(); tabListMenu.close(); }
 
@@ -238,6 +246,7 @@ Item {
                         property var info: modelData
                         property int tabIndex: index
                         property bool isActive: info.id === root.activeId
+                        property bool isPlaying: info.id === Playlists.playingId
                         property bool isDefault: info.isDefault === true
                         property bool isDragged: root.tabDragging && root.draggedIndex === tabIndex
                         z: isDragged ? 10 : 0
@@ -260,12 +269,14 @@ Item {
                         }
 
                         Rectangle {
-                            anchors.fill: parent; anchors.margins: 2; radius: 6
+                            anchors.fill: parent; anchors.margins: 2; radius: 4
                             color: tabBtn.isDragged
-                                   ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.4)
-                                   : (tabHover.containsMouse && !tabBtn.isActive
-                                      ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-                                      : "transparent")
+                                   ? root.selectionColor
+                                   : (tabBtn.isActive
+                                      ? root.selectionBackgroundColor
+                                      : (tabHover.containsMouse
+                                         ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+                                         : "transparent"))
                             Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.InOutQuad } }
                         }
 
@@ -274,13 +285,18 @@ Item {
                             // icon buttons (they used to sit 2 px too high).
                             id: tabLabel; anchors.centerIn: parent; anchors.verticalCenterOffset: 0
                             text: tabBtn.info.name; width: Math.min(implicitWidth, 180 - 24)
-                            color: Kirigami.Theme.textColor; font.pixelSize: 13; font.weight: Font.Normal
+                            color: tabBtn.isDragged ? Kirigami.Theme.highlightedTextColor
+                                                    : Kirigami.Theme.textColor
+                            font.pixelSize: 13
+                            font.weight: (tabBtn.isPlaying || tabBtn.isDragged) ? Font.DemiBold : Font.Normal
                             elide: Text.ElideRight
                         }
 
                         Rectangle {
                             anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.min(tabLabel.width + 16, parent.width - 16); height: 3; radius: 1.5
+                            // Span the tab, not the label: a short playlist name
+                            // must not get a shorter underline than a long one.
+                            width: parent.width - 16; height: 3; radius: 1.5
                             color: Kirigami.Theme.highlightColor; visible: tabBtn.isActive
                         }
 

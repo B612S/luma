@@ -214,7 +214,6 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
                 }
                 if (name.isEmpty()) name = e.path;
             }
-            if (current) return "▶ " + name;
             return name;
         }
         case Qt::UserRole:      return e.path;

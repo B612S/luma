@@ -22,14 +22,39 @@ Rectangle {
     property var playlistPanel: null
     property var scrollBar: null
 
+    // The playing bar is opaque; only a dragged row gets the strong
+    // translucent background. The row is not otherwise filled.
+    readonly property color selectionColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                    Kirigami.Theme.highlightColor.g,
+                                                    Kirigami.Theme.highlightColor.b, 0.85)
+    readonly property color selectionBackgroundColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                              Kirigami.Theme.highlightColor.g,
+                                                              Kirigami.Theme.highlightColor.b, 0.35)
+
     // The row being dragged is highlighted in place: it is moved through the
     // model as the pointer crosses rows, so it always occupies the slot that
     // will be dropped. No separate floating copy is drawn.
     color: isBeingDragged
-           ? Kirigami.Theme.highlightColor
-           : (dragArea.containsMouse && !(playlistPanel && playlistPanel.isDragging)
-              ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1)
-              : "transparent")
+           ? selectionColor
+           : (isCurrent
+              ? selectionBackgroundColor
+              : (dragArea.containsMouse && !(playlistPanel && playlistPanel.isDragging)
+                 ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.1)
+                 : "transparent"))
+
+    // The playing entry is marked by a Kirigami bar instead of the old "▶ "
+    // prefix; only a dragged row gets a full background highlight.
+    Rectangle {
+        visible: isCurrent
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: 4
+        anchors.bottomMargin: 4
+        width: 3
+        radius: 1.5
+        color: Kirigami.Theme.highlightColor
+    }
 
     RowLayout {
         anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 8
@@ -41,7 +66,7 @@ Rectangle {
                                   : (model.unavailable ? Kirigami.Theme.negativeTextColor
                                                        : Kirigami.Theme.textColor)
             font.pixelSize: 14
-            font.weight: isCurrent ? Font.Bold : Font.Medium
+            font.weight: (isCurrent || isBeingDragged) ? Font.DemiBold : Font.Normal
             elide: Text.ElideRight; wrapMode: Text.NoWrap
             verticalAlignment: Text.AlignVCenter; Layout.alignment: Qt.AlignVCenter
         }
@@ -52,7 +77,9 @@ Rectangle {
                    ? Qt.rgba(Kirigami.Theme.highlightedTextColor.r,
                              Kirigami.Theme.highlightedTextColor.g,
                              Kirigami.Theme.highlightedTextColor.b, 0.75)
-                   : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.6)
+                   : Qt.rgba(Kirigami.Theme.textColor.r,
+                             Kirigami.Theme.textColor.g,
+                             Kirigami.Theme.textColor.b, 0.6)
             font.pixelSize: 12; elide: Text.ElideRight
             Layout.maximumWidth: 100
             verticalAlignment: Text.AlignVCenter; Layout.alignment: Qt.AlignVCenter

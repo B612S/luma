@@ -17,6 +17,9 @@ class PlaylistManager : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList playlists READ playlists NOTIFY playlistsChanged)
     Q_PROPERTY(QString activeId READ activeId WRITE setActiveId NOTIFY activeIdChanged)
+    // Id of the playlist whose entry is actually playing (may differ from the
+    // open tab). The tab bar uses it to emphasise the playing playlist.
+    Q_PROPERTY(QString playingId READ playingId NOTIFY playingIdChanged)
     Q_PROPERTY(PlaylistModel* activeModel READ activeModel NOTIFY activeModelChanged)
     Q_PROPERTY(PlaylistModel* defaultModel READ defaultModel CONSTANT)
 
@@ -28,6 +31,7 @@ public:
 
     QVariantList playlists() const;
     QString activeId() const { return m_activeId; }
+    QString playingId() const;
     void setActiveId(const QString &id);
 
     PlaylistModel* activeModel() const;
@@ -76,6 +80,7 @@ public:
 signals:
     void playlistsChanged();
     void activeIdChanged();
+    void playingIdChanged();
     void activeModelChanged();
     void watchFoldersChanged(const QString &id);
 

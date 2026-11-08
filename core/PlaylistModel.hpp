@@ -73,7 +73,8 @@ public:
     // Radio station name from the stream's ICY headers: saved in the playlist
     // and shown when the station is not playing.
     void setStationTitle(const QString &path, const QString &name);
-    // Only the model that owns the active playback shows the ▶ marker.
+    // Only the model that owns the active playback reports isCurrent; the
+    // playlist delegate draws the playing side bar.
     void setPlaying(bool playing);
     bool isPlaying() const { return m_isPlaying; }
 

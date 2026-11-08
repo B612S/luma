@@ -227,13 +227,18 @@ void TestPlaylistManager::onlyPlayingPlaylistIsMarked()
     modelB->setCurrentIndex(0);
 
     manager.setPlayingModel(modelA);
+    QCOMPARE(manager.playingId(), a);
     QCOMPARE(modelA->data(modelA->index(0), Qt::UserRole + 1).toBool(), true);
     QCOMPARE(modelB->data(modelB->index(0), Qt::UserRole + 1).toBool(), false);
     QCOMPARE(modelB->data(modelB->index(0), Qt::DisplayRole).toString(), QStringLiteral("b"));
 
     manager.setPlayingModel(modelB);
+    QCOMPARE(manager.playingId(), b);
     QCOMPARE(modelA->data(modelA->index(0), Qt::UserRole + 1).toBool(), false);
     QCOMPARE(modelB->data(modelB->index(0), Qt::UserRole + 1).toBool(), true);
+
+    manager.setPlayingModel(nullptr);
+    QVERIFY(manager.playingId().isEmpty());
 }
 
 void TestPlaylistManager::addAudioAndVideoFiles()

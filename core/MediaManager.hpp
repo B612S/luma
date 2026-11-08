@@ -2,12 +2,10 @@
 #include <QObject>
 #include <QStringList>
 #include <QByteArray>
-#include <functional>
 #include <QVariantMap>
 #include <QElapsedTimer>
 #include <QPair>
 #include <QPointer>
-#include <QDBusInterface>
 #include "mpvqt/MpvItem.hpp"
 #include "PlaybackPositions.hpp"
 #include "PlaylistModel.hpp"
@@ -17,6 +15,11 @@ class ConfigManager;
 class IcyMetadataReader;
 class PlaylistManager;
 class QProcess;
+class YtDlpRuntime;
+class MediaInfoService;
+class MediaNotifier;
+class TrailingSilenceDetector;
+class MediaFileActions;
 class QTemporaryDir;
 class QTimer;
 
@@ -64,7 +67,8 @@ public:
     bool liveStream() const { return m_liveStream; }
     bool isLoading() const { return m_loading; }
     bool hasMedia() const { return m_hasMedia; }
-    QString defaultFileManagerName() const { return m_defaultFileManagerName; }
+    QString defaultFileManagerName() const;
+
 
     // Runtime requirements for YouTube's JavaScript challenge. The ejs
     // package can be installed into ~/.local/share/luma without touching the
@@ -150,10 +154,6 @@ private:
     // Nothing is playing any more (end of the playlist or "stop" mode): unload
     // the file so the video area goes black and the player looks idle again.
     void stopPlayback();
-    void _sendNotification(const QString &body);
-    void _sendNotification(const QString &summary, const QString &body, const QString &coverPath);
-    // Notification with track metadata (artist, album, cover art).
-    void _notifyForFile(const QString &path);
     // Live stream title (ICY for radio).
     void onMediaTitleChanged();
     void onIcyTitleChanged(const QString &title);
@@ -184,20 +184,6 @@ private:
         QString title;
     };
     QString writeChaptersFile(const QVector<ChapterInfo> &chapters);
-    QString ytdlpLocalDir() const;
-    QString ytdlpEjsLocalDir() const;
-    QString denoLocalDir() const;
-    void runWheelInstall(const QString &package, const QString &dir,
-                         std::function<void(bool, const QString &)> done);
-    QString localPackageVersion(const QString &dir, const QString &module) const;
-    void probeSystemYtdlpVersion(const QString &exe);
-    void probeSystemEjs(const QString &python);
-    void checkLocalPackageUpdate(const QString &package, const QString &localVersion,
-                                 const QString &latestKey, const QString &updateKey,
-                                 bool *running);
-    void runDenoInstall(std::function<void(bool, const QString &)> done);
-    void probeDenoVersion(const QString &exe);
-    void checkDenoUpdate(const QString &localVersion);
 
     MpvItem *m_mpv;
     PlaylistManager *m_playlists = nullptr;
@@ -253,7 +239,6 @@ private:
     void updateCrossfade();
     void setCrossfadeFilter(const QString &filter);
 
-    QDBusInterface *m_notifyInterface = nullptr;
     QProcess *m_ytdlpProcess = nullptr;
     QTimer *m_ytdlpTimeout = nullptr;
     IcyMetadataReader *m_icyReader = nullptr;
@@ -261,20 +246,11 @@ private:
     QString m_pendingIcyTitle;
     QByteArray m_ytdlpStdoutBuffer;
     QString m_ytdlpStderr;
-    QString m_defaultFileManagerName = QStringLiteral("File Manager");
-    bool m_fileManagerLookupStarted = false;
-    void resolveDefaultFileManagerName();
-    // Last result of refreshYtdlpRuntime(); keeps the settings page stable
-    // while the background ejs probe runs.
-    QVariantMap m_ytdlpRuntime;
-    bool m_ytdlpVersionProbeRunning = false;
-    bool m_ejsProbeRunning = false;
-    bool m_ytdlpUpdateCheckRunning = false;
-    bool m_ejsUpdateCheckRunning = false;
-    bool m_denoVersionProbeRunning = false;
-    bool m_denoUpdateCheckRunning = false;
-    // Discards notifications from a file that was already replaced.
-    quint64 m_notifyGeneration = 0;
+    YtDlpRuntime *m_ytDlpRuntime = nullptr;
+    MediaInfoService *m_mediaInfo = nullptr;
+    MediaNotifier *m_notifier = nullptr;
+    TrailingSilenceDetector *m_silenceDetector = nullptr;
+    MediaFileActions *m_fileActions = nullptr;
     quint64 m_folderScanGeneration = 0;
     QString m_resolvedTitle;
     QString m_resolvedVideoUrl;

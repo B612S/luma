@@ -250,6 +250,14 @@ Dialog {
                     wrapMode: Text.Wrap
                 }
 
+                Button {
+                    Layout.alignment: Qt.AlignLeft
+                    visible: dialog.dirty
+                    enabled: !dialog.tagsSaving
+                    text: qsTranslate("MediaInfoDialog", "tags_save")
+                    onClicked: dialog.saveChanges()
+                }
+
                 Label {
                     Layout.fillWidth: true
                     visible: dialog.saveMessage !== ""
@@ -330,24 +338,6 @@ Dialog {
         }
     }
 
-    footer: DialogButtonBox {
-        alignment: Qt.AlignRight
-
-        Button {
-            text: qsTranslate("MediaInfoDialog", "tags_save")
-            visible: dialog.dirty
-            enabled: !dialog.tagsSaving
-            DialogButtonBox.buttonRole: DialogButtonBox.ActionRole
-            onClicked: dialog.saveChanges()
-        }
-        Item { implicitWidth: 8; implicitHeight: 1 }
-        Button {
-            text: qsTranslate("SettingsDialog", "about_close")
-            DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-            onClicked: dialog.close()
-        }
-        Item { implicitWidth: 16; implicitHeight: 1 }
-    }
 
     // The container does not always store a per-stream bitrate; the backend
     // estimates it then and says so, so mark the value as approximate and

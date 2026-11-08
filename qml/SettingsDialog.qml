@@ -35,6 +35,10 @@ Dialog {
     }
 
     readonly property int controlWidth: 200
+    // The selected category gets a subtle background and an opaque bar.
+    readonly property color selectionBackgroundColor: Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                                              Kirigami.Theme.highlightColor.g,
+                                                              Kirigami.Theme.highlightColor.b, 0.35)
     property var ytdlpRuntime: ({})
     property bool ytdlpInstalling: false
     property bool ytdlpEjsInstalling: false
@@ -151,15 +155,27 @@ Dialog {
 
                     Layout.fillWidth: true
                     height: 36
-                    color: isActive ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15) :
+                    color: isActive ? settingsDialog.selectionBackgroundColor :
                     (catHover.containsMouse ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08) : "transparent")
                     radius: 4
+
+                    Rectangle {
+                        visible: isActive
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 4
+                        anchors.bottomMargin: 4
+                        width: 3
+                        radius: 1.5
+                        color: Kirigami.Theme.highlightColor
+                    }
 
                     Text {
                         text: btn.text
                         color: Kirigami.Theme.textColor
                         font.pixelSize: 14
-                        font.weight: isActive ? Font.Bold : Font.Normal
+                        font.weight: isActive ? Font.DemiBold : Font.Normal
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         anchors.leftMargin: 12
@@ -1308,16 +1324,6 @@ Dialog {
     property string currentCategory: "general"
 
 
-    footer: DialogButtonBox {
-        alignment: Qt.AlignRight
-        Button {
-            text: qsTr("settings_close")
-            DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-            onClicked: settingsDialog.close()
-        }
-        Item { implicitWidth: 16; implicitHeight: 1 }
-    }
-
     // Subtitle font picker. The system font list is large, so
     // we don't use ComboBox: ListView only creates delegates for visible
     // rows, and the list is populated when the dialog first opens.
@@ -1441,7 +1447,7 @@ Dialog {
                         text: modelData
                         color: Kirigami.Theme.textColor
                         font.pixelSize: 14
-                        font.weight: modelData === Config.subtitleFont ? Font.Bold : Font.Normal
+                        font.weight: modelData === Config.subtitleFont ? Font.DemiBold : Font.Normal
                         verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideRight
                     }

@@ -62,6 +62,11 @@ qt_add_executable(luma
     core/PlaylistSaver.cpp
     core/PlaylistSaver.hpp
     core/MediaManager.cpp
+    core/YtDlpRuntime.cpp
+    core/MediaInfoService.cpp
+    core/MediaNotifier.cpp
+    core/TrailingSilenceDetector.cpp
+    core/MediaFileActions.cpp
     core/IcyMetadataReader.cpp
     core/IcyMetadataReader.hpp
     core/RadioNameResolver.cpp

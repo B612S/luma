@@ -15,7 +15,7 @@ class TestPlaylistModel : public QObject
 
 private slots:
     void setFilesAndCurrent();
-    void displayAddsCurrentMarker();
+    void displayHasNoCurrentMarker();
     void displayStripsExtension();
     void updateMetadataChangesFields();
     void sortByMetadata();
@@ -54,12 +54,12 @@ void TestPlaylistModel::setFilesAndCurrent()
     QVERIFY(!model.contains("z.mp4"));
 }
 
-void TestPlaylistModel::displayAddsCurrentMarker()
+void TestPlaylistModel::displayHasNoCurrentMarker()
 {
     PlaylistModel model;
     model.setFiles({"a.mp4", "b.mp4"}, "a.mp4");
 
-    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ a"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("a"));
     QCOMPARE(model.data(model.index(1), Qt::DisplayRole).toString(), QStringLiteral("b"));
 }
 
@@ -67,14 +67,14 @@ void TestPlaylistModel::displayStripsExtension()
 {
     PlaylistModel model;
     model.setFiles({"movie.mkv"}, "movie.mkv");
-    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ movie"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("movie"));
 
     // Playlists saved by older versions could still contain "clip.mp4" as title.
     QVariantMap entry;
     entry["path"] = QStringLiteral("/tmp/clip.mp4");
     entry["title"] = QStringLiteral("clip.mp4");
     model.setEntries(QVariantList() << entry, QStringLiteral("/tmp/clip.mp4"));
-    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ clip"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("clip"));
 }
 
 void TestPlaylistModel::playingMarkerIsControllable()
@@ -82,7 +82,7 @@ void TestPlaylistModel::playingMarkerIsControllable()
     PlaylistModel model;
     model.setFiles({"a.mp3"}, "a.mp3");
     QCOMPARE(model.data(model.index(0), Qt::UserRole + 1).toBool(), true);
-    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("▶ a"));
+    QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), QStringLiteral("a"));
 
     model.setPlaying(false);
     QCOMPARE(model.data(model.index(0), Qt::UserRole + 1).toBool(), false);
@@ -318,12 +318,12 @@ void TestPlaylistModel::radioShowsStationWhenNotPlaying()
 
     model.setCurrentIndex(0);
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
-             QStringLiteral("▶ Toronto Cast"));
+             QStringLiteral("Toronto Cast"));
 
     // While the station plays, its live tag is shown instead.
     model.setStreamTitle(url, QStringLiteral("Artist - Track"));
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
-             QStringLiteral("▶ Artist - Track"));
+             QStringLiteral("Artist - Track"));
 
     // Once it stops, the playlist goes back to the station name.
     model.setPlaying(false);
@@ -344,7 +344,7 @@ void TestPlaylistModel::videoTitlePersists()
     model.setVideoTitle(url, QStringLiteral("Rick Astley - Never Gonna Give You Up"));
 
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(),
-             QStringLiteral("▶ Rick Astley - Never Gonna Give You Up"));
+             QStringLiteral("Rick Astley - Never Gonna Give You Up"));
 
     const QVariantList saved = model.toVariantList();
     QCOMPARE(int(saved.size()), 1);
@@ -354,7 +354,7 @@ void TestPlaylistModel::videoTitlePersists()
     PlaylistModel loaded;
     loaded.setEntries(saved, url);
     QCOMPARE(loaded.data(loaded.index(0), Qt::DisplayRole).toString(),
-             QStringLiteral("▶ Rick Astley - Never Gonna Give You Up"));
+             QStringLiteral("Rick Astley - Never Gonna Give You Up"));
 }
 
 void TestPlaylistModel::shuffleKeepsCurrentFirst()

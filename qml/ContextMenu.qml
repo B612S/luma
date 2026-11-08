@@ -203,7 +203,8 @@ LumaMenu {
             }
 
             LumaMenuButton {
-                text: (menu.mpv && menu.mpv.cropEnabled ? "✓ " : "") + qsTr("menu_crop")
+                text: qsTr("menu_crop")
+                checked: menu.mpv && menu.mpv.cropEnabled
                 isEnabled: menu.hasVideo
                 onClicked: { menu.toggleCropRequested(); menu.close() }
             }
@@ -236,7 +237,8 @@ LumaMenu {
             }
 
             LumaMenuButton {
-                text: (Media.playMode === "sequential" ? "✓ " : "") + qsTr("playback_sequential")
+                text: qsTr("playback_sequential")
+                checked: Media.playMode === "sequential"
                 onClicked: {
                     Media.playMode = "sequential";
                     Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_sequential")));
@@ -244,7 +246,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (Media.playMode === "repeat" ? "✓ " : "") + qsTr("playback_repeat")
+                text: qsTr("playback_repeat")
+                checked: Media.playMode === "repeat"
                 onClicked: {
                     Media.playMode = "repeat";
                     Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_repeat")));
@@ -252,7 +255,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (Media.playMode === "shuffle" ? "✓ " : "") + qsTr("playback_shuffle")
+                text: qsTr("playback_shuffle")
+                checked: Media.playMode === "shuffle"
                 onClicked: {
                     Media.playMode = "shuffle";
                     Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_shuffle")));
@@ -260,7 +264,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (Media.playMode === "stop" ? "✓ " : "") + qsTr("playback_stop")
+                text: qsTr("playback_stop")
+                checked: Media.playMode === "stop"
                 onClicked: {
                     Media.playMode = "stop";
                     Osd.showInfo(qsTr("osd_playback_mode").arg(qsTr("playback_stop")));
@@ -280,7 +285,8 @@ LumaMenu {
             spacing: 2
 
             LumaMenuButton {
-                text: (menu.currentAspect === "original" ? "✓ " : "") + qsTr("aspect_original")
+                text: qsTr("aspect_original")
+                checked: menu.currentAspect === "original"
                 onClicked: {
                     Media.setAspectRatio("original");
                     menu.currentAspect = "original";
@@ -289,7 +295,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (menu.currentAspect === "16:9" ? "✓ " : "") + "16:9"
+                text: "16:9"
+                checked: menu.currentAspect === "16:9"
                 onClicked: {
                     Media.setAspectRatio("16:9");
                     menu.currentAspect = "16:9";
@@ -298,7 +305,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (menu.currentAspect === "4:3" ? "✓ " : "") + "4:3"
+                text: "4:3"
+                checked: menu.currentAspect === "4:3"
                 onClicked: {
                     Media.setAspectRatio("4:3");
                     menu.currentAspect = "4:3";
@@ -307,7 +315,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (menu.currentAspect === "21:9" ? "✓ " : "") + "21:9"
+                text: "21:9"
+                checked: menu.currentAspect === "21:9"
                 onClicked: {
                     Media.setAspectRatio("21:9");
                     menu.currentAspect = "21:9";
@@ -316,7 +325,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (menu.currentAspect === "1:1" ? "✓ " : "") + "1:1"
+                text: "1:1"
+                checked: menu.currentAspect === "1:1"
                 onClicked: {
                     Media.setAspectRatio("1:1");
                     menu.currentAspect = "1:1";
@@ -325,7 +335,8 @@ LumaMenu {
                 }
             }
             LumaMenuButton {
-                text: (menu.currentAspect === "9:16" ? "✓ " : "") + "9:16"
+                text: "9:16"
+                checked: menu.currentAspect === "9:16"
                 onClicked: {
                     Media.setAspectRatio("9:16");
                     menu.currentAspect = "9:16";
@@ -393,7 +404,8 @@ LumaMenu {
 
             LumaMenuButton {
                 visible: CastManager.casting
-                text: "✓ " + qsTr("menu_casting")
+                text: qsTr("menu_casting")
+                checked: true
                 isEnabled: false
             }
 

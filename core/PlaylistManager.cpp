@@ -328,8 +328,10 @@ void PlaylistManager::reloadExternalPlaylists()
         if (m_activeId == id)
             setActiveId(DEFAULT_ID);
         PlaylistModel *model = m_models.take(id);
-        if (model && m_playingModel == model)
+        if (model && m_playingModel == model) {
             m_playingModel = nullptr;
+            emit playingIdChanged();
+        }
         if (model) {
             model->disconnect(this);
             model->deleteLater();
@@ -766,8 +768,10 @@ void PlaylistManager::deletePlaylist(const QString &id) {
 
     QFile::remove(playlistFilePath(id));
     PlaylistModel *model = m_models.take(id);
-    if (model && m_playingModel == model)
+    if (model && m_playingModel == model) {
         m_playingModel = nullptr;
+        emit playingIdChanged();
+    }
     if (model) {
         model->disconnect(this);
         model->deleteLater();
@@ -902,11 +906,25 @@ void PlaylistManager::addFilesToPlaylist(const QString &id, const QStringList &p
 }
 
 void PlaylistManager::setPlayingModel(PlaylistModel *model) {
+    const bool changed = m_playingModel != model;
     m_playingModel = model;
     for (PlaylistModel *candidate : m_models) {
         if (candidate)
             candidate->setPlaying(candidate == model);
     }
+    if (changed)
+        emit playingIdChanged();
+}
+
+QString PlaylistManager::playingId() const
+{
+    if (!m_playingModel)
+        return {};
+    for (auto it = m_models.cbegin(); it != m_models.cend(); ++it) {
+        if (it.value() == m_playingModel)
+            return it.key();
+    }
+    return {};
 }
 
 QString PlaylistManager::playlistModeFor(PlaylistModel *model) const {

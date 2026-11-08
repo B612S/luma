@@ -136,6 +136,15 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Selected playlist rows, tabs, Settings categories and checked menu entries
+  use the semibold (DemiBold) weight, which is visibly lighter than Bold but
+  still distinct from Normal.
+- Dialogs no longer show a **Close** button; the information dialog's
+  **Apply** action now sits next to the tag warning instead of in a footer.
+- Dragged playlist rows/tabs use the Kirigami highlight at alpha 0.85.
+  Bar-marked selections (the Settings and playlist-properties categories, the
+  playing row, the open tab and checked menu entries) use a 0.35 background
+  with an opaque bar; selected text uses DemiBold and the `▶` prefix is gone.
 - Removed the “All playlists” and “New playlist” tooltips from the playlist
   tab bar, and slightly reduced the playlist search font.
 - The AppImage now applies the KDE `kdeglobals` font explicitly when the
@@ -262,6 +271,8 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- The active playlist tab underline now spans the tab width instead of the
+  label width, so short playlist names no longer get a shorter bar.
 - The playlist tab menu hides **Properties**, **Rename** and **Delete** for
   the Default playlist instead of offering actions that cannot work (the
   Default playlist is not saved and cannot be renamed or deleted).
