@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing GitHub release tag to attach the builds to (optional)
-        required: false
+        description: Existing GitHub release tag to attach the builds to (required for manual runs)
+        required: true
         type: string
   release:
     types: [published]
@@ -34,7 +34,23 @@ jobs:
             avahi dpkg patchelf github-cli
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth 1 origin "${GITHUB_REF}"
+          git checkout --detach FETCH_HEAD
+
+      - name: Resolve release tag
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          DISPATCH_TAG: ${{ inputs.release_tag }}
+        run: |
+          TAG="${EVENT_TAG:-$DISPATCH_TAG}"
+          if [ -z "$TAG" ]; then
+            echo "No release tag supplied" >&2
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Build Debian package and AppImage
         run: |
@@ -42,20 +58,9 @@ jobs:
           ./build-deb.sh
           ./build-appimage.sh
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: luma-packages
-          path: |
-            dist/*.deb
-            dist/*.AppImage
-          if-no-files-found: error
-
       - name: Attach packages to release
-        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           gh release upload "$TAG" dist/*.deb dist/*.AppImage --clobber
