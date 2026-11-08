@@ -248,16 +248,10 @@ Dialog {
                                        Kirigami.Theme.textColor.b, 0.65)
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 16
-
-                        Item { Layout.fillWidth: true }
-
-                        Button {
-                            text: qsTranslate("PlaylistPanel", "playlist_add_watch_folder")
-                            onClicked: Playlists.openAddWatchFolderDialog(dialog.playlistId)
-                        }
+                    Button {
+                        Layout.alignment: Qt.AlignLeft
+                        text: qsTranslate("PlaylistPanel", "playlist_add_watch_folder")
+                        onClicked: Playlists.openAddWatchFolderDialog(dialog.playlistId)
                     }
 
                     ColumnLayout {
