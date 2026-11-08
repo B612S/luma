@@ -673,13 +673,7 @@ PluginApi::PluginApi(PluginRuntime *runtime, const PluginManifest &manifest,
 {
     const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
     const QString dataRoot = base + QStringLiteral("/luma/plugins/data");
-    const QString oldData = base + QStringLiteral("/luma/plugin-data/") + manifest.id;
     m_dataDir = dataRoot + QLatin1Char('/') + manifest.id;
-    QDir().mkpath(dataRoot);
-    // Migrate data written by older Luma versions. Renaming is atomic and
-    // cheap; both paths live under the same data directory.
-    if (!QFileInfo::exists(m_dataDir) && QFileInfo(oldData).isDir())
-        QDir().rename(oldData, m_dataDir);
     QDir().mkpath(m_dataDir);
 
     m_events = new PluginEventsApi(runtime, this);

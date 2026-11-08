@@ -9,7 +9,7 @@
 #include "ConfigManager.hpp"
 #include "TestEnvironment.h"
 
-// Settings: default values, legacy key migration, control bar mode,
+// Settings: default values, control bar mode,
 // yt-dlp options (the ~/.config/luma/yt-dlp.conf file).
 class TestConfigManager : public QObject
 {
@@ -19,20 +19,15 @@ private slots:
     void init();
     void defaults();
     void loggingModes();
-    void legacyDebugLoggingMigrates();
     void playbackSettings();
     void playbackSettingsPersist();
-    void playbackMigratesToMpvConf();
     void controlBarModePersists();
-    void legacyPinControlsMigrates();
     void unsupportedLanguageFallsBack();
     void languageResolution();
     void musicCrossfade();
     void reloadsExternalChanges();
     void ytdlpQualityAndProxy();
     void ytdlpProxyTypeAndAddress();
-    void ytdlpSocksSchemeMigrates();
-    void ytdlpCommentsAreRemoved();
     void ytdlpKeepsCustomOptions();
 
 private:
@@ -111,29 +106,6 @@ void TestConfigManager::loggingModes()
     QCOMPARE(config2.lumaLogMode(), QStringLiteral("debug"));
     QCOMPARE(config2.mpvLogMode(), QStringLiteral("error"));
     QCOMPARE(config2.ytdlpLogMode(), QStringLiteral("info"));
-
-    // "none" is the legacy spelling of "off".
-    config2.setLumaLogMode("none");
-    QCOMPARE(config2.lumaLogMode(), QStringLiteral("off"));
-}
-
-void TestConfigManager::legacyDebugLoggingMigrates()
-{
-    QDir().mkpath(lumaDir());
-    {
-        QFile luma(lumaDir() + "/luma.conf");
-        QVERIFY(luma.open(QIODevice::WriteOnly | QIODevice::Text));
-        luma.write("[ui]\ndebug_logging=debug\n");
-    }
-
-    {
-        ConfigManager config;
-        QCOMPARE(config.lumaLogMode(), QStringLiteral("debug"));
-    }
-
-    QSettings settings(lumaDir() + "/luma.conf", QSettings::IniFormat);
-    QVERIFY(!settings.contains(QStringLiteral("ui/debug_logging")));
-    QCOMPARE(settings.value("debug/luma").toString(), QStringLiteral("debug"));
 }
 
 void TestConfigManager::playbackSettings()
@@ -208,64 +180,6 @@ void TestConfigManager::playbackSettingsPersist()
     QVERIFY(!settings.contains(QStringLiteral("playback/hwdec")));
 }
 
-void TestConfigManager::playbackMigratesToMpvConf()
-{
-    // Older versions kept these values in luma.conf; mpv.conf had no options.
-    QDir().mkpath(lumaDir());
-    {
-        QFile luma(lumaDir() + "/luma.conf");
-        QVERIFY(luma.open(QIODevice::WriteOnly | QIODevice::Text));
-        luma.write("[playback]\naudio_output=alsa\nhwdec=vaapi-copy\n");
-    }
-    {
-        QFile mpv(lumaDir() + "/mpv.conf");
-        QVERIFY(mpv.open(QIODevice::WriteOnly | QIODevice::Text));
-        mpv.write("deinterlace=auto\n");
-    }
-
-    {
-        ConfigManager config;
-        QCOMPARE(config.audioOutput(), QStringLiteral("alsa"));
-        QCOMPARE(config.hwdec(), QStringLiteral("vaapi-copy"));
-    }
-
-    // Values were written into mpv.conf; other options stay; legacy keys are gone.
-    {
-        QFile mpv(lumaDir() + "/mpv.conf");
-        QVERIFY(mpv.open(QIODevice::ReadOnly | QIODevice::Text));
-        const QString content = QString::fromUtf8(mpv.readAll());
-        mpv.close();
-        QVERIFY(content.contains(QStringLiteral("ao=alsa")));
-        QVERIFY(content.contains(QStringLiteral("hwdec=vaapi-copy")));
-        QVERIFY(content.contains(QStringLiteral("deinterlace=auto")));
-    }
-    {
-        QSettings settings(lumaDir() + "/luma.conf", QSettings::IniFormat);
-        QVERIFY(!settings.contains(QStringLiteral("playback/audio_output")));
-        QVERIFY(!settings.contains(QStringLiteral("playback/hwdec")));
-    }
-
-    // If both files have values, mpv.conf is authoritative.
-    {
-        ConfigManager config;
-        config.setValue("playback/audio_output", QStringLiteral("auto"));
-        config.setValue("playback/hwdec", QStringLiteral("auto"));
-    }
-    {
-        QFile mpv(lumaDir() + "/mpv.conf");
-        QVERIFY(mpv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text));
-        mpv.write("hwdec=vaapi\nao=pulse\n");
-    }
-
-    ConfigManager config2;
-    QCOMPARE(config2.audioOutput(), QStringLiteral("pulse"));
-    QCOMPARE(config2.hwdec(), QStringLiteral("vaapi"));
-
-    QSettings settings(lumaDir() + "/luma.conf", QSettings::IniFormat);
-    QVERIFY(!settings.contains(QStringLiteral("playback/audio_output")));
-    QVERIFY(!settings.contains(QStringLiteral("playback/hwdec")));
-}
-
 void TestConfigManager::controlBarModePersists()
 {
     {
@@ -282,17 +196,6 @@ void TestConfigManager::controlBarModePersists()
     // An unknown value is normalized to "float".
     config2.setControlBarMode("nonsense");
     QCOMPARE(config2.controlBarMode(), QStringLiteral("float"));
-}
-
-void TestConfigManager::legacyPinControlsMigrates()
-{
-    {
-        ConfigManager config;
-        config.setValue("ui/pin_controls", true);
-    }
-
-    ConfigManager config2;
-    QCOMPARE(config2.controlBarMode(), QStringLiteral("pinned"));
 }
 
 void TestConfigManager::unsupportedLanguageFallsBack()
@@ -473,61 +376,6 @@ void TestConfigManager::ytdlpProxyTypeAndAddress()
     QCOMPARE(config2.ytdlpProxyType(), QStringLiteral("socks5"));
     QCOMPARE(config2.ytdlpProxyAddress(), QStringLiteral("127.0.0.1:1080"));
     QCOMPARE(config2.ytdlpProxy(), QStringLiteral("socks5://127.0.0.1:1080"));
-}
-
-void TestConfigManager::ytdlpSocksSchemeMigrates()
-{
-    // Old config with the generic "socks://" scheme: yt-dlp hangs with it.
-    QDir().mkpath(lumaDir());
-    {
-        QFile file(lumaDir() + "/yt-dlp.conf");
-        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
-        file.write("--no-playlist\n--proxy=socks://127.0.0.1:1080\n");
-    }
-
-    ConfigManager config;
-    QCOMPARE(config.ytdlpProxyType(), QStringLiteral("socks5"));
-    QCOMPARE(config.ytdlpProxyAddress(), QStringLiteral("127.0.0.1:1080"));
-    QCOMPARE(config.ytdlpProxy(), QStringLiteral("socks5://127.0.0.1:1080"));
-
-    // The file is rewritten right away so yt-dlp gets a working scheme.
-    QFile file(config.ytdlpConfigPath());
-    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QString content = QString::fromUtf8(file.readAll());
-    file.close();
-    QVERIFY(content.contains(QStringLiteral("--proxy=socks5://127.0.0.1:1080")));
-    QVERIFY(!content.contains(QStringLiteral("--proxy=socks://")));
-}
-
-void TestConfigManager::ytdlpCommentsAreRemoved()
-{
-    // An old config may contain generated/user comments; they must disappear
-    // while keeping the actual options.
-    QDir().mkpath(lumaDir());
-    {
-        QFile file(lumaDir() + "/yt-dlp.conf");
-        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
-        file.write("# legacy header\n--no-playlist\n# another comment\n--format=best[height<=720]\n");
-    }
-
-    ConfigManager config;
-    QFile file(config.ytdlpConfigPath());
-    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QString content = QString::fromUtf8(file.readAll());
-    file.close();
-    QVERIFY(!content.contains(QLatin1Char('#')));
-    QVERIFY(content.contains(QStringLiteral("--no-playlist")));
-    QVERIFY(content.contains(QStringLiteral("--format=best[height<=720]")));
-
-    // A freshly generated file has no comments either.
-    QVERIFY(QFile::remove(config.ytdlpConfigPath()));
-    ConfigManager fresh;
-    QFile freshFile(fresh.ytdlpConfigPath());
-    QVERIFY(freshFile.open(QIODevice::ReadOnly | QIODevice::Text));
-    const QString freshContent = QString::fromUtf8(freshFile.readAll());
-    freshFile.close();
-    QVERIFY(!freshContent.contains(QLatin1Char('#')));
-    QVERIFY(freshContent.startsWith(QStringLiteral("--no-playlist")));
 }
 
 void TestConfigManager::ytdlpKeepsCustomOptions()

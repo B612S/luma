@@ -291,7 +291,6 @@ luma.storage.exists("notes.txt");
 
 Storage names are single file names inside `luma.dataDir`
 (`~/.local/share/luma/plugins/data/<id>/`); slashes and `..` are rejected.
-Existing data from the old `plugin-data` location is migrated on first load.
 
 ### Network
 

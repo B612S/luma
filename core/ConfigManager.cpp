@@ -54,10 +54,9 @@ static QString normalizedProxyUrl(const QString &proxy) {
 
 static QString normalizedLogMode(QString mode) {
     mode = mode.trimmed().toLower();
-    if (mode == QLatin1String("none") || mode == QLatin1String("off"))
+    if (mode == QLatin1String("off"))
         return QStringLiteral("off");
-    if (mode == QLatin1String("error") || mode == QLatin1String("warn")
-            || mode == QLatin1String("warning"))
+    if (mode == QLatin1String("error"))
         return QStringLiteral("error");
     if (mode == QLatin1String("debug"))
         return QStringLiteral("debug");
@@ -83,8 +82,7 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
             out << "language=auto\n";
             out << "single_instance=true\n";
             out << "notifications=true\n";
-            out << "append_to_playlist=false\n";
-            out << "pin_controls=false\n\n";
+            out << "append_to_playlist=false\n\n";
 
             out << "[playlist]\n";
             out << "mode=sequential\n\n";
@@ -119,13 +117,6 @@ ConfigManager::ConfigManager(QObject *parent) : QObject(parent) {
     }
 
     m_settings = new QSettings(path, QSettings::IniFormat, this);
-
-    // The old single switch (ui/debug_logging) now maps to the Luma log mode.
-    const QString legacyLogMode = m_settings->value("ui/debug_logging").toString();
-    if (!m_settings->contains("debug/luma") && !legacyLogMode.isEmpty())
-        m_settings->setValue("debug/luma", normalizedLogMode(legacyLogMode));
-    if (m_settings->contains("ui/debug_logging"))
-        m_settings->remove("ui/debug_logging");
 
     loadPlaybackSettingsFromMpvConf();
     loadYtdlpConfig();
@@ -348,11 +339,6 @@ void ConfigManager::setShowChapterMarkers(bool enabled) {
 
 QString ConfigManager::controlBarMode() const {
     QString mode = m_settings->value("ui/control_bar_mode").toString();
-    if (mode.isEmpty()) {
-        // Migrate the old "pin panel" setting.
-        mode = m_settings->value("ui/pin_controls", false).toBool()
-                   ? QStringLiteral("pinned") : QStringLiteral("float");
-    }
     if (mode != QLatin1String("hidden") && mode != QLatin1String("pinned"))
         mode = QStringLiteral("float");
     return mode;
@@ -648,8 +634,6 @@ void ConfigManager::loadYtdlpConfig() {
     m_ytdlpProxyType = QStringLiteral("none");
     m_ytdlpProxyAddress.clear();
     m_ytdlpExtra.clear();
-    bool proxyNeedsRewrite = false;
-    bool hadComments = false;
 
     QFile f(ytdlpConfigPath());
     if (!f.exists() || !f.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -661,10 +645,8 @@ void ConfigManager::loadYtdlpConfig() {
     while (!f.atEnd()) {
         QString line = QString::fromUtf8(f.readLine()).trimmed();
         if (line.isEmpty()) continue;
-        if (line.startsWith(QLatin1Char('#'))) {
-            hadComments = true;
+        if (line.startsWith(QLatin1Char('#')))
             continue;
-        }
 
         if (line.startsWith(QStringLiteral("--format="))) {
             m_ytdlpQuality = ytdlpQualityFromFormat(line.mid(9));
@@ -680,16 +662,12 @@ void ConfigManager::loadYtdlpConfig() {
         }
         if (line.startsWith(QStringLiteral("--proxy="))) {
             const QString raw = line.mid(8).trimmed();
-            const QString normalized = normalizedProxyUrl(raw);
-            if (raw != normalized) proxyNeedsRewrite = true;
-            m_ytdlpProxy = normalized;
+            m_ytdlpProxy = normalizedProxyUrl(raw);
             continue;
         }
         if (line.startsWith(QStringLiteral("--proxy "))) {
             const QString raw = line.mid(8).trimmed();
-            const QString normalized = normalizedProxyUrl(raw);
-            if (raw != normalized) proxyNeedsRewrite = true;
-            m_ytdlpProxy = normalized;
+            m_ytdlpProxy = normalizedProxyUrl(raw);
             continue;
         }
         if (line == QLatin1String("--no-playlist")
@@ -702,68 +680,6 @@ void ConfigManager::loadYtdlpConfig() {
     f.close();
 
     updateProxyParts();
-    if (hadComments)
-        removeYtdlpComments();
-    if (proxyNeedsRewrite)
-        rewriteProxyLine();
-}
-
-// Strips comments from the user's yt-dlp.conf while keeping the other
-// lines. Called once when an old file is read.
-void ConfigManager::removeYtdlpComments() {
-    QFile f(ytdlpConfigPath());
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-
-    QStringList lines;
-    while (!f.atEnd()) {
-        const QString line = QString::fromUtf8(f.readLine()).trimmed();
-        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
-        lines << line;
-    }
-    f.close();
-
-    QFile out(ytdlpConfigPath());
-    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
-    QTextStream stream(&out);
-    for (const QString &line : lines)
-        stream << line << "\n";
-}
-
-// Targeted replacement of the --proxy line: the other options (including
-// a format Luma does not know) are not overwritten.
-void ConfigManager::rewriteProxyLine() {
-    QFile f(ytdlpConfigPath());
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        writeYtdlpConfig();
-        return;
-    }
-
-    QStringList lines;
-    bool replaced = false;
-    while (!f.atEnd()) {
-        const QString line = QString::fromUtf8(f.readLine());
-        const QString trimmed = line.trimmed();
-        if (trimmed.startsWith(QLatin1Char('#'))) continue;
-        if (trimmed.startsWith(QStringLiteral("--proxy="))
-                || trimmed.startsWith(QStringLiteral("--proxy "))) {
-            if (!replaced && !m_ytdlpProxy.isEmpty()) {
-                lines << QStringLiteral("--proxy=") + m_ytdlpProxy;
-                replaced = true;
-            }
-            continue;
-        }
-        lines << trimmed;
-    }
-    f.close();
-
-    if (!replaced && !m_ytdlpProxy.isEmpty())
-        lines << QStringLiteral("--proxy=") + m_ytdlpProxy;
-
-    QFile out(ytdlpConfigPath());
-    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
-    QTextStream stream(&out);
-    for (const QString &line : lines)
-        stream << line << "\n";
 }
 
 void ConfigManager::writeYtdlpConfig() {
@@ -792,8 +708,7 @@ void ConfigManager::setValue(const QString &key, const QVariant &value) {
 }
 
 void ConfigManager::loadPlaybackSettingsFromMpvConf() {
-    // hwdec/ao are stored in mpv.conf in mpv's own syntax. Read them there and
-    // migrate legacy [playback] keys from luma.conf once.
+    // hwdec/ao are stored in mpv.conf in mpv's own syntax.
     QString audio = QStringLiteral("auto");
     QString mode = QStringLiteral("auto");
     bool hasHwdec = false;
@@ -826,35 +741,16 @@ void ConfigManager::loadPlaybackSettingsFromMpvConf() {
         f.close();
     }
 
-    const bool legacyHwdec = m_settings->contains("playback/hwdec");
-    const bool legacyAudio = m_settings->contains("playback/audio_output");
-    const QString legacyHwdecValue = m_settings->value("playback/hwdec").toString();
-    const QString legacyAudioValue = m_settings->value("playback/audio_output").toString();
-
     m_hwdec = kHwdecModes.contains(mode) ? mode : QStringLiteral("auto");
     m_audioOutput = kAudioOutputs.contains(audio) ? audio : QStringLiteral("auto");
 
     bool dirty = false;
-    if (!hasHwdec) {
-        if (legacyHwdec && kHwdecModes.contains(legacyHwdecValue))
-            m_hwdec = legacyHwdecValue;
-        // Always keep an explicit hwdec line in mpv.conf.
-        dirty = true;
-    }
+    if (!hasHwdec)
+        dirty = true; // Always keep an explicit hwdec line in mpv.conf.
     if (invalidHwdec)
         dirty = true; // normalize an unsupported value to "auto"
-    if (!hasAo && legacyAudio && kAudioOutputs.contains(legacyAudioValue)
-            && legacyAudioValue != QLatin1String("auto")) {
-        m_audioOutput = legacyAudioValue;
-        dirty = true;
-    }
     if (hasAo && audio == QLatin1String("auto"))
         dirty = true; // "ao=auto" is not a valid driver; remove the line
-
-    if (legacyHwdec)
-        m_settings->remove("playback/hwdec");
-    if (legacyAudio)
-        m_settings->remove("playback/audio_output");
 
     if (dirty)
         savePlaybackToMpvConf();

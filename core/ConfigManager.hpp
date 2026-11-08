@@ -177,8 +177,6 @@ private:
     void loadPlaybackSettingsFromMpvConf();
     void savePlaybackToMpvConf();
     void updateProxyParts();
-    void rewriteProxyLine();
-    void removeYtdlpComments();
     void loadYtdlpConfig();
     void writeYtdlpConfig();
     // Another instance may rewrite the config files while this one is running;

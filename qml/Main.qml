@@ -282,7 +282,7 @@ ApplicationWindow {
             // the cursor: hiding it over a dialog would leave the user without
             // a pointer, but the bar itself may still auto-hide.
             if (!root.currentOpenMenu && !root.isDialogOpen) root.cursorVisible = false;
-            if (!Config.pinControls) root.controlsVisible = false;
+            if (!root.controlBarPinnedMode) root.controlsVisible = false;
         }
     }
 

@@ -148,9 +148,11 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Removed legacy configuration migrations: `ui/debug_logging`,
+  `ui/pin_controls`, old `[playback]` keys, old yt-dlp proxy/comments files and
+  the old plugin data location are no longer rewritten.
 - Plugin-scoped data now lives under
-  `~/.local/share/luma/plugins/data/<id>/` instead of `plugin-data/<id>/`;
-  existing data is migrated on first load.
+  `~/.local/share/luma/plugins/data/<id>/`.
 - Playlist settings moved out of Settings: the Default playlist's append
   switch and playback mode now live in its Properties dialog. Properties is
   available for the Default playlist again, and every playlist now exposes its
@@ -273,8 +275,6 @@ All notable changes to Luma are documented here. The format is based on
 - Playlist names (including “Default”) are refreshed when the UI language changes.
 - Vendored mpvqt sources now document their local modifications (see
   [`mpvqt/README.md`](mpvqt/README.md)).
-- The old `ui/debug_logging` setting is migrated to `debug/luma`; new logging
-  settings live under the `[debug]` section.
 - The Settings dialog background is less transparent (0.95 alpha), matching the keyboard
   shortcuts help, so the video shows through much less while settings are open.
 - The media information dialog uses the same less transparent background as the Settings
