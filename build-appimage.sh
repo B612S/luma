@@ -167,7 +167,7 @@ rm -rf "$APPDIR/usr/plugins/xcbglintegrations"
 if [[ ! -e "$APPDIR/usr/lib/libmujs.so" ]]; then
     MUJS_PATH=""
     if command -v ldconfig >/dev/null 2>&1; then
-        MUJS_PATH="$(ldconfig -p 2>/dev/null | awk '$1 == "libmujs.so" { print $NF; exit }')"
+        MUJS_PATH="$(ldconfig -p 2>/dev/null | awk '$1 == "libmujs.so" { path=$NF } END { if (path) print path }')"
     fi
     if [[ -z "$MUJS_PATH" ]]; then
         for candidate in /usr/lib/libmujs.so /usr/lib64/libmujs.so; do
