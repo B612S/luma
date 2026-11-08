@@ -62,9 +62,18 @@ jobs:
           ./build-deb.sh
           ./build-appimage.sh
 
+      - name: Build Arch package
+        run: |
+          useradd -m -s /bin/bash builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su - builder -c "cd '$GITHUB_WORKSPACE' && makepkg -f --nodeps"
+          PKG="$(find "$GITHUB_WORKSPACE" -maxdepth 1 -name 'luma-*.pkg.tar.zst' -print -quit)"
+          test -n "$PKG"
+          cp "$PKG" "dist/luma-${RELEASE_VERSION}-1-$(uname -m).pkg.tar.zst"
+
       - name: Attach packages to release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release upload "$TAG" dist/*.deb dist/*.AppImage --clobber
+          gh release upload "$TAG" dist/*.deb dist/*.AppImage dist/*.pkg.tar.zst --clobber

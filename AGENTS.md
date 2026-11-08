@@ -148,6 +148,6 @@ settings/menu behavior.
   key is the desktop-entry spec version, not the app version.
 - Packaging: `PKGBUILD` (Arch, local) copies the working tree and installs
   `luma.desktop` and `assets/luma.png`; `build-deb.sh` creates a best-effort
-  Debian package, and `.github/workflows/packages.yml` builds the `.deb` and
-  AppImage on release/manual request. `.gitignore` covers `src/`, `pkg/`,
+  Debian package, and `.github/workflows/packages.yml` builds the `.deb`,
+  AppImage and Arch package on release/manual request. `.gitignore` covers `src/`, `pkg/`,
   `AppDir/`, and package artifacts.

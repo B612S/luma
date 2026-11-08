@@ -162,12 +162,12 @@ target system; the Luma project is Arch-first.
 ## CI packages
 
 [`.github/workflows/packages.yml`](.github/workflows/packages.yml) builds the
-`.deb` and AppImage on every published GitHub release and can also be started
-manually from the Actions tab; a manual run requires an existing release tag
-so the built files can be attached to it.
+`.deb`, AppImage and Arch package on every published GitHub release and can
+also be started manually from the Actions tab; a manual run requires an
+existing release tag so the built files can be attached to it.
 
-The Arch package is intentionally not built by CI; build it locally on request
-with `makepkg -si`.
+CI also builds the Arch package with `makepkg -f --nodeps` and attaches it to
+the release. For a local build, use `makepkg -si` on request.
 
 ## AppImage
 

@@ -8,8 +8,9 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
-- GitHub Actions builds the Debian package and AppImage on published releases
-  or on manual request; the Arch package stays a local, on-demand build.
+- GitHub Actions builds the Debian package, AppImage and Arch package on
+  published releases or on manual request. Local `makepkg` remains available
+  for on-demand rebuilds.
 - New plugins start disabled. Direct `mpv` access (`mpv:raw`) and external
   programs (`process`, through `luma.process.run(program, ...)`) use separate
   warning dialogs and separate approvals; both are requested before the plugin
