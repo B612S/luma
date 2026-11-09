@@ -8,10 +8,8 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
-- The About dialog shows the exact build next to the version: the short git
-  hash and the build time, for example `1.0.0-c52a683 (2026-11-09 14:05)`.
-  The hash is omitted for source tarballs, and `-dirty` marks uncommitted
-  tracked changes at configure time.
+- The About dialog shows the git revision next to the version, for example
+  `1.0.0-c52a683`. The hash is omitted for source tarballs.
 - A plugin information button in Settings opens a compact, plugin-localized
   dialog with an optional 5-6 line `info` text explaining what the plugin does
   and how to open its UI.

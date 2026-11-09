@@ -4,11 +4,10 @@ Luma uses `MAJOR.MINOR.PATCH` versions (for example `1.4.2`). The single source
 is the [`VERSION`](VERSION) file: edit that file, not the places that consume it.
 
 - `CMakeLists.txt` reads `VERSION`, defines `LUMA_VERSION`, and passes it to
-  `QCoreApplication::applicationVersion()` together with a build stamp. About
-  shows `<version>-<git hash> (<configure time>)`, for example
-  `1.0.0-c52a683 (2026-11-09 14:05)`. The hash is omitted when the sources have
-  no git repository, and `-dirty` marks uncommitted tracked changes at
-  configure time; reconfigure to refresh the stamp.
+  `QCoreApplication::applicationVersion()` together with the git revision.
+  About shows `<version>-<git hash>`, for example `1.0.0-c52a683`. The hash is
+  omitted when the sources have no git repository; `PKGBUILD` passes the
+  revision explicitly because it copies the tree without `.git`.
 - `build-appimage.sh` uses it for `luma-<version>-<arch>.AppImage`.
 - `PKGBUILD` uses it for `pkgver`; `pkgrel` remains a packaging-only counter.
 - `luma.desktop`'s `Version` key is the Desktop Entry Specification version, not

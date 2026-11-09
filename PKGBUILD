@@ -64,10 +64,14 @@ prepare() {
 build() {
     cd "$srcdir/luma"
 
+    # prepare() copies the tree without .git, so pass the revision explicitly.
+    local git_hash
+    git_hash="$(git -C "${startdir:-$PWD}" rev-parse --short=7 HEAD 2>/dev/null)"
     cmake -B build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DLUMA_BUILD_TESTS=OFF \
+        -DLUMA_GIT_HASH="$git_hash" \
         -G Ninja
 
     cmake --build build

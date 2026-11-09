@@ -50,25 +50,19 @@
 #ifndef LUMA_GIT_HASH
 #define LUMA_GIT_HASH ""
 #endif
-#ifndef LUMA_BUILD_TIME
-#define LUMA_BUILD_TIME ""
-#endif
 
 namespace {
 // A command line with a few paths is tiny; cap the single-instance handshake.
 constexpr qsizetype kMaxInstanceArgs = 64 * 1024;
 
-// "1.0.0-c52a683 (2026-11-09 14:05)": the version from VERSION plus the build
-// stamp, so About identifies the exact build.
-QString buildVersionString()
+// "1.0.0-c52a683": the version from VERSION plus the git revision, so About
+// identifies the exact build.
+QString versionWithRevision()
 {
     QString version = QString::fromLatin1(LUMA_VERSION);
     const QString hash = QString::fromLatin1(LUMA_GIT_HASH);
-    const QString built = QString::fromLatin1(LUMA_BUILD_TIME);
     if (!hash.isEmpty())
         version += QLatin1Char('-') + hash;
-    if (!built.isEmpty())
-        version += QStringLiteral(" (%1)").arg(built);
     return version;
 }
 
@@ -252,7 +246,7 @@ int main(int argc, char *argv[]) {
             QIcon::setThemeName(iconTheme);
     }
     app.setApplicationName("luma");
-    app.setApplicationVersion(buildVersionString());
+    app.setApplicationVersion(versionWithRevision());
     QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
     app.setWindowIcon(QIcon(":/assets/luma.png"));
 
