@@ -7,6 +7,30 @@ if(NOT LUMA_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
 endif()
 project(luma VERSION ${LUMA_VERSION} LANGUAGES CXX)
 
+# Build stamp shown in the About dialog: "<version>-<git hash> (<build time>)".
+# The hash is optional (source tarballs have no repository) and marked when the
+# tree had uncommitted tracked changes at configure time. The timestamp is the
+# configure time; packages always build from a fresh build directory.
+find_package(Git QUIET)
+set(LUMA_GIT_HASH "")
+if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" rev-parse --short=7 HEAD
+        OUTPUT_VARIABLE LUMA_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}"
+                status --porcelain --untracked-files=no
+        OUTPUT_VARIABLE LUMA_GIT_DIRTY
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(LUMA_GIT_HASH AND NOT LUMA_GIT_DIRTY STREQUAL "")
+        string(APPEND LUMA_GIT_HASH "-dirty")
+    endif()
+endif()
+string(TIMESTAMP LUMA_BUILD_TIME "%Y-%m-%d %H:%M")
+
 include(GNUInstallDirs)
 if(NOT CMAKE_INSTALL_DATADIR)
     set(CMAKE_INSTALL_DATADIR "share")
@@ -211,7 +235,11 @@ target_link_libraries(luma PRIVATE
     ${AVUTIL_LIBRARIES}
 )
 
-target_compile_definitions(luma PRIVATE LUMA_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(luma PRIVATE
+    LUMA_VERSION="${PROJECT_VERSION}"
+    LUMA_GIT_HASH="${LUMA_GIT_HASH}"
+    LUMA_BUILD_TIME="${LUMA_BUILD_TIME}"
+)
 
 # Required: Luma has no X11 fallback.
 target_link_libraries(luma PRIVATE Qt6::WaylandClient)
