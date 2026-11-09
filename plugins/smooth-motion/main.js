@@ -46,39 +46,25 @@ function restore(key) {
         luma.mpv.setProperty(key, original[key]);
 }
 
-function mpvString(name) {
-    const value = luma.mpv.getProperty(name);
+// The stats snapshot carries the observed values, so the plugin can avoid
+// synchronous mpv property reads on the GUI thread — at file open those block
+// the loadfile and can cost the first frames.
+function snapshotValue(name) {
+    const snapshot = luma.stats.snapshot();
+    const value = snapshot[name];
     return value === undefined || value === null ? "" : String(value).trim();
 }
 
-function removeFilter() {
-    // mpvqt returns the "vf" property as a list of filter maps whose label has
-    // no "@" prefix; it is not a string, so searching the option text does not
-    // work. When the shape is unexpected, try the removal anyway: a filter left
-    // running is worse than a warning in the mpv log.
-    // The old label is kept for users upgrading from an earlier plugin build.
-    const labels = ["luma-fps", "lumafps"];
-    let present = null;
-    const value = luma.mpv.getProperty("vf");
-    // QJSEngine exposes the converted QVariantList as an array-like object
-    // (Array.isArray() is false for it), so detect it by its length.
-    if (value && typeof value === "object" && typeof value.length === "number") {
-        present = [];
-        for (let i = 0; i < value.length; ++i) {
-            const entry = value[i];
-            if (entry && entry.label)
-                present.push(String(entry.label));
-        }
-    }
+function hwdecName() {
+    return snapshotValue("hwdec-current").toLowerCase();
+}
 
-    let removed = false;
-    for (const label of labels) {
-        if (present && present.indexOf(label) < 0)
-            continue;
-        if (luma.mpv.command(["vf", "remove", "@" + label]))
-            removed = true;
-    }
-    return removed;
+function removeFilter() {
+    // The old label is kept for users upgrading from an earlier plugin build.
+    // mpv reports an error for a label that is not in the chain; the caller
+    // only removes while it believes a filter is active.
+    for (const label of ["@luma-fps", "@lumafps"])
+        luma.mpv.command(["vf", "remove", label]);
 }
 
 function configBool(key, fallback) {
@@ -118,7 +104,7 @@ function formatFps(value) {
 // Hardware decoding hands cuda/vaapi frames to the filter chain; "*-copy"
 // decoders already produce software frames.
 function softwareFrames() {
-    const hwdec = mpvString("hwdec-current").toLowerCase();
+    const hwdec = hwdecName();
     return hwdec === "" || hwdec === "no" || hwdec.endsWith("-copy");
 }
 
@@ -151,7 +137,7 @@ function isAutoHwdec(value) {
 function noteHardwareDecoder() {
     if (hwdecForced)
         return;
-    const current = mpvString("hwdec-current").toLowerCase();
+    const current = hwdecName();
     if (!current || current === "no" || current.endsWith("-copy"))
         return;
     if (current === hwdecPin)
@@ -266,7 +252,10 @@ function apply(preparing) {
     // mpv must not blend frames on its own on top of the generated ones.
     luma.mpv.setProperty("interpolation", "no");
 
-    removeFilter();
+    // Removing a filter costs blocking mpv commands; at file open there is
+    // usually nothing to remove, so keep the hot path free of them.
+    if (filterActive)
+        removeFilter();
     filterActive = false;
 
     if (!interpolate) {
@@ -346,7 +335,7 @@ function tick() {
         noteHardwareDecoder();
     if (pinCheckAt && !hwdecForced && Date.now() - pinCheckAt > 2000) {
         pinCheckAt = 0;
-        const current = mpvString("hwdec-current").toLowerCase();
+        const current = hwdecName();
         if (current === "no" || current === "") {
             // The remembered decoder is not available any more (for example the
             // GPU or driver changed); fall back to the user's setting once.

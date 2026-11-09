@@ -336,6 +336,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Smooth Motion no longer reads mpv properties synchronously while a file is
+  being opened. Those blocking round-trips delayed mpv's `loadfile`, so the
+  first frames arrived late and display-resample counted one or two dropped
+  frames when starting a video from a playlist. The plugin uses the observed
+  statistics snapshot instead and only touches the filter chain when it is
+  actually active.
 - OSD messages appear immediately instead of fading in from zero opacity, so a
   stalled fade-in can no longer leave a freshly shown message invisible.
 - A hidden text field that still holds focus (for example the search box of a
