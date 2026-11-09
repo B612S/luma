@@ -337,6 +337,10 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Resource Monitor shows the player's own GPU usage instead of the system-wide
+  figure: the renderer measures the GPU time of its video rendering with timer
+  queries and reports it to the plugin, which labels the value as player usage
+  and only falls back to the system figure when the measurement is unavailable.
 - The player no longer re-renders the video frame for every scene-graph
   repaint. UI animations (the playlist fade, the tab highlight, the OSD, a
   statistics refresh) used to make mpv render the current frame again at the

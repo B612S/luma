@@ -1,7 +1,7 @@
 {
   "id": "com.luma.resource-monitor",
   "name": "Resource Monitor",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "apiVersion": 1,
   "main": "main.js",
   "description": "Draws live CPU, RAM and GPU graphs for the player on its own statistics page.",
@@ -10,5 +10,5 @@
     "process"
   ],
   "settings": [],
-  "info": "Samples Luma CPU/RAM and the GPU actually used for rendering.\nEnable it and approve process access.\nOpen Statistics (I), then press 3 (or its assigned number).\nCPU is shown per core and normalized to the system.\nGraphs cover the last ~2 minutes."
+  "info": "Samples Luma CPU/RAM and the GPU usage of the player: the renderer measures its own GPU time and labels it as player usage. On systems where that is not available, the system-wide GPU figure is shown and labelled as such.\nEnable it and approve process access.\nOpen Statistics (I), then press 3 (or its assigned number).\nGraphs cover the last ~2 minutes."
 }

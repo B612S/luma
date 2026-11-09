@@ -22,6 +22,9 @@
  *     repaint was explicitly requested); unrelated scene repaints, such as UI
  *     animations, reuse the framebuffer texture instead of re-rendering the
  *     video at the compositor rate.
+ *   - Measure the GPU time of the video render with timer queries and report
+ *     it to MpvItem::setGpuUsage(), so plugins can show the player's own GPU
+ *     usage instead of the system-wide figure.
  */
 
 #include "mpvrenderer.h"
@@ -93,6 +96,31 @@ void MpvRenderer::synchronize(QQuickFramebufferObject *item)
     }
 }
 
+void MpvRenderer::collectGpuTimer()
+{
+    if (!m_gpuTimerPending || !m_gpuTimer.isResultAvailable())
+        return;
+    const QList<GLuint64> intervals = m_gpuTimer.waitForIntervals();
+    m_gpuTimerPending = false;
+    if (intervals.isEmpty() || m_lastFrameNs <= 0)
+        return;
+
+    // Share of the frame period the video rendering occupied on the GPU.
+    const double frameUsage = 100.0 * double(intervals.last()) / double(m_lastFrameNs);
+    m_gpuUsageEma = m_gpuUsageEma < 0.0 ? frameUsage
+                                        : 0.7 * m_gpuUsageEma + 0.3 * frameUsage;
+    if (!m_gpuReportClock.isValid())
+        m_gpuReportClock.start();
+    if (m_gpuReportClock.elapsed() < 500)
+        return;
+    m_gpuReportClock.restart();
+    const int usage = int(qBound(0.0, m_gpuUsageEma, 100.0));
+    if (auto *item = qobject_cast<MpvItem *>(m_mpvAItem.data())) {
+        QMetaObject::invokeMethod(item, "setGpuUsage", Qt::QueuedConnection,
+                                  Q_ARG(int, usage));
+    }
+}
+
 void MpvRenderer::render()
 {
     if (!m_mpvAItem || !m_mpvResourceManager || !m_mpvResourceManager->mpvRenderContext) {
@@ -102,6 +130,16 @@ void MpvRenderer::render()
     QOpenGLFramebufferObject *fbo = framebufferObject();
     if (!fbo) return;
 
+    if (m_gpuTimerState == 0) {
+        m_gpuTimerState = 2;
+        if (QOpenGLContext::currentContext()) {
+            m_gpuTimer.setSampleCount(2);
+            if (m_gpuTimer.create())
+                m_gpuTimerState = 1;
+        }
+    }
+    collectGpuTimer();
+
     // A repaint that is not caused by a new mpv frame (a UI animation, for
     // example) keeps the framebuffer texture as it is. Re-rendering the video
     // at the compositor rate only adds work and can drop frames.
@@ -109,6 +147,13 @@ void MpvRenderer::render()
         return;
     m_forceRender = false;
     m_renderedCounter = m_frameCounter;
+
+    const bool measure = (m_gpuTimerState == 1 && !m_gpuTimerPending);
+    if (measure) {
+        m_lastFrameNs = m_frameClock.isValid() ? m_frameClock.restart() : 0;
+        m_gpuTimer.reset();
+        m_gpuTimer.recordSample();
+    }
 
     QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -136,6 +181,11 @@ void MpvRenderer::render()
     };
 
     mpv_render_context_render(m_mpvResourceManager->mpvRenderContext, params);
+
+    if (measure) {
+        m_gpuTimer.recordSample();
+        m_gpuTimerPending = true;
+    }
 }
 
 QOpenGLFramebufferObject *MpvRenderer::createFramebufferObject(const QSize &size)

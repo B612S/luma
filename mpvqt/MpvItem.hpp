@@ -47,6 +47,10 @@ class MpvItem : public MpvAbstractItem {
     Q_PROPERTY(QRect videoCropRect READ videoCropRect NOTIFY videoCropRectChanged)
     Q_PROPERTY(QVariantList chapterList READ chapterList NOTIFY chapterListChanged)
     Q_PROPERTY(int chapter READ chapter NOTIFY chapterChanged)
+    // GPU time spent rendering the video, as a percentage of the wall time
+    // between rendered frames. Measured by the renderer with timer queries;
+    // -1 until the first measurement.
+    Q_PROPERTY(int gpuUsage READ gpuUsage NOTIFY gpuUsageChanged)
 
     // NEW: Property for passing the cast state from QML to C++
     Q_PROPERTY(bool isCasting READ isCasting WRITE setCastingState NOTIFY isCastingChanged)
@@ -85,6 +89,8 @@ public:
     QRect videoCropRect() const;
     QVariantList chapterList() const { return m_chapterList; }
     int chapter() const { return m_chapter; }
+    int gpuUsage() const;
+    Q_INVOKABLE void setGpuUsage(int usage);
 
     // NEW:
     bool isCasting() const { return m_isCasting; }
@@ -127,6 +133,7 @@ signals:
     void videoParamsChanged();
     void chapterListChanged();
     void chapterChanged();
+    void gpuUsageChanged();
     void thumbnailReady(const QString &requestId);
     // Emitted from the mpv worker thread; connected via a queued connection.
     void mpvLogMessage(const QString &prefix, const QString &level, const QString &message);
@@ -160,6 +167,9 @@ private:
 
     // NEW:
     bool   m_isCasting = false;
+    int m_gpuUsage = -1;
+    bool m_gpuUsageSeen = false;
+    QElapsedTimer m_gpuUsageTimer;
 
     QThread *m_thumbThread = nullptr;
     QPointer<ThumbnailWorker> m_thumbWorker;

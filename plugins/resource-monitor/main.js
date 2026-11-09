@@ -28,6 +28,7 @@ let lastRamMb = 0;
 let lastRamPercent = 0;
 let lastGpu = -1;
 let lastGpuName = "";
+let lastGpuPlayer = false;
 let reportedPageError = "";
 
 function base64(text) {
@@ -58,7 +59,7 @@ function parseNumber(value) {
 
 function processMetrics(text) {
     const metrics = { ticks: -1, hz: 100, cores: 1, rssKb: 0, totalKb: 0,
-                      gpu: -1, gpuName: "", gpuNode: "" };
+                      gpu: -1, gpuName: "", gpuNode: "", gpuPlayer: false };
     const used = [];
     const nvidia = [];
     let usedNvidia = false;
@@ -163,6 +164,18 @@ function collect() {
         if (metrics.ticks < 0)
             return;
 
+        // The host can measure the GPU time of its own video rendering. That
+        // is the player's usage; fall back to the system-wide value only when
+        // the renderer could not measure it.
+        if (luma.stats) {
+            const snapshot = luma.stats.snapshot();
+            const hostGpu = Number(snapshot["gpu-usage"]);
+            if (Number.isFinite(hostGpu) && hostGpu >= 0) {
+                metrics.gpu = hostGpu;
+                metrics.gpuPlayer = true;
+            }
+        }
+
         let cpu = 0;
         if (previousTicks >= 0 && sampleTime > previousTime) {
             const elapsed = (sampleTime - previousTime) / 1000;
@@ -182,6 +195,7 @@ function collect() {
             ? Math.min(100, lastRamMb * 1024 / metrics.totalKb * 100) : 0;
         lastGpu = metrics.gpu;
         lastGpuName = metrics.gpuName;
+        lastGpuPlayer = metrics.gpuPlayer;
 
         push(cpuHistory, lastCpuSystem);
         push(ramHistory, lastRamPercent);
@@ -215,8 +229,11 @@ function chart(y, title, value, color, history) {
 
 function svgPage() {
     let gpuText = "n/a";
-    if (lastGpu >= 0)
-        gpuText = lastGpu.toFixed(0) + "%" + (lastGpuName ? " | " + lastGpuName : " system");
+    if (lastGpu >= 0) {
+        const scope = lastGpuPlayer ? "player" : "system";
+        gpuText = lastGpu.toFixed(0) + "%"
+                  + (lastGpuName ? " | " + lastGpuName : "") + " | " + scope;
+    }
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="330">`
         + chart(0, "CPU", lastCpu.toFixed(0) + "% core | "
                                  + lastCpuSystem.toFixed(0) + "% sys",

@@ -13,6 +13,9 @@
  *     repaint was explicitly requested); unrelated scene repaints, such as UI
  *     animations, reuse the framebuffer texture instead of re-rendering the
  *     video at the compositor rate.
+ *   - Measure the GPU time of the video render with timer queries and report
+ *     it to MpvItem::setGpuUsage(), so plugins can show the player's own GPU
+ *     usage instead of the system-wide figure.
  */
 
 #ifndef MPVRENDERER_H
@@ -21,6 +24,7 @@
 #include <QtQuick/QQuickFramebufferObject>
 #include <QOpenGLFramebufferObject>
 #include <QElapsedTimer>
+#include <QOpenGLTimeMonitor>
 #include <mpv/render_gl.h>
 #include "mpvabstractitem.h"
 
@@ -50,6 +54,16 @@ private:
     bool m_lastCasting = false;
     bool m_lastVideoDisabled = false;
     QElapsedTimer m_frameTimer;
+    // GPU time of the video render (timer queries). 0 = not checked yet,
+    // 1 = available, 2 = unsupported.
+    QOpenGLTimeMonitor m_gpuTimer;
+    int m_gpuTimerState = 0;
+    bool m_gpuTimerPending = false;
+    QElapsedTimer m_frameClock;
+    qint64 m_lastFrameNs = 0;
+    double m_gpuUsageEma = -1.0;
+    QElapsedTimer m_gpuReportClock;
+    void collectGpuTimer();
 };
 
 #endif // MPVRENDERER_H
