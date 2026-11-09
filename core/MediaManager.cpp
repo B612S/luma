@@ -559,9 +559,6 @@ QVariantMap MediaManager::pluginStats() const
     };
     for (const QString &property : properties)
         result.insert(property, m_mpv->observedProperty(property));
-    // The renderer measures the GPU time of Luma's own video rendering; this
-    // is the player's usage, unlike the system-wide GPU utilization.
-    result.insert(QStringLiteral("gpu-usage"), m_mpv->gpuUsage());
     // mpv's display-fps is often unavailable under libmpv/Wayland. Qt knows
     // the compositor-reported refresh rate and gives the plugin a useful
     // fallback instead of reporting n/a.

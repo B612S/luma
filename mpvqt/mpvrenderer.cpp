@@ -22,9 +22,6 @@
  *     repaint was explicitly requested); unrelated scene repaints, such as UI
  *     animations, reuse the framebuffer texture instead of re-rendering the
  *     video at the compositor rate.
- *   - Measure the GPU time of the video render with timer queries and report
- *     it to MpvItem::setGpuUsage(), so plugins can show the player's own GPU
- *     usage instead of the system-wide figure.
  */
 
 #include "mpvrenderer.h"
@@ -35,7 +32,6 @@
 #include <QOpenGLFramebufferObject>
 #include <QQuickWindow>
 #include <QOpenGLFunctions>
-#include <QtGui/qopengl.h>
 
 #include "mpvabstractitem.h"
 #include "mpvabstractitem_p.h"
@@ -97,76 +93,6 @@ void MpvRenderer::synchronize(QQuickFramebufferObject *item)
     }
 }
 
-void MpvRenderer::initGpuTimer()
-{
-    if (m_gpuTimerState != 0)
-        return;
-    m_gpuTimerState = 2;
-    QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (!ctx || ctx->isOpenGLES())
-        return;
-    // Resolve the query functions directly: the driver may expose timer
-    // queries even when Qt's version/extension check for them fails.
-    m_glGenQueries = reinterpret_cast<GenQueriesFn>(ctx->getProcAddress("glGenQueries"));
-    m_glBeginQuery = reinterpret_cast<BeginQueryFn>(ctx->getProcAddress("glBeginQuery"));
-    m_glEndQuery = reinterpret_cast<EndQueryFn>(ctx->getProcAddress("glEndQuery"));
-    m_glGetQueryObjectuiv = reinterpret_cast<GetQueryUivFn>(
-        ctx->getProcAddress("glGetQueryObjectuiv"));
-    m_glGetQueryObjectui64v = reinterpret_cast<GetQueryUi64vFn>(
-        ctx->getProcAddress("glGetQueryObjectui64v"));
-    if (!m_glGetQueryObjectui64v) {
-        m_glGetQueryObjectui64v = reinterpret_cast<GetQueryUi64vFn>(
-            ctx->getProcAddress("glGetQueryObjectui64vEXT"));
-    }
-    if (!m_glGenQueries || !m_glBeginQuery || !m_glEndQuery
-            || !m_glGetQueryObjectuiv || !m_glGetQueryObjectui64v) {
-        return;
-    }
-    m_glGenQueries(2, m_gpuQueryIds);
-    if (m_gpuQueryIds[0] == 0)
-        return;
-    m_gpuTimerState = 1;
-    qCDebug(MpvQt_MpvRenderer) << "GPU timer queries ready; context"
-                               << ctx->format().majorVersion()
-                               << ctx->format().minorVersion()
-                               << "profile" << int(ctx->format().profile());
-}
-
-void MpvRenderer::collectGpuTimer()
-{
-    if (m_gpuPendingSlot < 0)
-        return;
-    QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (!ctx)
-        return;
-    GLuint available = 0;
-    m_glGetQueryObjectuiv(m_gpuQueryIds[m_gpuPendingSlot],
-                          GL_QUERY_RESULT_AVAILABLE, &available);
-    if (!available)
-        return;
-
-    GLuint64 elapsed = 0;
-    m_glGetQueryObjectui64v(m_gpuQueryIds[m_gpuPendingSlot], GL_QUERY_RESULT, &elapsed);
-    m_gpuPendingSlot = -1;
-    if (m_lastFrameNs <= 0)
-        return;
-
-    // Share of the frame period the video rendering occupied on the GPU.
-    const double frameUsage = 100.0 * double(elapsed) / double(m_lastFrameNs);
-    m_gpuUsageEma = m_gpuUsageEma < 0.0 ? frameUsage
-                                        : 0.7 * m_gpuUsageEma + 0.3 * frameUsage;
-    if (!m_gpuReportClock.isValid())
-        m_gpuReportClock.start();
-    if (m_gpuReportClock.elapsed() < 500)
-        return;
-    m_gpuReportClock.restart();
-    const int usage = int(qBound(0.0, m_gpuUsageEma, 100.0));
-    if (auto *item = qobject_cast<MpvItem *>(m_mpvAItem.data())) {
-        QMetaObject::invokeMethod(item, "setGpuUsage", Qt::QueuedConnection,
-                                  Q_ARG(int, usage));
-    }
-}
-
 void MpvRenderer::render()
 {
     if (!m_mpvAItem || !m_mpvResourceManager || !m_mpvResourceManager->mpvRenderContext) {
@@ -176,9 +102,6 @@ void MpvRenderer::render()
     QOpenGLFramebufferObject *fbo = framebufferObject();
     if (!fbo) return;
 
-    initGpuTimer();
-    collectGpuTimer();
-
     // A repaint that is not caused by a new mpv frame (a UI animation, for
     // example) keeps the framebuffer texture as it is. Re-rendering the video
     // at the compositor rate only adds work and can drop frames.
@@ -186,23 +109,6 @@ void MpvRenderer::render()
         return;
     m_forceRender = false;
     m_renderedCounter = m_frameCounter;
-
-    bool measure = false;
-    QOpenGLContext *glctx = QOpenGLContext::currentContext();
-    if (m_gpuTimerState == 1 && m_gpuPendingSlot < 0 && glctx) {
-        m_lastFrameNs = m_frameClock.isValid() ? m_frameClock.restart() : 0;
-        m_gpuPendingSlot = m_gpuQuerySlot;
-        m_gpuQuerySlot ^= 1;
-        m_glBeginQuery(GL_TIME_ELAPSED, m_gpuQueryIds[m_gpuPendingSlot]);
-        if (glctx->functions()->glGetError() != GL_NO_ERROR) {
-            // The context exports the query functions but does not accept
-            // GL_TIME_ELAPSED; leave the value to the plugin's own sources.
-            m_gpuTimerState = 2;
-            m_gpuPendingSlot = -1;
-        } else {
-            measure = true;
-        }
-    }
 
     QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -230,9 +136,6 @@ void MpvRenderer::render()
     };
 
     mpv_render_context_render(m_mpvResourceManager->mpvRenderContext, params);
-
-    if (measure && glctx)
-        m_glEndQuery(GL_TIME_ELAPSED);
 }
 
 QOpenGLFramebufferObject *MpvRenderer::createFramebufferObject(const QSize &size)

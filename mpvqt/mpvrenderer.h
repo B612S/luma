@@ -13,9 +13,6 @@
  *     repaint was explicitly requested); unrelated scene repaints, such as UI
  *     animations, reuse the framebuffer texture instead of re-rendering the
  *     video at the compositor rate.
- *   - Measure the GPU time of the video render with timer queries and report
- *     it to MpvItem::setGpuUsage(), so plugins can show the player's own GPU
- *     usage instead of the system-wide figure.
  */
 
 #ifndef MPVRENDERER_H
@@ -53,18 +50,6 @@ private:
     bool m_lastCasting = false;
     bool m_lastVideoDisabled = false;
     QElapsedTimer m_frameTimer;
-    // GPU time of the video render (GL timer queries). 0 = not checked yet,
-    // 1 = available, 2 = unsupported.
-    int m_gpuTimerState = 0;
-    GLuint m_gpuQueryIds[2] = {0, 0};
-    int m_gpuQuerySlot = 0;
-    int m_gpuPendingSlot = -1;
-    QElapsedTimer m_frameClock;
-    qint64 m_lastFrameNs = 0;
-    double m_gpuUsageEma = -1.0;
-    QElapsedTimer m_gpuReportClock;
-    void initGpuTimer();
-    void collectGpuTimer();
     using GenQueriesFn = void (*)(GLsizei, GLuint *);
     using BeginQueryFn = void (*)(GLenum, GLuint);
     using EndQueryFn = void (*)(GLenum);

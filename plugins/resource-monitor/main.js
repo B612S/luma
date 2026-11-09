@@ -60,7 +60,7 @@ function parseNumber(value) {
 function processMetrics(text) {
     const metrics = { ticks: -1, hz: 100, cores: 1, rssKb: 0, totalKb: 0,
                       gpu: -1, gpuName: "", gpuNode: "", gpuPlayer: false,
-                      pmon: [] };
+                      pmon: [], engines: [] };
     const used = [];
     const nvidia = [];
     let usedNvidia = false;
@@ -90,6 +90,8 @@ function processMetrics(text) {
             }
         } else if (line.startsWith("PMON "))
             metrics.pmon.push(line.slice(5));
+        else if (line.startsWith("ENGINE "))
+            metrics.engines.push(line.slice(7));
         else if (line.startsWith("NVIDIA "))
             nvidia.push(line.slice(7));
     }
@@ -131,6 +133,57 @@ function pmonUsage(line) {
         if (Number.isFinite(value) && value > usage)
             usage = value;
     }
+    return usage;
+}
+
+// DRM drivers expose per-client GPU engine time in /proc/<pid>/fdinfo
+// (drm-usage-stats). The delta between two samples divided by the elapsed
+// time is the player's usage of that engine.
+let previousEngines = new Map();
+let previousEngineTime = 0;
+
+function engineUsage(lines, now) {
+    const current = new Map();
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 5)
+            continue;
+        const key = parts[0] + "|" + parts[1] + "|" + parts[2];
+        current.set(key, {
+            engine: parts[2],
+            ns: parseNumber(parts[3]),
+            capacity: Math.max(1, parseNumber(parts[4]))
+        });
+    }
+    if (current.size === 0)
+        return -1;
+
+    let usage = -1;
+    // Engine counters are nanoseconds; the sample times are milliseconds.
+    const elapsed = previousEngineTime > 0 && now > previousEngineTime
+        ? (now - previousEngineTime) * 1000000 : 0;
+    if (elapsed > 0) {
+        const totals = new Map();
+        const capacities = new Map();
+        for (const [key, entry] of current) {
+            const previous = previousEngines.get(key);
+            if (previous === undefined || entry.ns < previous)
+                continue;
+            totals.set(entry.engine, (totals.get(entry.engine) || 0) + (entry.ns - previous));
+            capacities.set(entry.engine, entry.capacity);
+        }
+        for (const [engine, ns] of totals) {
+            const percent = 100 * ns / (elapsed * (capacities.get(engine) || 1));
+            if (percent > usage)
+                usage = percent;
+        }
+        usage = Math.max(0, Math.min(100, usage));
+    }
+    const counters = new Map();
+    for (const [key, entry] of current)
+        counters.set(key, entry.ns);
+    previousEngines = counters;
+    previousEngineTime = now;
     return usage;
 }
 
@@ -177,7 +230,16 @@ function collect() {
         "    nvidia-smi --query-gpu=utilization.gpu,name --format=csv,noheader,nounits 2>/dev/null | head -n 1 | sed 's/^/NVIDIA /'",
         "    nvidia-smi pmon -c 1 -s u 2>/dev/null | awk -v pid=\"$pid\" '$1 !~ /^#/ && $2 == pid { print \"PMON \" $0 }'",
         "  fi",
-        "fi"
+        "fi",
+        "for info in /proc/$pid/fdinfo/*; do",
+        "  awk '",
+        "    /^drm-pdev:/ { pdev=$2 }",
+        "    /^drm-client-id:/ { client=$2 }",
+        "    /^drm-engine-capacity-/ { n=$1; sub(/^drm-engine-capacity-/, \"\", n); cap[n]=$2 }",
+        "    /^drm-engine-/ { n=$1; sub(/^drm-engine-/, \"\", n); if (n !~ /^capacity-/) eng[n]=$2 }",
+        "    END { for (n in eng) print \"ENGINE \" (pdev != \"\" ? pdev : \"-\") \" \" (client != \"\" ? client : \"-\") \" \" n \" \" eng[n] \" \" (cap[n] != \"\" ? cap[n] : 1) }",
+        "  ' \"$info\" 2>/dev/null",
+        "done"
     ].join("\n");
 
     luma.process.run("/bin/sh", ["-c", script], { timeoutMs: 3500 }, (response) => {
@@ -188,14 +250,10 @@ function collect() {
         if (metrics.ticks < 0)
             return;
 
-        // The host can measure the GPU time of its own video rendering. That
-        // is the player's usage; fall back to the system-wide value only when
-        // the renderer could not measure it.
-        if (luma.stats) {
-            const snapshot = luma.stats.snapshot();
-            const hostGpu = Number(snapshot["gpu-usage"]);
-            if (Number.isFinite(hostGpu) && hostGpu >= 0) {
-                metrics.gpu = hostGpu;
+        if (!metrics.gpuPlayer && metrics.engines.length > 0) {
+            const usage = engineUsage(metrics.engines, sampleTime);
+            if (usage >= 0) {
+                metrics.gpu = usage;
                 metrics.gpuPlayer = true;
             }
         }

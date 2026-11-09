@@ -153,27 +153,6 @@ MpvItem::~MpvItem() {
         delete m_thumbWorker.data();
 }
 
-int MpvItem::gpuUsage() const
-{
-    if (!m_gpuUsageSeen)
-        return -1;
-    // No measured frame for a while (paused, stopped, audio only): idle.
-    if (m_gpuUsageTimer.elapsed() > 3000)
-        return 0;
-    return m_gpuUsage;
-}
-
-void MpvItem::setGpuUsage(int usage)
-{
-    const int value = qBound(0, usage, 100);
-    m_gpuUsageSeen = true;
-    m_gpuUsageTimer.start();
-    if (value == m_gpuUsage)
-        return;
-    m_gpuUsage = value;
-    emit gpuUsageChanged();
-}
-
 void MpvItem::geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) {
     MpvAbstractItem::geometryChange(newGeometry, oldGeometry);
     if (newGeometry.size() != oldGeometry.size()) {

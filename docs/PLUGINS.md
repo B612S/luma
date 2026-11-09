@@ -371,9 +371,7 @@ luma.stats.clear();
 Plugin stats appear in the native Stats panel under a **Plugins** section.
 `snapshot()` returns the current media/playback values, including
 `container-fps`, `estimated-vf-fps`, `display-fps`, codecs, bitrates and cache
-state. `gpu-usage` is the player's own GPU time as a percentage of the frame
-period, measured by the renderer with timer queries (`-1` until the first
-measurement, `0` while nothing is rendering).
+state.
 
 A plugin can also add a full page to the same native Stats window:
 
