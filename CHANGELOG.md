@@ -336,6 +336,10 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Switching to a playlist with Japanese (or emoji) titles no longer drops video
+  frames. Qt loads the CJK/emoji fallback fonts lazily the first time such a
+  title is shaped, which blocked the GUI thread for ~40 ms right when the
+  playlist was selected; the fallback text is now shaped once at startup.
 - Opening the playlist panel no longer drops video frames. Its rows already
   exist while the panel is closed, so creating them was not the cost: the
   150 ms fade-in re-rendered the whole scene (the video included), and opening

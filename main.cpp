@@ -19,6 +19,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QFont>
+#include <QTextLayout>
 #include <QStyle>
 #include <QRect>
 #include <QSize>
@@ -166,6 +167,29 @@ QString systemIconTheme()
     }
     return {};
 }
+
+// Qt loads the fallback fonts for CJK and emoji lazily, the first time a
+// string with such glyphs is shaped. A playlist with Japanese titles then
+// blocked the GUI thread for tens of milliseconds on the first switch to it,
+// which was enough to drop a video frame or two. Shape a sample once at
+// startup, while nothing is playing.
+void prewarmTextFallback()
+{
+    const QFont font = QGuiApplication::font();
+    const QStringList samples = {
+        QStringLiteral("日本語かなカナ漢字中文한국어"),
+        QStringLiteral("「」＂？！"),
+        QStringLiteral("😀🎌🔥✨❤️👍"),
+    };
+    for (const QString &sample : samples) {
+        QTextLayout layout(sample, font);
+        layout.beginLayout();
+        QTextLine line = layout.createLine();
+        if (line.isValid())
+            line.setLineWidth(10000.0);
+        layout.endLayout();
+    }
+}
 }
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
@@ -249,6 +273,7 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion(versionWithRevision());
     QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
     app.setWindowIcon(QIcon(":/assets/luma.png"));
+    prewarmTextFallback();
 
     ConfigManager config;
     Logger::instance().setMode(config.lumaLogMode());
