@@ -16,6 +16,9 @@ class RadioNameResolver;
 class PlaylistManager : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList playlists READ playlists NOTIFY playlistsChanged)
+    // The first rows of every playlist, used once at startup to warm the text
+    // glyph cache with the real QML text pipeline.
+    Q_PROPERTY(QStringList warmupTitles READ warmupTitles CONSTANT)
     Q_PROPERTY(QString activeId READ activeId WRITE setActiveId NOTIFY activeIdChanged)
     // Id of the playlist whose entry is actually playing (may differ from the
     // open tab). The tab bar uses it to emphasise the playing playlist.
@@ -33,6 +36,7 @@ public:
     // Every entry's displayed title, across all playlists. Used at startup to
     // warm the CJK/emoji glyph cache before the playlist panel is shown.
     QStringList allDisplayTitles() const;
+    QStringList warmupTitles() const;
     QString activeId() const { return m_activeId; }
     QString playingId() const;
     void setActiveId(const QString &id);

@@ -20,6 +20,7 @@
 
 #include <QtQuick/QQuickFramebufferObject>
 #include <QOpenGLFramebufferObject>
+#include <QElapsedTimer>
 #include <mpv/render_gl.h>
 #include "mpvabstractitem.h"
 
@@ -48,6 +49,7 @@ private:
     bool m_forceRender = true;
     bool m_lastCasting = false;
     bool m_lastVideoDisabled = false;
+    QElapsedTimer m_frameTimer;
 };
 
 #endif // MPVRENDERER_H

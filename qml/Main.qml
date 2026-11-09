@@ -556,4 +556,40 @@ ApplicationWindow {
         urlDialog.openWith(qsTranslate("MediaManager", "dialog_open_url"), "");
     }
 
+    // Qt fills the scene-graph glyph cache the first time it paints a text
+    // run. Paint the playlist titles once here, with the same Text properties
+    // as the list rows, so the first switch to a playlist with CJK/emoji
+    // titles does not freeze the video while it rasterises them.
+    Item {
+        id: glyphWarmup
+        width: 420
+        height: 600
+        opacity: 0.004
+        z: -1
+
+        Column {
+            Repeater {
+                model: Playlists.warmupTitles
+                Text {
+                    width: 400
+                    text: modelData
+                    elide: Text.ElideRight
+                    font.pixelSize: 14
+                }
+            }
+        }
+
+        Component.onCompleted: console.log("[perf] glyph warmup rows",
+                                           Playlists.warmupTitles.length)
+
+        Timer {
+            interval: 600
+            running: true
+            onTriggered: {
+                console.log("[perf] glyph warmup done")
+                glyphWarmup.destroy()
+            }
+        }
+    }
+
 }

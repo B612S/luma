@@ -10,6 +10,7 @@
 #include <QTextStream>
 #include <QDebug>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QStandardPaths>
 #include <QStyleFactory>
 #include <QTranslator>
@@ -19,9 +20,6 @@
 #include <QProcess>
 #include <QSettings>
 #include <QFont>
-#include <QPainter>
-#include <QImage>
-#include <QScreen>
 #include <QStyle>
 #include <QRect>
 #include <QSize>
@@ -169,42 +167,6 @@ QString systemIconTheme()
     }
     return {};
 }
-
-// The first time a playlist with CJK/emoji titles is shown, Qt rasterises the
-// glyphs of those titles while the rows are painted. That filled the glyph
-// cache synchronously and could make the renderer miss enough frame deadlines
-// to drop half a dozen frames (measured: ~300 ms on the first switch). Paint
-// the same titles offscreen once at startup, before anything plays, so the
-// cache is already warm when the playlist is opened. The 300 px width matches
-// the elided text in the list rows.
-void prewarmPlaylistGlyphs(const QStringList &titles)
-{
-    if (titles.isEmpty())
-        return;
-    QFont font = QGuiApplication::font();
-    font.setPixelSize(14); // PlaylistDelegate's title size.
-
-    constexpr int kPerChunk = 50;
-    qreal dpr = 1.0;
-    if (QScreen *screen = QGuiApplication::primaryScreen())
-        dpr = screen->devicePixelRatio();
-    // Create the canvas in device pixels so the 50 rows fit at any scaling.
-    QImage canvas(qCeil(320 * dpr), qCeil(kPerChunk * 40 * dpr),
-                  QImage::Format_ARGB32_Premultiplied);
-    canvas.setDevicePixelRatio(dpr);
-
-    QPainter painter;
-    for (int base = 0; base < titles.size(); base += kPerChunk) {
-        canvas.fill(Qt::transparent);
-        painter.begin(&canvas);
-        painter.setFont(font);
-        const int end = std::min(base + kPerChunk, int(titles.size()));
-        for (int i = base; i < end; ++i)
-            painter.drawText(QRect(0, (i - base) * 40, canvas.width(), 40),
-                             Qt::AlignLeft | Qt::AlignVCenter, titles.at(i));
-        painter.end();
-    }
-}
 }
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
@@ -287,6 +249,21 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("luma");
     app.setApplicationVersion(versionWithRevision());
     QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
+
+    // Diagnostic: a frozen UI shows up as a gap between these heartbeats.
+    auto *stallTimer = new QTimer(&app);
+    stallTimer->setInterval(20);
+    QObject::connect(stallTimer, &QTimer::timeout, &app, []() {
+        static QElapsedTimer last;
+        if (!last.isValid()) {
+            last.start();
+            return;
+        }
+        const qint64 gap = last.restart();
+        if (gap > 70)
+            qDebug() << "[perf] GUI stall" << gap << "ms";
+    });
+    stallTimer->start();
     app.setWindowIcon(QIcon(":/assets/luma.png"));
 
     ConfigManager config;
@@ -348,7 +325,6 @@ int main(int argc, char *argv[]) {
 
     // ---- Managers ----
     PlaylistManager playlists(&config);
-    prewarmPlaylistGlyphs(playlists.allDisplayTitles());
 
     MediaManager media(nullptr, &app);
     media.setConfig(&config);

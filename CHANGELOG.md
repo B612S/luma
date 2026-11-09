@@ -342,12 +342,12 @@ All notable changes to Luma are documented here. The format is based on
   compositor rate, which could drop frames; the renderer now reuses the
   framebuffer texture until mpv delivers a new frame, and only explicit
   repaints (end of file, video output switched off) force a new render.
-- Switching to a playlist with Japanese (or emoji) titles no longer drops video
-  frames. The first time such a playlist was shown, the renderer had to fill
-  its glyph cache with those titles synchronously while painting the rows
-  (measured at about 300 ms, enough to lose half a dozen frames). All playlist
-  titles are now painted once, offscreen, at startup before playback, so the
-  glyph cache is already warm when the playlist is opened.
+- Switching to a playlist with Japanese (or emoji) titles no longer freezes
+  the video the first time. The scene-graph glyph cache is filled at startup
+  by painting the first rows of every playlist through the same QML text
+  pipeline as the list rows (an offscreen QPainter warmup did not reach it).
+  The freeze measured about 300 ms, which is why the first switch lost half a
+  dozen frames.
 - Opening the playlist panel no longer drops video frames. Its rows already
   exist while the panel is closed, so creating them was not the cost: the
   150 ms fade-in re-rendered the whole scene (the video included), and opening

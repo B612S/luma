@@ -70,6 +70,14 @@ void MpvRenderer::synchronize(QQuickFramebufferObject *item)
         m_mpvResourceManager = mpvAItem->d_ptr->m_mpvResourceManager;
     }
 
+    if (m_frameTimer.isValid()) {
+        const qint64 gap = m_frameTimer.restart();
+        if (gap > 70)
+            qCDebug(MpvQt_MpvRenderer) << "[perf] render gap" << gap << "ms";
+    } else {
+        m_frameTimer.start();
+    }
+
     m_frameCounter = mpvAItem->frameUpdateCounter();
     MpvItem *mpvItem = qobject_cast<MpvItem *>(mpvAItem);
     if (mpvItem) {
