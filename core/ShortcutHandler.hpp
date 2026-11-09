@@ -10,6 +10,7 @@
 #include "OsdManager.hpp"
 #include "MediaManager.hpp"
 #include "ShortcutAction.hpp"
+#include "PluginShortcut.hpp"
 
 class CastManager;
 class GlobalShortcuts;
@@ -31,7 +32,7 @@ public:
     void setOsd(OsdManager *osd) { m_osd = osd; }
     void setMedia(MediaManager *media) { m_media = media; }
     void setCastManager(CastManager *cast) { m_castManager = cast; }
-    void setPluginManager(PluginManager *plugins) { m_pluginManager = plugins; }
+    void setPluginManager(PluginManager *plugins);
     // Called from QML while the user drags the seek slider.
     Q_INVOKABLE void setSliderSeeking(bool seeking);
 
@@ -73,10 +74,33 @@ signals:
     void bindingsChanged();
 
 private:
+    // A binding for a shortcut action declared by a plugin. Plugin actions are
+    // stored next to the built-in ones in shortcuts.conf and listed in
+    // Settings → Shortcuts under the plugin that declared them.
+    struct PluginBinding {
+        QString id;
+        QString pluginId;
+        QString actionId;
+        QString label;
+        quint32 keycode = 0;
+        Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+        QString text;
+
+        bool isValid() const { return keycode > 0 && !text.isEmpty(); }
+    };
+
     void executeAction(ShortcutAction action, bool autoRepeat);
     ShortcutAction matchAction(QKeyEvent *event) const;
     void loadShortcuts();
     void saveShortcuts();
+    void reloadPluginActions();
+    void rebuildPluginBindings();
+    void setPluginShortcut(const QString &id, int keycode, int modifiers,
+                           const QString &text, bool global);
+    void clearPluginShortcut(const QString &id, bool global);
+    void clearPluginBindingKey(quint32 keycode, Qt::KeyboardModifiers modifiers,
+                               const QString &exceptId);
+    QString matchPluginBinding(QKeyEvent *event) const;
     void updateGlobalShortcuts();
     QVariantList bindings() const;
     bool globalShortcutsAvailable() const;
@@ -102,6 +126,11 @@ private:
     CastManager *m_castManager = nullptr;
     PluginManager *m_pluginManager = nullptr;
     QPointer<QQuickWindow> m_window;
+    QList<PluginShortcutAction> m_pluginActions;
+    QMap<QString, PluginBinding> m_pluginLocal;
+    QMap<QString, PluginBinding> m_pluginGlobal;
+    QMap<QString, QString> m_pluginLocalStored;
+    QMap<QString, QString> m_pluginGlobalStored;
 
     QTimer *m_seekTimer = nullptr;
     QTimer *m_volTimer = nullptr;

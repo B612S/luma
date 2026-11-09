@@ -220,6 +220,37 @@ bool PluginRuntime::invokeShortcut(int key, Qt::KeyboardModifiers modifiers)
     return true;
 }
 
+bool PluginRuntime::addShortcutAction(const QString &id, const QJSValue &callback)
+{
+    if (id.isEmpty() || !callback.isCallable())
+        return false;
+    bool declared = false;
+    for (const PluginShortcutDef &def : m_manifest.shortcuts) {
+        if (def.id == id) { declared = true; break; }
+    }
+    if (!declared) {
+        qWarning().noquote() << "[plugin:" << m_manifest.id
+                             << "] undeclared shortcut action:" << id;
+        return false;
+    }
+    m_shortcutActions.insert(id, callback);
+    return true;
+}
+
+bool PluginRuntime::invokeShortcutAction(const QString &id)
+{
+    const QJSValue callback = m_shortcutActions.value(id);
+    if (!callback.isCallable())
+        return false;
+    QVariantMap payload;
+    payload.insert(QStringLiteral("id"), id);
+    const QJSValue result = callback.call({m_engine->toScriptValue(payload)});
+    if (result.isError())
+        qWarning().noquote() << "[plugin:" << m_manifest.id << "] shortcut action:"
+                             << result.toString();
+    return true;
+}
+
 void PluginRuntime::unload()
 {
 
@@ -233,6 +264,7 @@ void PluginRuntime::unload()
         }
     }
     m_shortcuts.clear();
+    m_shortcutActions.clear();
     if (!m_stats.isEmpty()) {
         m_stats.clear();
         if (m_manager)

@@ -187,6 +187,33 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
         manifest.settings << parsed;
     }
 
+    // Shortcut actions are only usable with the "shortcuts" permission; they
+    // are listed in Settings → Shortcuts and stored in shortcuts.conf.
+    if (manifest.permissions.contains(QStringLiteral("shortcuts"))) {
+        QSet<QString> shortcutIds;
+        static const QRegularExpression shortcutIdPattern(
+            QStringLiteral("^[a-z0-9][a-z0-9_-]*$"));
+        const QJsonArray shortcuts = obj.value(QStringLiteral("shortcuts")).toArray();
+        for (const QJsonValue &value : shortcuts) {
+            if (!value.isObject() || manifest.shortcuts.size() >= 16)
+                continue;
+            const QJsonObject shortcut = value.toObject();
+            const QString id = shortcut.value(QStringLiteral("id")).toString().trimmed();
+            const QString label = shortcut.value(QStringLiteral("label")).toString().trimmed();
+            const QString defaultKey = shortcut.value(QStringLiteral("default")).toString().trimmed();
+            if (id.isEmpty() || label.isEmpty()
+                    || !shortcutIdPattern.match(id).hasMatch()
+                    || shortcutIds.contains(id))
+                continue;
+            shortcutIds.insert(id);
+            PluginShortcutDef def;
+            def.id = id;
+            def.label = label;
+            def.defaultKey = defaultKey;
+            manifest.shortcuts << def;
+        }
+    }
+
     manifest.valid = true;
     return manifest;
 }

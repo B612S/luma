@@ -184,6 +184,9 @@ public:
     explicit PluginShortcutsApi(PluginRuntime *runtime, QObject *parent = nullptr);
     Q_INVOKABLE bool add(const QString &key, const QJSValue &callback);
     Q_INVOKABLE void remove(const QString &key);
+    // Register the handler for an action declared in plugin.json under
+    // "shortcuts"; the key is assigned in Settings → Shortcuts.
+    Q_INVOKABLE bool on(const QString &id, const QJSValue &callback);
 
 private:
     bool allowed() const;

@@ -57,6 +57,10 @@ public:
     bool addShortcut(const QString &key, const QJSValue &callback);
     void removeShortcut(const QString &key);
     bool invokeShortcut(int key, Qt::KeyboardModifiers modifiers);
+    // Actions declared in plugin.json under "shortcuts"; the host lists them in
+    // Settings → Shortcuts and calls back here when their key is pressed.
+    bool addShortcutAction(const QString &id, const QJSValue &callback);
+    bool invokeShortcutAction(const QString &id);
 
 private:
     struct EventHandler {
@@ -76,6 +80,7 @@ private:
     QHash<QString, QVariantMap> m_stats;
     QHash<QString, QVariantMap> m_statsPages;
     QHash<QString, QJSValue> m_shortcuts;
+    QHash<QString, QJSValue> m_shortcutActions;
     QHash<QString, QJSValue> m_menuCallbacks;
     QHash<QString, QVariantMap> m_menuSpecs;
     QVector<PluginWindow *> m_windows;

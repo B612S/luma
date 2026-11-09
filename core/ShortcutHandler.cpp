@@ -146,6 +146,83 @@ QString serializeBinding(const ShortcutBinding &binding)
     return binding.text + QLatin1Char('|') + QString::number(binding.keycode);
 }
 
+struct RawBinding {
+    quint32 keycode = 0;
+    Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+    QString text;
+
+    bool isValid() const { return keycode > 0 && !text.isEmpty(); }
+};
+
+RawBinding parseRawBinding(const QString &value)
+{
+    RawBinding result;
+    const int separator = value.lastIndexOf(QLatin1Char('|'));
+    if (separator <= 0) return result;
+
+    const QString text = value.left(separator).trimmed();
+    bool ok = false;
+    const uint code = value.mid(separator + 1).toUInt(&ok);
+    if (!ok || code == 0 || text.isEmpty()) return result;
+
+    result.keycode = code;
+    result.modifiers = parseModifiers(text);
+    const QString physical = physicalKeyName(code);
+    result.text = physical.isEmpty() ? text : modifiersPrefix(result.modifiers) + physical;
+    return result;
+}
+
+QString serializeRawBinding(const QString &text, quint32 keycode)
+{
+    if (keycode == 0 || text.isEmpty()) return QString();
+    return text + QLatin1Char('|') + QString::number(keycode);
+}
+
+// Resolve a key name such as "F9" or "Ctrl+F9" to a Wayland keycode. Only
+// names that physicalKeyName() can produce are accepted, which is exactly what
+// ShortcutField displays after the user presses a key.
+bool keycodeFromName(const QString &text, quint32 *keycode, Qt::KeyboardModifiers *modifiers)
+{
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) return false;
+    const int plus = trimmed.lastIndexOf(QLatin1Char('+'));
+    const QString name = (plus >= 0 ? trimmed.mid(plus + 1) : trimmed).trimmed();
+    if (name.isEmpty()) return false;
+    const Qt::KeyboardModifiers mods = parseModifiers(trimmed);
+    for (quint32 code = 8; code < 256; ++code) {
+        const QString physical = physicalKeyName(code);
+        if (!physical.isEmpty() && physical.compare(name, Qt::CaseInsensitive) == 0) {
+            *keycode = code;
+            *modifiers = mods;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isReservedStatsShortcut(const QString &text)
+{
+    const QKeySequence sequence = QKeySequence::fromString(
+        text.trimmed(), QKeySequence::PortableText);
+    const QString normalized = sequence.toString(QKeySequence::PortableText);
+    return normalized.size() == 1 && normalized.at(0).isDigit();
+}
+
+QString pluginShortcutId(const QString &pluginId, const QString &actionId)
+{
+    return QStringLiteral("plugin:") + pluginId + QLatin1Char(':') + actionId;
+}
+
+bool splitPluginShortcutId(const QString &id, QString *pluginId, QString *actionId)
+{
+    if (!id.startsWith(QLatin1String("plugin:"))) return false;
+    const int separator = id.indexOf(QLatin1Char(':'), 7);
+    if (separator <= 7 || separator + 1 >= id.size()) return false;
+    *pluginId = id.mid(7, separator - 7);
+    *actionId = id.mid(separator + 1);
+    return !pluginId->isEmpty() && !actionId->isEmpty();
+}
+
 } // namespace
 
 ShortcutHandler::ShortcutHandler(MpvItem *mpv, OsdManager *osd, MediaManager *media,
@@ -225,6 +302,160 @@ void ShortcutHandler::setSliderSeeking(bool seeking) {
     m_isSliderSeeking = seeking;
 }
 
+void ShortcutHandler::setPluginManager(PluginManager *plugins)
+{
+    if (m_pluginManager == plugins) return;
+    if (m_pluginManager) disconnect(m_pluginManager, nullptr, this, nullptr);
+    m_pluginManager = plugins;
+    if (m_pluginManager) {
+        connect(m_pluginManager, &PluginManager::shortcutActionsChanged,
+                this, &ShortcutHandler::reloadPluginActions);
+    }
+    reloadPluginActions();
+}
+
+void ShortcutHandler::reloadPluginActions()
+{
+    m_pluginActions = m_pluginManager ? m_pluginManager->shortcutActions()
+                                      : QList<PluginShortcutAction>();
+    rebuildPluginBindings();
+    if (m_globalShortcuts && m_globalShortcutsAllowed) updateGlobalShortcuts();
+    emit bindingsChanged();
+}
+
+void ShortcutHandler::rebuildPluginBindings()
+{
+    m_pluginLocal.clear();
+    m_pluginGlobal.clear();
+    for (const PluginShortcutAction &action : m_pluginActions) {
+        const QString id = pluginShortcutId(action.pluginId, action.actionId);
+        for (int pass = 0; pass < 2; ++pass) {
+            const bool global = pass == 1;
+            const QMap<QString, QString> &stored = global ? m_pluginGlobalStored
+                                                          : m_pluginLocalStored;
+            PluginBinding binding;
+            binding.id = id;
+            binding.pluginId = action.pluginId;
+            binding.actionId = action.actionId;
+            binding.label = action.label;
+            if (stored.contains(id)) {
+                // An empty stored value means the user cleared the binding; do
+                // not fall back to the default key again.
+                const RawBinding raw = parseRawBinding(stored.value(id));
+                if (!raw.isValid()) continue;
+                binding.keycode = raw.keycode;
+                binding.modifiers = raw.modifiers;
+                binding.text = raw.text;
+            } else if (!global) {
+                // The manifest default is a local key only; a global binding
+                // is registered when the user assigns one.
+                quint32 keycode = 0;
+                Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+                if (!keycodeFromName(action.defaultKey, &keycode, &modifiers)) continue;
+                binding.keycode = keycode;
+                binding.modifiers = modifiers;
+                binding.text = modifiersPrefix(modifiers) + physicalKeyName(keycode);
+            } else {
+                continue;
+            }
+            if (binding.isValid())
+                (global ? m_pluginGlobal : m_pluginLocal).insert(id, binding);
+        }
+    }
+}
+
+void ShortcutHandler::setPluginShortcut(const QString &id, int keycode, int modifiers,
+                                        const QString &text, bool global)
+{
+    QString pluginId, actionId;
+    if (!splitPluginShortcutId(id, &pluginId, &actionId)) return;
+    if (keycode <= 0 || text.trimmed().isEmpty() || isReservedStatsShortcut(text))
+        return;
+
+    bool known = false;
+    for (const PluginShortcutAction &action : m_pluginActions) {
+        if (action.pluginId == pluginId && action.actionId == actionId) {
+            known = true;
+            break;
+        }
+    }
+    if (!known) return;
+
+    const quint32 code = static_cast<quint32>(keycode);
+    const Qt::KeyboardModifiers mods =
+        static_cast<Qt::KeyboardModifiers>(modifiers) & kModifierMask;
+    const QString normalized = text.trimmed();
+
+    if (global) {
+        m_pluginGlobalStored.insert(id, serializeRawBinding(normalized, code));
+        rebuildPluginBindings();
+        saveShortcuts();
+        emit bindingsChanged();
+        updateGlobalShortcuts();
+        return;
+    }
+
+    m_pluginLocalStored.insert(id, serializeRawBinding(normalized, code));
+    // Keep local bindings unambiguous: a key triggers only one action.
+    for (auto it = m_localBindings.begin(); it != m_localBindings.end(); ) {
+        if (it.value().keycode == code && it.value().modifiers == mods)
+            it = m_localBindings.erase(it);
+        else
+            ++it;
+    }
+    clearPluginBindingKey(code, mods, id);
+    rebuildPluginBindings();
+    saveShortcuts();
+    emit bindingsChanged();
+}
+
+void ShortcutHandler::clearPluginShortcut(const QString &id, bool global)
+{
+    QString pluginId, actionId;
+    if (!splitPluginShortcutId(id, &pluginId, &actionId)) return;
+    (global ? m_pluginGlobalStored : m_pluginLocalStored).insert(id, QString());
+    rebuildPluginBindings();
+    saveShortcuts();
+    emit bindingsChanged();
+    if (global) updateGlobalShortcuts();
+}
+
+void ShortcutHandler::clearPluginBindingKey(quint32 keycode,
+                                            Qt::KeyboardModifiers modifiers,
+                                            const QString &exceptId)
+{
+    // Active actions, including their default keys from plugin.json.
+    for (const PluginShortcutAction &action : m_pluginActions) {
+        const QString id = pluginShortcutId(action.pluginId, action.actionId);
+        if (id == exceptId) continue;
+        const PluginBinding binding = m_pluginLocal.value(id);
+        if (binding.isValid() && binding.keycode == keycode
+                && binding.modifiers == modifiers)
+            m_pluginLocalStored.insert(id, QString());
+    }
+    // Stored bindings of plugins that are not loaded right now.
+    for (auto it = m_pluginLocalStored.begin(); it != m_pluginLocalStored.end(); ++it) {
+        if (it.key() == exceptId || m_pluginLocal.contains(it.key())) continue;
+        const RawBinding raw = parseRawBinding(it.value());
+        if (raw.isValid() && raw.keycode == keycode && raw.modifiers == modifiers)
+            it.value() = QString();
+    }
+}
+
+QString ShortcutHandler::matchPluginBinding(QKeyEvent *event) const
+{
+    const quint32 keycode = static_cast<quint32>(event->nativeScanCode());
+    const Qt::KeyboardModifiers mods = event->modifiers()
+        & ~Qt::GroupSwitchModifier
+        & ~Qt::KeypadModifier;
+    for (auto it = m_pluginLocal.cbegin(); it != m_pluginLocal.cend(); ++it) {
+        if (it.value().isValid() && it.value().keycode == keycode
+                && it.value().modifiers == mods)
+            return it.key();
+    }
+    return QString();
+}
+
 QString ShortcutHandler::shortcutsPath() const
 {
     return m_shortcutsPath;
@@ -239,6 +470,20 @@ QVariantList ShortcutHandler::bindings() const
         QVariantMap entry;
         entry.insert(QStringLiteral("id"), QString::fromLatin1(info.id));
         entry.insert(QStringLiteral("category"), QString::fromLatin1(info.category));
+        entry.insert(QStringLiteral("localText"), local.text);
+        entry.insert(QStringLiteral("globalText"), global.text);
+        entry.insert(QStringLiteral("hasLocal"), local.isValid());
+        entry.insert(QStringLiteral("hasGlobal"), global.isValid());
+        result.append(entry);
+    }
+    for (const PluginShortcutAction &action : m_pluginActions) {
+        const QString id = pluginShortcutId(action.pluginId, action.actionId);
+        const PluginBinding local = m_pluginLocal.value(id);
+        const PluginBinding global = m_pluginGlobal.value(id);
+        QVariantMap entry;
+        entry.insert(QStringLiteral("id"), id);
+        entry.insert(QStringLiteral("category"), QStringLiteral("plugins"));
+        entry.insert(QStringLiteral("label"), action.label);
         entry.insert(QStringLiteral("localText"), local.text);
         entry.insert(QStringLiteral("globalText"), global.text);
         entry.insert(QStringLiteral("hasLocal"), local.isValid());
@@ -265,17 +510,14 @@ QString ShortcutHandler::keyText(int keycode, int key, int modifiers) const
     return QKeySequence(key | static_cast<int>(mods)).toString(QKeySequence::PortableText);
 }
 
-static bool isReservedStatsShortcut(const QString &text)
-{
-    const QKeySequence sequence = QKeySequence::fromString(
-        text.trimmed(), QKeySequence::PortableText);
-    const QString normalized = sequence.toString(QKeySequence::PortableText);
-    return normalized.size() == 1 && normalized.at(0).isDigit();
-}
-
 void ShortcutHandler::setShortcut(const QString &id, int keycode, int modifiers,
                                   const QString &text, bool global)
 {
+    if (id.startsWith(QLatin1String("plugin:"))) {
+        setPluginShortcut(id, keycode, modifiers, text, global);
+        return;
+    }
+
     const ShortcutAction action = shortcutActionFromId(id);
     if (action == ShortcutAction::None || keycode <= 0 || text.trimmed().isEmpty()
             || isReservedStatsShortcut(text))
@@ -301,6 +543,9 @@ void ShortcutHandler::setShortcut(const QString &id, int keycode, int modifiers,
                 conflicts.append(it.key());
         }
         for (ShortcutAction conflict : conflicts) m_localBindings.remove(conflict);
+        // Plugin actions share the local key space with the built-in ones.
+        clearPluginBindingKey(binding.keycode, binding.modifiers, QString());
+        rebuildPluginBindings();
     }
 
     saveShortcuts();
@@ -324,6 +569,11 @@ void ShortcutHandler::setGlobalShortcutsAllowed(bool allowed)
 
 void ShortcutHandler::clearShortcut(const QString &id, bool global)
 {
+    if (id.startsWith(QLatin1String("plugin:"))) {
+        clearPluginShortcut(id, global);
+        return;
+    }
+
     const ShortcutAction action = shortcutActionFromId(id);
     if (action == ShortcutAction::None) return;
 
@@ -366,6 +616,16 @@ void ShortcutHandler::loadShortcuts()
         }
     }
 
+    // Keep every declared plugin binding, including actions of plugins that are
+    // currently disabled, so enabling a plugin again restores its keys.
+    for (const QString &key : settings.allKeys()) {
+        if (key.startsWith(QLatin1String("local/plugin:")))
+            m_pluginLocalStored.insert(key.mid(6), settings.value(key).toString());
+        else if (key.startsWith(QLatin1String("global/plugin:")))
+            m_pluginGlobalStored.insert(key.mid(7), settings.value(key).toString());
+    }
+    rebuildPluginBindings();
+
     if (!existed) saveShortcuts();
 }
 
@@ -382,6 +642,10 @@ void ShortcutHandler::saveShortcuts()
         settings.setValue(QStringLiteral("global/") + id,
                           serializeBinding(m_globalBindings.value(info.action)));
     }
+    for (auto it = m_pluginLocalStored.cbegin(); it != m_pluginLocalStored.cend(); ++it)
+        settings.setValue(QStringLiteral("local/") + it.key(), it.value());
+    for (auto it = m_pluginGlobalStored.cbegin(); it != m_pluginGlobalStored.cend(); ++it)
+        settings.setValue(QStringLiteral("global/") + it.key(), it.value());
     settings.sync();
 }
 
@@ -421,11 +685,26 @@ void ShortcutHandler::updateGlobalShortcuts()
         shortcut.trigger = binding.text;
         list.append(shortcut);
     }
+    for (const PluginBinding &binding : m_pluginGlobal) {
+        if (!binding.isValid()) continue;
+        GlobalShortcut shortcut;
+        shortcut.id = binding.id;
+        shortcut.description = binding.label;
+        shortcut.trigger = binding.text;
+        list.append(shortcut);
+    }
     m_globalShortcuts->setShortcuts(list);
 }
 
 void ShortcutHandler::executeActionById(const QString &id)
 {
+    if (id.startsWith(QLatin1String("plugin:"))) {
+        QString pluginId, actionId;
+        if (m_pluginManager && splitPluginShortcutId(id, &pluginId, &actionId))
+            m_pluginManager->invokeShortcutAction(pluginId, actionId);
+        return;
+    }
+
     const ShortcutAction action = shortcutActionFromId(id);
     if (action != ShortcutAction::None)
         executeAction(action, false);
@@ -880,9 +1159,17 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
             // Core bindings always win. Plugin shortcuts only run for otherwise
             // unhandled keys, and never while a modal dialog is open.
             if (m_pluginManager && !key->isAutoRepeat()
-                    && !(m_window && m_window->property("isDialogOpen").toBool())
-                    && m_pluginManager->handleShortcut(key->key(), key->modifiers()))
-                return true;
+                    && !(m_window && m_window->property("isDialogOpen").toBool())) {
+                const QString pluginShortcut = matchPluginBinding(key);
+                if (!pluginShortcut.isEmpty()) {
+                    QString pluginId, actionId;
+                    if (splitPluginShortcutId(pluginShortcut, &pluginId, &actionId)
+                            && m_pluginManager->invokeShortcutAction(pluginId, actionId))
+                        return true;
+                }
+                if (m_pluginManager->handleShortcut(key->key(), key->modifiers()))
+                    return true;
+            }
             return false;
         }
 

@@ -216,6 +216,25 @@ QVariantList PluginManager::menuActions() const
     return result;
 }
 
+QList<PluginShortcutAction> PluginManager::shortcutActions() const
+{
+    QList<PluginShortcutAction> result;
+    for (PluginRuntime *runtime : m_runtimes) {
+        if (!runtime || !runtime->isLoaded())
+            continue;
+        const PluginManifest &manifest = runtime->manifest();
+        for (const PluginShortcutDef &def : manifest.shortcuts) {
+            PluginShortcutAction action;
+            action.pluginId = manifest.id;
+            action.actionId = def.id;
+            action.label = pluginTranslate(manifest, def.label);
+            action.defaultKey = def.defaultKey;
+            result.append(action);
+        }
+    }
+    return result;
+}
+
 QVariantList PluginManager::windows() const
 {
     QVariantList result;
@@ -346,6 +365,7 @@ bool PluginManager::setPluginEnabled(const QString &id, bool enabled)
     saveDisabled(QStringList(m_disabled.cbegin(), m_disabled.cend()));
     emit pluginsChanged();
     emit menuActionsChanged();
+    emit shortcutActionsChanged();
     emit windowsChanged();
     return true;
 }
@@ -440,6 +460,7 @@ bool PluginManager::removePlugin(const QString &id)
     loadAll();
     emit pluginsChanged();
     emit menuActionsChanged();
+    emit shortcutActionsChanged();
     emit windowsChanged();
     return true;
 }
@@ -453,6 +474,7 @@ void PluginManager::reload()
     loadAll();
     emit pluginsChanged();
     emit menuActionsChanged();
+    emit shortcutActionsChanged();
     emit windowsChanged();
     dispatch(QStringLiteral("startup"),
              {{QStringLiteral("version"), QCoreApplication::applicationVersion()}});
@@ -484,6 +506,17 @@ bool PluginManager::handleShortcut(int key, Qt::KeyboardModifiers modifiers)
     for (PluginRuntime *runtime : m_runtimes) {
         if (runtime && runtime->isLoaded()
                 && runtime->invokeShortcut(key, modifiers))
+            return true;
+    }
+    return false;
+}
+
+bool PluginManager::invokeShortcutAction(const QString &pluginId, const QString &actionId)
+{
+    for (PluginRuntime *runtime : m_runtimes) {
+        if (runtime && runtime->isLoaded()
+                && runtime->manifest().id == pluginId
+                && runtime->invokeShortcutAction(actionId))
             return true;
     }
     return false;
@@ -700,6 +733,7 @@ void PluginManager::loadAll()
         saveDisabled(QStringList(m_disabled.cbegin(), m_disabled.cend()));
     emit pluginsChanged();
     emit menuActionsChanged();
+    emit shortcutActionsChanged();
 }
 
 QStringList PluginManager::disabledFromSettings() const
@@ -739,6 +773,7 @@ void PluginManager::unloadAll()
     m_runtimes.clear();
     m_windows.clear();
     emit menuActionsChanged();
+    emit shortcutActionsChanged();
     emit windowsChanged();
 }
 
@@ -816,6 +851,7 @@ void PluginManager::connectEvents()
                          {{QStringLiteral("language"), pluginLanguage(m_config)}});
             emit pluginsChanged();
             emit menuActionsChanged();
+            emit shortcutActionsChanged();
         });
     }
 }

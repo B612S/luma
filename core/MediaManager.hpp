@@ -138,7 +138,10 @@ public:
     // the mpv thread; the media API above is preferred for normal use.
     Q_INVOKABLE QVariant pluginMpvGetProperty(const QString &name) const;
     Q_INVOKABLE void pluginMpvSetProperty(const QString &name, const QVariant &value);
-    Q_INVOKABLE void pluginMpvCommand(const QStringList &args);
+    // Returns false when mpv rejects the command (unknown filter, bad
+    // argument, unavailable property) so plugins can react instead of
+    // assuming success.
+    Q_INVOKABLE bool pluginMpvCommand(const QStringList &args);
 
 signals:
     void fileChanged(const QString &path);

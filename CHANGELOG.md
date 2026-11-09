@@ -27,6 +27,10 @@ All notable changes to Luma are documented here. The format is based on
 - Plugin APIs for the Stats panel (`luma.stats`) and for extra keyboard
   shortcuts (`luma.shortcuts`); plugin stats appear under a native Plugins
   section and shortcuts only receive keys not handled by Luma.
+- Plugin actions declared in `plugin.json` (`shortcuts`) are listed in
+  Settings → Shortcuts with a local and a global key, and plugins handle them
+  with `luma.shortcuts.on()`. Smooth Motion adds an on/off action, `F9` by
+  default, with an OSD confirmation.
 - Per-plugin translations from `locales/<language>.json`, matching the player
   language; `luma.i18n.t()` is available to plugin JavaScript. Host-rendered
   plugin settings labels and descriptions use the same translations.
@@ -179,6 +183,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- Smooth Motion now uses the slice-threaded `framerate` filter (linear
+  blending) instead of `minterpolate`; the interpolation-quality setting was
+  removed. At 1080p the filter costs roughly a quarter of the CPU of
+  `minterpolate`'s blend mode and targets the exact display rate (for example
+  159.96 instead of 160). Its Stats page shows the measured filter output rate,
+  dropped frames and the active filter instead of the requested target.
 - Removed legacy configuration migrations: `ui/debug_logging`,
   `ui/pin_controls`, old `[playback]` keys, old yt-dlp proxy/comments files and
   the old plugin data location are no longer rewritten.
@@ -321,6 +331,21 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Smooth Motion now pauses hardware decoding for as long as the plugin is
+  enabled. mpv could not convert CUDA/VAAPI frames for `minterpolate`, disabled
+  the filter and kept playing at the source rate while the plugin reported it
+  as active; the filter now runs on software frames and the plugin verifies the
+  real output rate.
+- Smooth Motion no longer stutters at the start of a video: it switches to
+  software decoding and adds its filter when the file is opened, before mpv
+  builds the video chain, instead of reinitializing the decoder and seeking
+  about a second into playback.
+- Toggling Smooth Motion off and on applies immediately to the current video:
+  a toggle now only adds or removes the filter instead of switching `hwdec`,
+  which made mpv restart the decoder with a seek and could leave the filter
+  disabled until another file was opened.
+- `luma.mpv.command()` returns mpv's actual result instead of always `true`, so
+  plugins can detect commands that mpv rejected.
 - Dialog keyboard handling is consistent across Settings, plugin dialogs,
   Media Info, playlist dialogs, Equalizer and file-unavailable prompts:
   Escape closes, Tab moves between controls, Space activates the focused

@@ -1043,7 +1043,9 @@ Dialog {
                                 Label {
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 1
-                                    text: qsTranslate("Shortcuts", "shortcut_" + modelData.id)
+                                    text: modelData.label !== undefined && modelData.label !== ""
+                                          ? modelData.label
+                                          : qsTranslate("Shortcuts", "shortcut_" + modelData.id)
                                     color: Kirigami.Theme.textColor
                                     font.pixelSize: 14
                                     wrapMode: Text.WordWrap

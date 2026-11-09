@@ -478,8 +478,7 @@ bool PluginMpvApi::command(const QVariantList &args)
                              << "] blocked raw mpv command:" << command.value(0);
         return false;
     }
-    m_runtime->manager()->media()->pluginMpvCommand(command);
-    return true;
+    return m_runtime->manager()->media()->pluginMpvCommand(command);
 }
 
 // ---------------------------------------------------------------- processes
@@ -772,6 +771,11 @@ void PluginShortcutsApi::remove(const QString &key)
 {
     if (allowed())
         m_runtime->removeShortcut(key);
+}
+
+bool PluginShortcutsApi::on(const QString &id, const QJSValue &callback)
+{
+    return allowed() && m_runtime->addShortcutAction(id.trimmed(), callback);
 }
 
 // ---------------------------------------------------------------- UI

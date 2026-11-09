@@ -636,11 +636,13 @@ void MediaManager::pluginMpvSetProperty(const QString &name, const QVariant &val
     m_mpv->setProperty(name, value);
 }
 
-void MediaManager::pluginMpvCommand(const QStringList &args)
+bool MediaManager::pluginMpvCommand(const QStringList &args)
 {
     if (!m_mpv || args.isEmpty())
-        return;
-    m_mpv->command(args);
+        return false;
+    const QVariant reply = m_mpv->commandBlocking(args);
+    // MpvController::command() reports failures as an ErrorReturn value.
+    return reply.userType() != qMetaTypeId<ErrorReturn>();
 }
 
 QString MediaManager::currentFileName() const {

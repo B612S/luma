@@ -18,6 +18,8 @@ private slots:
     void acceptsProcessPermission();
     void acceptsPluginSettings();
     void rejectsInvalidPluginSetting();
+    void acceptsPluginShortcuts();
+    void ignoresUndeclaredShortcutPermission();
     void loadsPluginLocale();
 };
 
@@ -184,6 +186,45 @@ void TestPluginManifest::loadsPluginLocale()
              QStringLiteral("Привет"));
     QCOMPARE(translatedPluginText(translations, QStringLiteral("Missing")),
              QStringLiteral("Missing"));
+}
+
+void TestPluginManifest::acceptsPluginShortcuts()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    writeFile(dir.path() + "/main.js", "");
+    writeFile(dir.path() + "/plugin.json", R"({
+        "id": "com.example.test", "apiVersion": 1, "main": "main.js",
+        "permissions": ["shortcuts"],
+        "shortcuts": [
+            { "id": "toggle", "label": "Test on / off", "default": "F9" },
+            { "id": "Bad Id", "label": "ignored" },
+            { "id": "toggle", "label": "duplicate" }
+        ]
+    })");
+
+    const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
+    QVERIFY2(manifest.valid, qPrintable(manifest.error));
+    QCOMPARE(manifest.shortcuts.size(), 1);
+    QCOMPARE(manifest.shortcuts.first().id, QStringLiteral("toggle"));
+    QCOMPARE(manifest.shortcuts.first().label, QStringLiteral("Test on / off"));
+    QCOMPARE(manifest.shortcuts.first().defaultKey, QStringLiteral("F9"));
+}
+
+void TestPluginManifest::ignoresUndeclaredShortcutPermission()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    writeFile(dir.path() + "/main.js", "");
+    writeFile(dir.path() + "/plugin.json", R"({
+        "id": "com.example.test", "apiVersion": 1, "main": "main.js",
+        "permissions": ["osd"],
+        "shortcuts": [ { "id": "toggle", "label": "Test on / off" } ]
+    })");
+
+    const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
+    QVERIFY2(manifest.valid, qPrintable(manifest.error));
+    QVERIFY(manifest.shortcuts.isEmpty());
 }
 
 QTEST_MAIN(TestPluginManifest)

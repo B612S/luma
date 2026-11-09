@@ -241,7 +241,14 @@ luma.mpv.command(["seek", "10", "absolute"]);
 
 `getProperty` can block briefly on the mpv thread. The normal media API
 (`luma.media`) is safer and preferred; raw access is for plugins that need an
-mpv feature Luma does not wrap. It can change player state, but commands that
+mpv feature Luma does not wrap. `command()` returns `false` when mpv rejects
+the command (unknown filter, invalid argument, blocked command); `setProperty`
+returns `false` for blocked properties. Note that a successful `vf add` only
+means mpv accepted the filter: it can still disable a filter later when the
+format negotiation fails, so read `vf`/`estimated-vf-fps` back if the plugin
+depends on the result.
+
+It can change player state, but commands that
 execute processes or load scripts are blocked: `run`, `subprocess`,
 `load-script`, `loadfile`, `loadlist`, `script-*`, `define-section`,
 `enable-section`, `keybind`, and properties such as `script`, `script-opts`,
@@ -403,6 +410,32 @@ reassign these numeric keys. The plugin does not create another QML window.
 ### Keyboard shortcuts
 
 Permission: `shortcuts`.
+
+Reassignable actions are declared in `plugin.json` and appear in
+**Settings → Shortcuts** next to Luma's own actions, where each one gets a local
+and a global key (both can be reassigned or cleared; the binding is stored in
+`shortcuts.conf`):
+
+```json
+"shortcuts": [
+  { "id": "toggle", "label": "Smooth Motion on / off", "default": "F9" }
+]
+```
+
+`default` is only used until the user assigns a key. Register the handler in
+`activate()`; it receives `{ id }`:
+
+```js
+luma.shortcuts.on("toggle", () => {
+    // Do something when the action's key is pressed.
+});
+```
+
+Declared actions follow the same rules as Luma's shortcuts: Luma's own
+bindings win, and they are ignored while a modal dialog is open or a text field
+has focus. They are only active while the plugin is enabled.
+
+A plugin can also bind an arbitrary key that is not offered in Settings:
 
 ```js
 luma.shortcuts.add("F2", () => {

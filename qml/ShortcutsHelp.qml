@@ -80,7 +80,9 @@ Dialog {
                             width: parent.width - 222
                             text: modelData.help
                                   ? qsTr("sc_help")
-                                  : qsTranslate("Shortcuts", "shortcut_" + modelData.id)
+                                  : (modelData.label
+                                     ? modelData.label
+                                     : qsTranslate("Shortcuts", "shortcut_" + modelData.id))
                             color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
                                            Kirigami.Theme.textColor.b, 0.8)
                             font.pixelSize: 14
@@ -105,6 +107,7 @@ Dialog {
                 if (!binding.localText && !globalText) continue;
                 result.push({
                     id: binding.id,
+                    label: binding.label || "",
                     localText: binding.localText || "",
                     globalText: globalText,
                     help: false

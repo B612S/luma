@@ -7,6 +7,7 @@
 #include <QVector>
 #include <QVariantMap>
 #include "PluginManifest.hpp"
+#include "PluginShortcut.hpp"
 
 class ConfigManager;
 class MediaManager;
@@ -32,6 +33,7 @@ public:
 
     QVariantList plugins() const;
     QVariantList menuActions() const;
+    QList<PluginShortcutAction> shortcutActions() const;
     QVariantList windows() const;
     QVariantList statsLines() const;
     QVariantList statsPages() const;
@@ -58,6 +60,7 @@ public:
                                    const QVariantMap &context = {});
     Q_INVOKABLE void closeWindow(QObject *window);
     bool handleShortcut(int key, Qt::KeyboardModifiers modifiers);
+    bool invokeShortcutAction(const QString &pluginId, const QString &actionId);
 
     // Accessed by PluginApi.
     MediaManager *media() const { return m_media; }
@@ -75,6 +78,7 @@ public:
 signals:
     void pluginsChanged();
     void menuActionsChanged();
+    void shortcutActionsChanged();
     void windowsChanged();
     void statsChanged();
     void statsPagesChanged();
