@@ -342,6 +342,10 @@ All notable changes to Luma are documented here. The format is based on
   software decoding and adds its filter when the file is opened, before mpv
   builds the video chain, instead of reinitializing the decoder and seeking
   about a second into playback.
+- Smooth Motion no longer shows the previous 160 fps after interpolation is
+  disabled. mpv's `estimated-vf-fps` is a smoothed average that takes several
+  seconds to fall back, and it never updates while paused; without an active
+  filter the Stats page now reports the source rate.
 - Toggling Smooth Motion off and on applies immediately to the current video:
   a toggle now only adds or removes the filter instead of switching `hwdec`,
   which made mpv restart the decoder with a seek and could leave the filter

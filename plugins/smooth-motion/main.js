@@ -303,10 +303,15 @@ function tick() {
 function statsContent() {
     const snapshot = luma.stats.snapshot();
     const source = Number(snapshot["container-fps"]);
-    const output = Number(snapshot["estimated-vf-fps"]);
+    const interpolate = configBool("interpolation", true);
+    // estimated-vf-fps is a smoothed average: after the filter is removed mpv
+    // keeps reporting the previous high rate for several seconds. Without a
+    // filter the chain outputs exactly the source frames, so do not show the
+    // stale value.
+    const output = (filterActive && interpolate)
+        ? Number(snapshot["estimated-vf-fps"]) : source;
     const display = displayFps(snapshot);
     const target = targetFps(snapshot);
-    const interpolate = configBool("interpolation", true);
     const drops = Number(snapshot["frame-drop-count"]);
 
     let frameState = luma.i18n.t("Inactive");
