@@ -38,19 +38,44 @@ Rectangle {
     property bool menuVisible: contextMenu.visible
     property bool hasOpenDialog: dialogs.nameDialog.visible || dialogs.deleteDialog.visible || dialogs.clearDialog.visible || infoDialog.visible || urlDialog.dialog.visible || propertiesDialog.visible
 
-    visible: opacity > 0.0; enabled: isOpen; opacity: isOpen ? 1.0 : 0.0
-    Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+    // Appear at once and only fade out: the 150 ms fade-in re-rendered the
+    // whole scene (video included) while the panel was opening, which could
+    // make the player drop a frame or two right then.
+    visible: opacity > 0.0; enabled: isOpen; opacity: 0.0
+    Behavior on opacity {
+        id: panelOpacity
+        NumberAnimation { duration: 150; easing.type: Easing.InOutQuad }
+    }
+
+    // The ListView is laid out even while the panel is closed, so keep its
+    // hidden position on the playing row. Opening the panel then does not have
+    // to jump far and rebuild rows (which cost a couple of video frames).
+    function ensureCurrentVisible() {
+        if (!listView || isOpen || !panel.model || listView.height <= 0) return;
+        const viewIndex = viewIndexForSource(panel.model.currentIndex);
+        if (viewIndex < 0) return;
+        const top = viewIndex * rowHeight;
+        if (top < listView.contentY || top + rowHeight > listView.contentY + listView.height)
+            listView.positionViewAtIndex(viewIndex, ListView.Contain);
+    }
+
+    onModelChanged: ensureCurrentVisible()
 
     onIsOpenChanged: {
         if (isOpen) {
+            panelOpacity.enabled = false;
+            panel.opacity = 1.0;
+            panelOpacity.enabled = true;
             scrollToCurrent();
         } else {
+            panel.opacity = 0.0;
             // A drag must not survive the panel: its release may never arrive.
             panel.endDrag();
             contextMenu.close(); tabs.closeMenus(); infoDialog.close(); propertiesDialog.close();
             // Never keep keyboard focus inside the closed search field.
             searchField.focus = false;
             cancelDragHold();
+            ensureCurrentVisible();
             if (panel.parent) panel.parent.forceActiveFocus();
         }
     }
@@ -108,6 +133,7 @@ Rectangle {
     Connections {
         target: model
         function onCurrentIndexChanged() {
+            panel.ensureCurrentVisible();
             // While filtering the list rows are proxy rows, not model rows.
             // During a drag the current item is irrelevant, and changing it can
             // make the view scroll away from the dragged row.
