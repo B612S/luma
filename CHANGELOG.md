@@ -333,6 +333,11 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Smooth Motion restores the concrete hardware decoder that was in use instead
+  of resolving `hwdec=auto` again after a runtime decoder restart, which could
+  pick a different API (for example `vulkan-copy` instead of `nvdec`). The
+  decoder is remembered from normal playback and forgotten if it is no longer
+  available.
 - Smooth Motion now restores the user's hardware decoding as soon as
   interpolation is disabled. Hardware decoding was forced off for the whole
   time the plugin was enabled (to make F9 instant), so `hwdec-current` stayed

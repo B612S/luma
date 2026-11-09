@@ -20,6 +20,8 @@ let luma;
 let active = false;
 let original = {};
 let hwdecForced = false;
+let hwdecPin = "";
+let pinCheckAt = 0;
 let lastTarget = 0;
 let filterActive = false;
 let filterVerified = false;
@@ -135,11 +137,43 @@ function addFilter(target) {
         statusText = luma.i18n.t("mpv rejected the filter; see the mpv log");
 }
 
+function isAutoHwdec(value) {
+    const mode = String(value).toLowerCase();
+    return mode === "" || mode === "auto" || mode === "auto-safe"
+        || mode === "auto-copy" || mode === "auto-copy-safe"
+        || mode === "auto-unsafe" || mode === "auto-copy-unsafe"
+        || mode === "yes";
+}
+
+// mpv's "auto" can resolve differently at file start and after a runtime
+// decoder restart (for example nvdec at start, vulkan-copy on a reinit), so
+// remember which concrete decoder was actually in use and restore that one.
+function noteHardwareDecoder() {
+    if (hwdecForced)
+        return;
+    const current = mpvString("hwdec-current").toLowerCase();
+    if (!current || current === "no" || current.endsWith("-copy"))
+        return;
+    if (current === hwdecPin)
+        return;
+    hwdecPin = current;
+    luma.config.set("hwdecPin", current);
+}
+
 function restoreHardwareDecoding() {
     if (!hwdecForced)
         return;
-    restore("hwdec");
     hwdecForced = false;
+    const option = original["hwdec"];
+    if (hwdecPin && isAutoHwdec(option)) {
+        // Pin the decoder the user actually had instead of letting mpv choose
+        // again; the choice is verified on the next ticks.
+        luma.mpv.setProperty("hwdec", hwdecPin);
+        pinCheckAt = Date.now();
+        return;
+    }
+    pinCheckAt = 0;
+    restore("hwdec");
 }
 
 function restoreAll() {
@@ -160,6 +194,7 @@ function restoreAll() {
     dropSample = null;
     droppedPerSecond = 0;
     retries = 0;
+    pinCheckAt = 0;
     refreshStatsPage();
 }
 
@@ -178,6 +213,8 @@ function apply(preparing) {
         remember("hwdec");
         active = true;
     }
+
+    noteHardwareDecoder();
 
     const snapshot = luma.stats.snapshot();
     const mode = String(luma.config.get("mode", "display"));
@@ -305,6 +342,22 @@ function tick() {
         return;
     }
 
+    if (active)
+        noteHardwareDecoder();
+    if (pinCheckAt && !hwdecForced && Date.now() - pinCheckAt > 2000) {
+        pinCheckAt = 0;
+        const current = mpvString("hwdec-current").toLowerCase();
+        if (current === "no" || current === "") {
+            // The remembered decoder is not available any more (for example the
+            // GPU or driver changed); fall back to the user's setting once.
+            const option = original["hwdec"];
+            hwdecPin = "";
+            luma.config.set("hwdecPin", "");
+            if (option !== undefined && option !== "")
+                luma.mpv.setProperty("hwdec", option);
+        }
+    }
+
     if (!active) {
         // The plugin was enabled while a file was already playing.
         apply(false);
@@ -411,6 +464,9 @@ function setInterpolation(enabled) {
 function activate(lumaApi) {
     luma = lumaApi;
     luma.log.info("Smooth Motion loaded");
+    hwdecPin = String(luma.config.get("hwdecPin", "")).trim().toLowerCase();
+    if (hwdecPin === "no")
+        hwdecPin = "";
     if (luma.shortcuts && luma.shortcuts.on)
         luma.shortcuts.on("toggle", () => { toggleInterpolation(); });
     luma.events.on("startup", () => { apply(false); });
