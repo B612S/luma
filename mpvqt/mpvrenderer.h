@@ -24,7 +24,6 @@
 #include <QtQuick/QQuickFramebufferObject>
 #include <QOpenGLFramebufferObject>
 #include <QElapsedTimer>
-#include <QOpenGLTimeMonitor>
 #include <mpv/render_gl.h>
 #include "mpvabstractitem.h"
 
@@ -54,16 +53,28 @@ private:
     bool m_lastCasting = false;
     bool m_lastVideoDisabled = false;
     QElapsedTimer m_frameTimer;
-    // GPU time of the video render (timer queries). 0 = not checked yet,
+    // GPU time of the video render (GL timer queries). 0 = not checked yet,
     // 1 = available, 2 = unsupported.
-    QOpenGLTimeMonitor m_gpuTimer;
     int m_gpuTimerState = 0;
-    bool m_gpuTimerPending = false;
+    GLuint m_gpuQueryIds[2] = {0, 0};
+    int m_gpuQuerySlot = 0;
+    int m_gpuPendingSlot = -1;
     QElapsedTimer m_frameClock;
     qint64 m_lastFrameNs = 0;
     double m_gpuUsageEma = -1.0;
     QElapsedTimer m_gpuReportClock;
+    void initGpuTimer();
     void collectGpuTimer();
+    using GenQueriesFn = void (*)(GLsizei, GLuint *);
+    using BeginQueryFn = void (*)(GLenum, GLuint);
+    using EndQueryFn = void (*)(GLenum);
+    using GetQueryUivFn = void (*)(GLuint, GLenum, GLuint *);
+    using GetQueryUi64vFn = void (*)(GLuint, GLenum, GLuint64 *);
+    GenQueriesFn m_glGenQueries = nullptr;
+    BeginQueryFn m_glBeginQuery = nullptr;
+    EndQueryFn m_glEndQuery = nullptr;
+    GetQueryUivFn m_glGetQueryObjectuiv = nullptr;
+    GetQueryUi64vFn m_glGetQueryObjectui64v = nullptr;
 };
 
 #endif // MPVRENDERER_H

@@ -59,7 +59,8 @@ function parseNumber(value) {
 
 function processMetrics(text) {
     const metrics = { ticks: -1, hz: 100, cores: 1, rssKb: 0, totalKb: 0,
-                      gpu: -1, gpuName: "", gpuNode: "", gpuPlayer: false };
+                      gpu: -1, gpuName: "", gpuNode: "", gpuPlayer: false,
+                      pmon: [] };
     const used = [];
     const nvidia = [];
     let usedNvidia = false;
@@ -87,7 +88,9 @@ function processMetrics(text) {
                     name: rest.slice(3).join(" ")
                 });
             }
-        } else if (line.startsWith("NVIDIA "))
+        } else if (line.startsWith("PMON "))
+            metrics.pmon.push(line.slice(5));
+        else if (line.startsWith("NVIDIA "))
             nvidia.push(line.slice(7));
     }
 
@@ -111,6 +114,24 @@ function processMetrics(text) {
         }
     }
     return metrics;
+}
+
+// nvidia-smi pmon reports per-process SM/memory/encoder/decoder utilization for
+// compute and graphics processes. Use the busiest engine as the player's GPU
+// usage: for a video player that is usually the decoder or the render engine.
+function pmonUsage(line) {
+    // gpu pid type sm mem enc dec command; some drivers omit the type column.
+    const parts = line.trim().split(/\s+/);
+    const base = parts.length > 2 && /^[CGM](\+[CGM])?$/.test(parts[2]) ? 3 : 2;
+    if (parts.length < base + 4)
+        return -1;
+    let usage = -1;
+    for (let i = base; i < base + 4; ++i) {
+        const value = Number(parts[i]);
+        if (Number.isFinite(value) && value > usage)
+            usage = value;
+    }
+    return usage;
 }
 
 function collect() {
@@ -152,11 +173,14 @@ function collect() {
         "done",
         "if [ \"$used_nvidia\" = 1 ]; then",
         "  echo \"USEDNVIDIA 1\"",
-        "  if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=utilization.gpu,name --format=csv,noheader,nounits 2>/dev/null | head -n 1 | sed 's/^/NVIDIA /'; fi",
+        "  if command -v nvidia-smi >/dev/null 2>&1; then",
+        "    nvidia-smi --query-gpu=utilization.gpu,name --format=csv,noheader,nounits 2>/dev/null | head -n 1 | sed 's/^/NVIDIA /'",
+        "    nvidia-smi pmon -c 1 -s u 2>/dev/null | awk -v pid=\"$pid\" '$1 !~ /^#/ && $2 == pid { print \"PMON \" $0 }'",
+        "  fi",
         "fi"
     ].join("\n");
 
-    luma.process.run("/bin/sh", ["-c", script], { timeoutMs: 1800 }, (response) => {
+    luma.process.run("/bin/sh", ["-c", script], { timeoutMs: 3500 }, (response) => {
         collecting = false;
         if (!response || !response.ok || !response.stdout)
             return;
@@ -172,6 +196,13 @@ function collect() {
             const hostGpu = Number(snapshot["gpu-usage"]);
             if (Number.isFinite(hostGpu) && hostGpu >= 0) {
                 metrics.gpu = hostGpu;
+                metrics.gpuPlayer = true;
+            }
+        }
+        if (!metrics.gpuPlayer && metrics.pmon.length > 0) {
+            const usage = pmonUsage(metrics.pmon[0]);
+            if (usage >= 0) {
+                metrics.gpu = usage;
                 metrics.gpuPlayer = true;
             }
         }
