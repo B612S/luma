@@ -185,6 +185,9 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- HDR Output no longer duplicates the plugin enable switch in its own
+  settings: the plugin applies whenever it is enabled in Settings → Plugins,
+  and only the tone-mapping choice remains configurable.
 - Smooth Motion now uses the slice-threaded `framerate` filter (linear
   blending) instead of `minterpolate`; the interpolation-quality setting was
   removed. At 1080p the filter costs roughly a quarter of the CPU of
@@ -333,6 +336,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- OSD messages appear immediately instead of fading in from zero opacity, so a
+  stalled fade-in can no longer leave a freshly shown message invisible.
+- A hidden text field that still holds focus (for example the search box of a
+  closed playlist panel) no longer swallows player shortcuts. Previously the
+  OSD and hotkeys looked unresponsive until the video or seek bar was clicked.
+- A plain time OSD clears the seek target of an earlier seek, so it cannot keep
+  rendering the stale target.
 - Smooth Motion restores the concrete hardware decoder that was in use instead
   of resolving `hwdec=auto` again after a runtime decoder restart, which could
   pick a different API (for example `vulkan-copy` instead of `nvdec`). The

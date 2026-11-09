@@ -16,6 +16,8 @@ function restore(key) {
         luma.mpv.setProperty(key, original[key]);
 }
 
+// The plugin is enabled or disabled in Settings → Plugins; there is no
+// second switch in the plugin settings.
 function apply() {
     const state = luma.media.state();
     if (!state.hasVideo)
@@ -26,15 +28,6 @@ function apply() {
         remember("hdr-compute-peak");
         remember("tone-mapping");
         active = true;
-    }
-
-    if (luma.config.get("enabled", true) !== true) {
-        restore("target-colorspace-hint");
-        restore("hdr-compute-peak");
-        restore("tone-mapping");
-        active = false;
-        original = {};
-        return;
     }
 
     luma.mpv.setProperty("target-colorspace-hint", "yes");

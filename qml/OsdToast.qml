@@ -20,10 +20,13 @@ Rectangle {
     property alias text: label.text
     property bool isOpen: false
 
-    visible: opacity > 0
+    // Show at once (a toast that only fades in stays invisible for the first
+    // frames, which looks like a missing OSD) and fade out when hiding.
+    visible: isOpen || opacity > 0
     opacity: 0.0
 
     Behavior on opacity {
+        id: opacityBehavior
         NumberAnimation {
             duration: 150
             easing.type: Easing.InOutQuad
@@ -32,7 +35,12 @@ Rectangle {
 
     onIsOpenChanged: {
         if (isOpen) {
+            // Appear at once: waiting for a fade-in animation can leave the
+            // toast invisible for the first frames, which looks like a missing
+            // OSD when the player is busy.
+            opacityBehavior.enabled = false
             osd.opacity = 1.0
+            opacityBehavior.enabled = true
         } else {
             osd.opacity = 0.0
         }

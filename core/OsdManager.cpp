@@ -1,8 +1,11 @@
 #include "OsdManager.hpp"
+#include <QLoggingCategory>
 
 namespace {
 constexpr int kTemporaryOsdMs = 2500;
 }
+
+Q_LOGGING_CATEGORY(lumaOsd, "luma.osd")
 
 OsdManager::OsdManager(MpvItem *mpv, QObject *parent) : QObject(parent), m_mpv(mpv) {
     m_hideTimer = new QTimer(this);
@@ -93,6 +96,10 @@ void OsdManager::requestTimeOsd(double pos, double dur) {
     if (!m_mpv || m_isPinned) return;
 
     m_state = StateTimeTemporary;
+    // A plain time OSD is not a seek: drop any target left by an earlier seek,
+    // otherwise tickOsd would keep rendering that stale target.
+    m_seekTarget = -1.0;
+    m_seekStartPos = -1.0;
     updateTimeInternal(pos, dur);
     m_visible = true;
     emit messageChanged();
@@ -151,6 +158,7 @@ void OsdManager::endTemporaryOsd() {
 }
 
 void OsdManager::hideOsd() {
+    qCDebug(lumaOsd) << "hide (explicit)";
     m_isPinned = false;
     m_state = StateHidden;
     m_seekTarget = -1.0;
@@ -167,6 +175,7 @@ void OsdManager::showVolume(double vol) {
 void OsdManager::showVolume(double vol, bool muted) {
     if (!m_mpv) return;
 
+    qCDebug(lumaOsd) << "show volume" << vol << muted;
     // Temporary overlay
     m_state = StateOverlayVolume;
 
@@ -187,6 +196,7 @@ void OsdManager::showVolume() {
 void OsdManager::showInfo(const QString &text) {
     if (text.isEmpty()) return;
 
+    qCDebug(lumaOsd) << "show info" << text;
     m_state = StateOverlayInfo;
     m_message = text;
     m_visible = true;
@@ -196,6 +206,8 @@ void OsdManager::showInfo(const QString &text) {
 }
 
 void OsdManager::hideOsdInternal() {
+    if (m_visible)
+        qCDebug(lumaOsd) << "hide";
     m_visible = false;
     emit visibleChanged();
 }

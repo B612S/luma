@@ -106,6 +106,19 @@ QString physicalKeyName(quint32 nativeScanCode)
     return text;
 }
 
+// A hidden or disabled text field (for example the search box of a closed
+// playlist panel) must not keep swallowing player shortcuts: the OSD then
+// looks broken until the user clicks the video or the seek bar.
+bool textInputFocused()
+{
+    QObject *focus = QGuiApplication::focusObject();
+    if (!focus || !(focus->inherits("QQuickTextInput")
+                    || focus->inherits("QQuickTextField")))
+        return false;
+    auto *item = qobject_cast<QQuickItem *>(focus);
+    return !item || (item->isVisible() && item->isEnabled());
+}
+
 ShortcutBinding defaultBindingFor(ShortcutAction action)
 {
     for (const ShortcutDef &def : defaultShortcuts()) {
@@ -1085,7 +1098,7 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
     // keyboard shortcuts.
     if (event->type() == QEvent::MouseButtonPress) {
         QObject *focus = QGuiApplication::focusObject();
-        if (focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextField"))) {
+        if (textInputFocused()) {
             auto *item = qobject_cast<QQuickItem *>(focus);
             auto *mouse = static_cast<QMouseEvent *>(event);
             if (item && mouse && m_window) {
@@ -1115,11 +1128,10 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
         // Escape and its close button; only the ? key is handled on release.
         if (m_helpVisible) return false;
 
-        // Ignore when focus is in a text field (TextField, TextInput, etc.)
-        QObject *focus = QGuiApplication::focusObject();
-        if (focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextField"))) {
+        // Ignore when focus is in a visible text field (TextField, TextInput,
+        // etc.); hidden fields must not block playback shortcuts.
+        if (textInputFocused())
             return false;
-        }
 
         if (key->key() == Qt::Key_Escape && !key->isAutoRepeat()) {
             // With an in-app dialog open, Escape belongs to the dialog (close
