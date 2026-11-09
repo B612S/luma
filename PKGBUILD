@@ -2,7 +2,9 @@
 
 pkgname=luma
 # VERSION is the single source of the application version (MAJOR.MINOR.PATCH).
-pkgver="$(tr -d '[:space:]' < "${startdir:-$PWD}/VERSION" 2>/dev/null || true)"
+# CI overrides it for pre-release tags (for example 1.0.0rc2); Arch pkgver
+# cannot contain "-", which is why the release tag is converted first.
+pkgver="${LUMA_PKGVER:-$(tr -d '[:space:]' < "${startdir:-$PWD}/VERSION" 2>/dev/null || true)}"
 pkgver="${pkgver:-1.0.0}"
 # Increment for a packaging-only rebuild; reset to 1 when pkgver changes.
 pkgrel=1

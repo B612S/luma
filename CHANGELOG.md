@@ -42,9 +42,10 @@ All notable changes to Luma are documented here. The format is based on
   Smooth Motion (display-refresh/fixed-FPS playback) and HDR Output.
 - Context menus hide track and video-only entries when they do not apply
   instead of showing disabled rows.
-- GitHub Actions builds the Debian package, AppImage and Arch package on
-  published releases or on manual request. Local `makepkg` remains available
-  for on-demand rebuilds.
+- GitHub Actions builds the Debian package, AppImage and Arch package in
+  separate parallel jobs on published releases or on manual request. The jobs
+  use pre-release-aware versions (`1.0.0~rc2` for Debian, `1.0.0rc2` for Arch),
+  and local `makepkg` remains available for on-demand rebuilds.
 - New plugins start disabled. Direct `mpv` access (`mpv:raw`) and external
   programs (`process`, through `luma.process.run(program, ...)`) use separate
   warning dialogs and separate approvals; both are requested before the plugin

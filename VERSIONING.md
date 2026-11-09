@@ -52,6 +52,8 @@ When `pkgver` changes, reset `pkgrel` to `1`.
 5. Reset `pkgrel=1` in `PKGBUILD` for a new `pkgver`, or increment it for a
    packaging-only rebuild.
 6. Rebuild the AppImage if it is part of the release.
-7. Tag the release as `vX.Y.Z`.
+7. Tag the release as `vX.Y.Z` (pre-releases use a tag such as `v1.0.0-rc2`
+   while `VERSION` stays `1.0.0`; CI converts the tag to `1.0.0~rc2` for Debian
+   and `1.0.0rc2` for Arch).
 
 The current baseline is `1.0.0`.
