@@ -342,12 +342,14 @@ All notable changes to Luma are documented here. The format is based on
   compositor rate, which could drop frames; the renderer now reuses the
   framebuffer texture until mpv delivers a new frame, and only explicit
   repaints (end of file, video output switched off) force a new render.
-- Switching to a playlist with Japanese (or emoji) titles no longer freezes
-  the video the first time. The scene-graph glyph cache is filled at startup
-  by painting the first rows of every playlist through the same QML text
-  pipeline as the list rows (an offscreen QPainter warmup did not reach it).
-  The freeze measured about 300 ms, which is why the first switch lost half a
-  dozen frames.
+- Switching to a playlist with Japanese (or symbol-heavy) titles no longer
+  freezes the video the first time. The freeze was Qt asking fontconfig for a
+  fallback font for every character the desktop font lacks (CJK, ⧸, ☆, …),
+  which is slow on a large font database (about 300 ms, half a dozen frames).
+  The application font now carries an explicit stack of installed CJK,
+  maths/symbol and emoji fonts, so no fallback search is needed, and their
+  font engines are loaded once at startup at the playlist row size. This is a
+  fixed cost, independent of the number of playlist entries.
 - Opening the playlist panel no longer drops video frames. Its rows already
   exist while the panel is closed, so creating them was not the cost: the
   150 ms fade-in re-rendered the whole scene (the video included), and opening

@@ -20,6 +20,8 @@
 #include <QProcess>
 #include <QSettings>
 #include <QFont>
+#include <QFontDatabase>
+#include <QTextLayout>
 #include <QStyle>
 #include <QRect>
 #include <QSize>
@@ -167,6 +169,58 @@ QString systemIconTheme()
     }
     return {};
 }
+
+// Titles in playlists can mix scripts and symbols that the desktop's primary
+// font does not carry. Qt then asks fontconfig for a fallback font the first
+// time each such run is shaped, which is slow (hundreds of milliseconds on a
+// large font database) and showed up as dropped frames when a playlist with
+// Japanese titles was selected. Give the application font an explicit stack of
+// installed fonts for those scripts instead, so Qt finds them without the
+// expensive search. The first family stays the desktop font, so normal text is
+// unchanged.
+void applyFontFallbackStack()
+{
+    QFont font = QGuiApplication::font();
+    QStringList families = font.families();
+    if (families.isEmpty())
+        families << font.family();
+
+    const QStringList installed = QFontDatabase::families();
+    auto add = [&](const QString &name) {
+        if (!name.isEmpty() && installed.contains(name) && !families.contains(name))
+            families << name;
+    };
+    // CJK, then maths/dingbats, then a broad symbol font and emoji. Only
+    // installed families are added, so this works on systems without Noto.
+    add(QStringLiteral("Noto Sans CJK JP"));
+    add(QStringLiteral("Noto Sans CJK SC"));
+    add(QStringLiteral("Noto Sans CJK KR"));
+    add(QStringLiteral("Noto Sans Math"));
+    add(QStringLiteral("Symbola"));
+    add(QStringLiteral("Noto Sans Symbols2"));
+    add(QStringLiteral("DejaVu Sans"));
+    add(QStringLiteral("Noto Color Emoji"));
+
+    font.setFamilies(families);
+    QGuiApplication::setFont(font);
+}
+
+// Load the font engines for that stack once, at the size the playlist rows
+// use, so the first playlist with such titles does not pay the load while a
+// video is playing. This is a fixed cost, not proportional to the playlist:
+// the list only lays out the rows that are visible.
+void preloadTextEngines()
+{
+    QFont font = QGuiApplication::font();
+    font.setPixelSize(14); // PlaylistDelegate's title size.
+    const QString sample = QStringLiteral("日本語かなカナ漢字中文한국어⧸＂☆✕「」？！😀🎌");
+    QTextLayout layout(sample, font);
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    if (line.isValid())
+        line.setLineWidth(10000.0);
+    layout.endLayout();
+}
 }
 
 void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
@@ -265,6 +319,8 @@ int main(int argc, char *argv[]) {
     });
     stallTimer->start();
     app.setWindowIcon(QIcon(":/assets/luma.png"));
+    applyFontFallbackStack();
+    preloadTextEngines();
 
     ConfigManager config;
     Logger::instance().setMode(config.lumaLogMode());

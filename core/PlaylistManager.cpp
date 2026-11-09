@@ -692,39 +692,6 @@ QVariantList PlaylistManager::playlists() const {
     return list;
 }
 
-QStringList PlaylistManager::warmupTitles() const
-{
-    // About one screen of rows per playlist: that is what is painted when a
-    // playlist is selected for the first time.
-    QStringList titles;
-    auto collect = [&titles](PlaylistModel *model) {
-        if (!model) return;
-        const int rows = qMin(model->rowCount(), 24);
-        for (int row = 0; row < rows; ++row)
-            titles << model->data(model->index(row, 0), Qt::DisplayRole).toString();
-    };
-    collect(m_defaultModel);
-    for (PlaylistModel *model : m_models)
-        collect(model);
-    return titles;
-}
-
-QStringList PlaylistManager::allDisplayTitles() const
-{
-    QStringList titles;
-    auto collect = [&titles](PlaylistModel *model) {
-        if (!model) return;
-        const int rows = model->rowCount();
-        titles.reserve(titles.size() + rows);
-        for (int row = 0; row < rows; ++row)
-            titles << model->data(model->index(row, 0), Qt::DisplayRole).toString();
-    };
-    collect(m_defaultModel);
-    for (PlaylistModel *model : m_models)
-        collect(model);
-    return titles;
-}
-
 QString PlaylistManager::playlistName(const QString &id) const {
     if (id == DEFAULT_ID) return tr("playlist_default");
     return m_names.value(id, id);
