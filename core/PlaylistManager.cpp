@@ -692,6 +692,22 @@ QVariantList PlaylistManager::playlists() const {
     return list;
 }
 
+QStringList PlaylistManager::allDisplayTitles() const
+{
+    QStringList titles;
+    auto collect = [&titles](PlaylistModel *model) {
+        if (!model) return;
+        const int rows = model->rowCount();
+        titles.reserve(titles.size() + rows);
+        for (int row = 0; row < rows; ++row)
+            titles << model->data(model->index(row, 0), Qt::DisplayRole).toString();
+    };
+    collect(m_defaultModel);
+    for (PlaylistModel *model : m_models)
+        collect(model);
+    return titles;
+}
+
 QString PlaylistManager::playlistName(const QString &id) const {
     if (id == DEFAULT_ID) return tr("playlist_default");
     return m_names.value(id, id);

@@ -343,9 +343,11 @@ All notable changes to Luma are documented here. The format is based on
   framebuffer texture until mpv delivers a new frame, and only explicit
   repaints (end of file, video output switched off) force a new render.
 - Switching to a playlist with Japanese (or emoji) titles no longer drops video
-  frames. Qt loads the CJK/emoji fallback fonts lazily the first time such a
-  title is shaped, which blocked the GUI thread for ~40 ms right when the
-  playlist was selected; the fallback text is now shaped once at startup.
+  frames. The first time such a playlist was shown, the renderer had to fill
+  its glyph cache with those titles synchronously while painting the rows
+  (measured at about 300 ms, enough to lose half a dozen frames). All playlist
+  titles are now painted once, offscreen, at startup before playback, so the
+  glyph cache is already warm when the playlist is opened.
 - Opening the playlist panel no longer drops video frames. Its rows already
   exist while the panel is closed, so creating them was not the cost: the
   150 ms fade-in re-rendered the whole scene (the video included), and opening

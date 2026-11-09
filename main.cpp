@@ -19,7 +19,9 @@
 #include <QProcess>
 #include <QSettings>
 #include <QFont>
-#include <QTextLayout>
+#include <QPainter>
+#include <QImage>
+#include <QScreen>
 #include <QStyle>
 #include <QRect>
 #include <QSize>
@@ -168,26 +170,39 @@ QString systemIconTheme()
     return {};
 }
 
-// Qt loads the fallback fonts for CJK and emoji lazily, the first time a
-// string with such glyphs is shaped. A playlist with Japanese titles then
-// blocked the GUI thread for tens of milliseconds on the first switch to it,
-// which was enough to drop a video frame or two. Shape a sample once at
-// startup, while nothing is playing.
-void prewarmTextFallback()
+// The first time a playlist with CJK/emoji titles is shown, Qt rasterises the
+// glyphs of those titles while the rows are painted. That filled the glyph
+// cache synchronously and could make the renderer miss enough frame deadlines
+// to drop half a dozen frames (measured: ~300 ms on the first switch). Paint
+// the same titles offscreen once at startup, before anything plays, so the
+// cache is already warm when the playlist is opened. The 300 px width matches
+// the elided text in the list rows.
+void prewarmPlaylistGlyphs(const QStringList &titles)
 {
-    const QFont font = QGuiApplication::font();
-    const QStringList samples = {
-        QStringLiteral("日本語かなカナ漢字中文한국어"),
-        QStringLiteral("「」＂？！"),
-        QStringLiteral("😀🎌🔥✨❤️👍"),
-    };
-    for (const QString &sample : samples) {
-        QTextLayout layout(sample, font);
-        layout.beginLayout();
-        QTextLine line = layout.createLine();
-        if (line.isValid())
-            line.setLineWidth(10000.0);
-        layout.endLayout();
+    if (titles.isEmpty())
+        return;
+    QFont font = QGuiApplication::font();
+    font.setPixelSize(14); // PlaylistDelegate's title size.
+
+    constexpr int kPerChunk = 50;
+    qreal dpr = 1.0;
+    if (QScreen *screen = QGuiApplication::primaryScreen())
+        dpr = screen->devicePixelRatio();
+    // Create the canvas in device pixels so the 50 rows fit at any scaling.
+    QImage canvas(qCeil(320 * dpr), qCeil(kPerChunk * 40 * dpr),
+                  QImage::Format_ARGB32_Premultiplied);
+    canvas.setDevicePixelRatio(dpr);
+
+    QPainter painter;
+    for (int base = 0; base < titles.size(); base += kPerChunk) {
+        canvas.fill(Qt::transparent);
+        painter.begin(&canvas);
+        painter.setFont(font);
+        const int end = std::min(base + kPerChunk, int(titles.size()));
+        for (int i = base; i < end; ++i)
+            painter.drawText(QRect(0, (i - base) * 40, canvas.width(), 40),
+                             Qt::AlignLeft | Qt::AlignVCenter, titles.at(i));
+        painter.end();
     }
 }
 }
@@ -273,7 +288,6 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion(versionWithRevision());
     QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
     app.setWindowIcon(QIcon(":/assets/luma.png"));
-    prewarmTextFallback();
 
     ConfigManager config;
     Logger::instance().setMode(config.lumaLogMode());
@@ -334,6 +348,7 @@ int main(int argc, char *argv[]) {
 
     // ---- Managers ----
     PlaylistManager playlists(&config);
+    prewarmPlaylistGlyphs(playlists.allDisplayTitles());
 
     MediaManager media(nullptr, &app);
     media.setConfig(&config);

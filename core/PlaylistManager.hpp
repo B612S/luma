@@ -30,6 +30,9 @@ public:
     static const QString DEFAULT_ID;
 
     QVariantList playlists() const;
+    // Every entry's displayed title, across all playlists. Used at startup to
+    // warm the CJK/emoji glyph cache before the playlist panel is shown.
+    QStringList allDisplayTitles() const;
     QString activeId() const { return m_activeId; }
     QString playingId() const;
     void setActiveId(const QString &id);
