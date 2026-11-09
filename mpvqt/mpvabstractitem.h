@@ -82,6 +82,12 @@ public:
     Q_INVOKABLE QVariant expandText(const QString &text);
     Q_INVOKABLE void requestUpdateFromRenderer();
 
+    // Luma: make the next scene-graph paint re-render the video frame even if
+    // mpv did not produce a new one (file end, video track disabled, and
+    // similar explicit repaints).
+    void repaintVideoFrame();
+    quint64 frameUpdateCounter() const { return m_frameUpdateCounter; }
+
     friend class MpvRenderer;
 
 Q_SIGNALS:
@@ -91,6 +97,13 @@ protected:
     MpvController *mpvController();
 
     std::unique_ptr<MpvAbstractItemPrivate> d_ptr;
+
+private:
+    // Incremented for every frame the renderer must draw. Scene repaints that
+    // are not caused by mpv (for example a UI animation) reuse the current
+    // framebuffer texture instead of rendering the video again at the
+    // compositor rate.
+    quint64 m_frameUpdateCounter = 0;
 };
 
 #endif // MPVABSTRACTITEM_H

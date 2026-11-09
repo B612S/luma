@@ -190,6 +190,12 @@ QVariant MpvAbstractItem::expandText(const QString &text)
 
 void MpvAbstractItem::requestUpdateFromRenderer()
 {
+    repaintVideoFrame();
+}
+
+void MpvAbstractItem::repaintVideoFrame()
+{
+    ++m_frameUpdateCounter;
     update();
 }
 

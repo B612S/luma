@@ -336,6 +336,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- The player no longer re-renders the video frame for every scene-graph
+  repaint. UI animations (the playlist fade, the tab highlight, the OSD, a
+  statistics refresh) used to make mpv render the current frame again at the
+  compositor rate, which could drop frames; the renderer now reuses the
+  framebuffer texture until mpv delivers a new frame, and only explicit
+  repaints (end of file, video output switched off) force a new render.
 - Switching to a playlist with Japanese (or emoji) titles no longer drops video
   frames. Qt loads the CJK/emoji fallback fonts lazily the first time such a
   title is shaped, which blocked the GUI thread for ~40 ms right when the

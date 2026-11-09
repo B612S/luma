@@ -18,6 +18,10 @@
  *   - The FBO texture is created with GL_CLAMP_TO_EDGE sampling, so resizing a
  *     PiP window cannot sample the opposite edge of the video.
  *   - Formatting cleanups.
+ *   - Render the video frame only when mpv produced a new one (or when a
+ *     repaint was explicitly requested); unrelated scene repaints, such as UI
+ *     animations, reuse the framebuffer texture instead of re-rendering the
+ *     video at the compositor rate.
  */
 
 #include "mpvrenderer.h"
@@ -65,6 +69,20 @@ void MpvRenderer::synchronize(QQuickFramebufferObject *item)
     if (!m_mpvResourceManager) {
         m_mpvResourceManager = mpvAItem->d_ptr->m_mpvResourceManager;
     }
+
+    m_frameCounter = mpvAItem->frameUpdateCounter();
+    MpvItem *mpvItem = qobject_cast<MpvItem *>(mpvAItem);
+    if (mpvItem) {
+        const bool casting = mpvItem->isCasting();
+        const bool videoDisabled = mpvItem->videoDisabled();
+        if (casting != m_lastCasting || videoDisabled != m_lastVideoDisabled) {
+            // The framebuffer has to be cleared or filled again when video
+            // output is switched on or off, even if mpv sent no new frame.
+            m_lastCasting = casting;
+            m_lastVideoDisabled = videoDisabled;
+            m_forceRender = true;
+        }
+    }
 }
 
 void MpvRenderer::render()
@@ -75,6 +93,14 @@ void MpvRenderer::render()
 
     QOpenGLFramebufferObject *fbo = framebufferObject();
     if (!fbo) return;
+
+    // A repaint that is not caused by a new mpv frame (a UI animation, for
+    // example) keeps the framebuffer texture as it is. Re-rendering the video
+    // at the compositor rate only adds work and can drop frames.
+    if (!m_forceRender && m_frameCounter == m_renderedCounter)
+        return;
+    m_forceRender = false;
+    m_renderedCounter = m_frameCounter;
 
     QOpenGLFunctions *f = QOpenGLContext::currentContext()->functions();
     f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -106,6 +132,8 @@ void MpvRenderer::render()
 
 QOpenGLFramebufferObject *MpvRenderer::createFramebufferObject(const QSize &size)
 {
+    // A new framebuffer needs a frame even if mpv has not produced a new one.
+    m_forceRender = true;
     if (m_mpvResourceManager && !m_mpvResourceManager->mpvRenderContext) {
         m_mpvResourceManager->mpvRenderContext = createMpvRenderContext();
     }

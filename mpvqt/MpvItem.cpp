@@ -209,8 +209,8 @@ void MpvItem::stopPlayback() {
     // last frame is replaced by the cleared framebuffer. The stop command is
     // queued to mpv's thread, so repaint again shortly after in case this first
     // repaint happens before the file is actually unloaded.
-    update();
-    QTimer::singleShot(100, this, [this]() { update(); });
+    repaintVideoFrame();
+    QTimer::singleShot(100, this, [this]() { repaintVideoFrame(); });
 }
 
 void MpvItem::setMuted(bool m) {
@@ -460,7 +460,7 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
         else if (value.canConvert<QVariantMap>()) disabled = value.toMap().isEmpty();
         m_videoDisabled = disabled;
         emit videoDisabledChanged();
-        update();
+        repaintVideoFrame();
     }
     else if (property == "media-title") {
         // For radio mpv updates this title when the track changes (ICY).
