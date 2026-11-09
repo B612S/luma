@@ -333,6 +333,11 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Smooth Motion now restores the user's hardware decoding as soon as
+  interpolation is disabled. Hardware decoding was forced off for the whole
+  time the plugin was enabled (to make F9 instant), so `hwdec-current` stayed
+  `no` (software decoding) even with interpolation off, including after a
+  restart.
 - Smooth Motion could keep generating frames after interpolation was disabled:
   the plugin searched mpv's `vf` property for its label as text, but mpvqt
   returns it as a list of filter maps, so the removal was skipped while the

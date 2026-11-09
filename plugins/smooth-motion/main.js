@@ -135,14 +135,18 @@ function addFilter(target) {
         statusText = luma.i18n.t("mpv rejected the filter; see the mpv log");
 }
 
+function restoreHardwareDecoding() {
+    if (!hwdecForced)
+        return;
+    restore("hwdec");
+    hwdecForced = false;
+}
+
 function restoreAll() {
     if (!active)
         return;
     removeFilter();
-    if (hwdecForced) {
-        restore("hwdec");
-        hwdecForced = false;
-    }
+    restoreHardwareDecoding();
     restore("video-sync");
     restore("interpolation");
     active = false;
@@ -185,6 +189,17 @@ function apply(preparing) {
     // changed or the previous file lost the filter. This keeps switching files
     // free of a filter reconfiguration.
     const sameChain = signature === appliedSignature && filterActive && interpolate;
+
+    // The filter only accepts software frames. Switching hwdec restarts the
+    // decoder with a seek, so do it once and only while frames are generated;
+    // re-apply it if something else (for example the hwdec toggle shortcut)
+    // turned hardware decoding back on. Doing it before the return paths keeps
+    // a file switch from starting with the wrong decoder.
+    if (interpolate && (!hwdecForced || !softwareFrames())) {
+        hwdecForced = true;
+        luma.mpv.setProperty("hwdec", "no");
+    }
+
     if (!preparing) {
         if (signature === appliedSignature) {
             refreshStatsPage();
@@ -213,17 +228,14 @@ function apply(preparing) {
     luma.mpv.setProperty("video-sync", mode === "display" ? "display-resample" : "audio");
     // mpv must not blend frames on its own on top of the generated ones.
     luma.mpv.setProperty("interpolation", "no");
-    // Software frames are required by the filter, and switching hwdec restarts
-    // the decoder with a seek. Do it once for the whole plugin session.
-    if (!hwdecForced) {
-        hwdecForced = true;
-        luma.mpv.setProperty("hwdec", "no");
-    }
 
     removeFilter();
     filterActive = false;
 
     if (!interpolate) {
+        // Nothing is generated, so leave decoding to the user's normal setting
+        // (nvdec/vaapi) instead of keeping the software fallback.
+        restoreHardwareDecoding();
         refreshStatsPage();
         return;
     }

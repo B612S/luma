@@ -1,7 +1,7 @@
 {
   "id": "com.luma.fps",
   "name": "Smooth Motion",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "apiVersion": 1,
   "main": "main.js",
   "description": "Generates frames for the display refresh rate or a fixed target frame rate.",
@@ -47,7 +47,7 @@
       "type": "switch",
       "label": "Motion interpolation",
       "default": true,
-      "description": "Generate intermediate frames by blending neighbouring frames with the framerate filter. Disable to leave the video at its source rate. Hardware decoding is paused while the plugin is enabled."
+      "description": "Generate intermediate frames by blending neighbouring frames with the framerate filter. Disable to leave the video at its source rate. Hardware decoding is paused while interpolation is active."
     }
   ],
   "shortcuts": [
@@ -57,5 +57,5 @@
       "default": "F9"
     }
   ],
-  "info": "Generates frames with mpv's framerate filter (linear blending).\nOpen Statistics (I), then press its number key (usually 2).\nSettings chooses the display refresh rate or a fixed frame rate.\nHardware decoding is paused while the plugin is enabled: the filter only accepts software frames. The filter is added when the file opens, so playback starts without a hitch.\nThe on/off shortcut is assigned in Settings → Shortcuts (F9 by default)."
+  "info": "Generates frames with mpv's framerate filter (linear blending).\nOpen Statistics (I), then press its number key (usually 2).\nSettings chooses the display refresh rate or a fixed frame rate.\nHardware decoding is paused while interpolation is active: the filter only accepts software frames. The filter is added when the file opens, so playback starts without a hitch.\nThe on/off shortcut is assigned in Settings → Shortcuts (F9 by default)."
 }
