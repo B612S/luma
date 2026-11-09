@@ -38,12 +38,31 @@ Rectangle {
     property bool menuVisible: contextMenu.visible
     property bool hasOpenDialog: dialogs.nameDialog.visible || dialogs.deleteDialog.visible || dialogs.clearDialog.visible || infoDialog.visible || urlDialog.dialog.visible || propertiesDialog.visible
 
-    visible: opacity > 0.0; enabled: isOpen; opacity: isOpen ? 1.0 : 0.0
+    // The panel stays laid out (and its list items stay alive) while closed.
+    // Creating them on open stalled the GUI thread long enough to drop a
+    // couple of video frames every time the panel was shown; now opening only
+    // changes opacity and input.
+    visible: true
+    enabled: isOpen
+    opacity: isOpen ? 1.0 : 0.0
     Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
 
-    onOpacityChanged: { if (opacity > 0.0 && isOpen) scrollToCurrent(); }
+    // Keep the invisible list near the playing row, so opening the panel does
+    // not jump far and recreate delegates in the middle of playback.
+    function ensureCurrentVisible() {
+        if (!listView || isOpen || !panel.model || listView.height <= 0) return;
+        const viewIndex = viewIndexForSource(panel.model.currentIndex);
+        if (viewIndex < 0) return;
+        const top = viewIndex * rowHeight;
+        if (top < listView.contentY || top + rowHeight > listView.contentY + listView.height)
+            listView.positionViewAtIndex(viewIndex, ListView.Contain);
+    }
+
+    onModelChanged: ensureCurrentVisible()
+
     onIsOpenChanged: {
-        if (!isOpen) {
+        if (isOpen) scrollToCurrent();
+        else {
             // A drag must not survive the panel: its release may never arrive.
             panel.endDrag();
             contextMenu.close(); tabs.closeMenus(); infoDialog.close(); propertiesDialog.close();
@@ -51,6 +70,11 @@ Rectangle {
             searchField.focus = false;
             if (panel.parent) panel.parent.forceActiveFocus();
         }
+    }
+
+    Connections {
+        target: panel.model
+        function onCurrentIndexChanged() { panel.ensureCurrentVisible() }
     }
 
     onIsFilteringChanged: {

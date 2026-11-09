@@ -336,6 +336,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Opening the playlist panel no longer drops video frames. The panel was
+  removed from the layout while closed, so its list rows were re-created on
+  every open and stalled the GUI thread. It now stays laid out at zero opacity
+  with input disabled, so the rows exist from startup and opening only changes
+  opacity; the hidden list also follows the playing row so opening it does not
+  jump far enough to rebuild rows.
 - Smooth Motion no longer reads mpv properties synchronously while a file is
   being opened. Those blocking round-trips delayed mpv's `loadfile`, so the
   first frames arrived late and display-resample counted one or two dropped
