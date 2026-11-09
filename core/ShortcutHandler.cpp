@@ -773,8 +773,7 @@ bool ShortcutHandler::isCursorOverQmlPanel() {
     if (!m_playlistItem) m_playlistItem = m_window->findChild<QQuickItem*>("playlistPanel");
     if (!m_statsItem) m_statsItem = m_window->findChild<QQuickItem*>("statsPanel");
     QPoint localPos = m_window->mapFromGlobal(QCursor::pos());
-    if (m_playlistItem && m_playlistItem->isVisible()
-            && m_playlistItem->property("isOpen").toBool()) {
+    if (m_playlistItem && m_playlistItem->isVisible()) {
         if (m_playlistItem->contains(m_playlistItem->mapFromItem(m_window->contentItem(), localPos))) return true;
     }
     if (m_statsItem && m_statsItem->isVisible()) {
