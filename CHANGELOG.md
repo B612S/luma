@@ -333,6 +333,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Smooth Motion could keep generating frames after interpolation was disabled:
+  the plugin searched mpv's `vf` property for its label as text, but mpvqt
+  returns it as a list of filter maps, so the removal was skipped while the
+  Stats page reported the filter as inactive. The filter list is now inspected
+  directly (with an unconditional removal as a fallback), so generation really
+  stops.
 - Smooth Motion now pauses hardware decoding for as long as the plugin is
   enabled. mpv could not convert CUDA/VAAPI frames for `minterpolate`, disabled
   the filter and kept playing at the source rate while the plugin reported it

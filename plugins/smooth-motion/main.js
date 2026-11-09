@@ -50,13 +50,33 @@ function mpvString(name) {
 }
 
 function removeFilter() {
+    // mpvqt returns the "vf" property as a list of filter maps whose label has
+    // no "@" prefix; it is not a string, so searching the option text does not
+    // work. When the shape is unexpected, try the removal anyway: a filter left
+    // running is worse than a warning in the mpv log.
     // The old label is kept for users upgrading from an earlier plugin build.
-    const chain = mpvString("vf");
-    for (const label of ["@luma-fps", "@lumafps"]) {
-        // Removing a missing label only writes a warning to the mpv log.
-        if (chain.indexOf(label) >= 0)
-            luma.mpv.command(["vf", "remove", label]);
+    const labels = ["luma-fps", "lumafps"];
+    let present = null;
+    const value = luma.mpv.getProperty("vf");
+    // QJSEngine exposes the converted QVariantList as an array-like object
+    // (Array.isArray() is false for it), so detect it by its length.
+    if (value && typeof value === "object" && typeof value.length === "number") {
+        present = [];
+        for (let i = 0; i < value.length; ++i) {
+            const entry = value[i];
+            if (entry && entry.label)
+                present.push(String(entry.label));
+        }
     }
+
+    let removed = false;
+    for (const label of labels) {
+        if (present && present.indexOf(label) < 0)
+            continue;
+        if (luma.mpv.command(["vf", "remove", "@" + label]))
+            removed = true;
+    }
+    return removed;
 }
 
 function configBool(key, fallback) {
