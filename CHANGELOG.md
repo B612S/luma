@@ -336,6 +336,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Opening the playlist panel no longer builds its rows twice and no longer
+  creates a timer per row: the list keeps fewer rows cached ahead of the
+  viewport, the drag-hold uses one timer for the whole list, and the view only
+  scrolls when the playing row is actually outside it. Building the rows used
+  to block the GUI thread long enough to drop one or two video frames every
+  time the panel was opened.
 - Smooth Motion no longer reads mpv properties synchronously while a file is
   being opened. Those blocking round-trips delayed mpv's `loadfile`, so the
   first frames arrived late and display-resample counted one or two dropped

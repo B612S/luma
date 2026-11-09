@@ -41,16 +41,48 @@ Rectangle {
     visible: opacity > 0.0; enabled: isOpen; opacity: isOpen ? 1.0 : 0.0
     Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
 
-    onOpacityChanged: { if (opacity > 0.0 && isOpen) scrollToCurrent(); }
     onIsOpenChanged: {
-        if (!isOpen) {
+        if (isOpen) {
+            scrollToCurrent();
+        } else {
             // A drag must not survive the panel: its release may never arrive.
             panel.endDrag();
             contextMenu.close(); tabs.closeMenus(); infoDialog.close(); propertiesDialog.close();
             // Never keep keyboard focus inside the closed search field.
             searchField.focus = false;
+            cancelDragHold();
             if (panel.parent) panel.parent.forceActiveFocus();
         }
+    }
+
+    // A single hold timer for the whole list: one timer per row made creating
+    // the rows needlessly heavy (the list is built from scratch every time the
+    // panel opens, and the cost was visible as dropped video frames).
+    property int dragHoldRow: -1
+    property real dragHoldSceneY: -1
+
+    function holdForDrag(index, sceneY) {
+        dragHoldRow = index;
+        dragHoldSceneY = sceneY;
+        dragHoldTimer.start();
+    }
+
+    function cancelDragHold() {
+        dragHoldTimer.stop();
+        dragHoldRow = -1;
+    }
+
+    function startHeldDrag() {
+        if (dragHoldRow >= 0 && !isFiltering)
+            beginDrag(dragHoldRow, dragHoldSceneY);
+        dragHoldRow = -1;
+    }
+
+    Timer {
+        id: dragHoldTimer
+        interval: 1000
+        repeat: false
+        onTriggered: panel.startHeldDrag()
     }
 
     onIsFilteringChanged: {
@@ -263,8 +295,15 @@ Rectangle {
     Timer {
         id: scrollTimer; interval: 50; repeat: false
         onTriggered: {
-            if (listView.currentIndex >= 0 && listView.currentIndex < listView.count)
-                listView.positionViewAtIndex(listView.currentIndex, ListView.Center)
+            if (listView.currentIndex < 0 || listView.currentIndex >= listView.count)
+                return;
+            // Only move the view when the playing row is outside it. Jumping
+            // to the centre of an already visible row rebuilt the list rows a
+            // second time right after opening, which cost video frames.
+            const top = listView.currentIndex * panel.rowHeight;
+            if (top < listView.contentY
+                    || top + panel.rowHeight > listView.contentY + listView.height)
+                listView.positionViewAtIndex(listView.currentIndex, ListView.Contain);
         }
     }
 
@@ -337,7 +376,7 @@ Rectangle {
                 anchors.fill: parent
                 clip: true; model: panel.viewModel
                 boundsBehavior: Flickable.StopAtBounds
-                focus: true; interactive: !panel.isDragging; cacheBuffer: 400
+                focus: true; interactive: !panel.isDragging; cacheBuffer: 120
                 // The panel scrolls to the current item explicitly (see
                 // scrollToCurrent). Letting the view follow currentIndex makes
                 // it jump to the playing row while a drag reorders the list.

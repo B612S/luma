@@ -134,26 +134,28 @@ Rectangle {
             // Reordering a filtered list makes no sense: its indices are not
             // playlist indices.
             if (mouse.button === Qt.LeftButton && playlistPanel
-                    && !playlistPanel.isFiltering) dragHoldTimer.start();
+                    && !playlistPanel.isFiltering)
+                playlistPanel.holdForDrag(itemIndex, lastSceneY);
         }
 
         onPositionChanged: (mouse) => {
             if (!playlistPanel) return;
             lastSceneY = mapToItem(null, mouse.x, mouse.y).y;
             if (!playlistPanel.isDragging) {
-                if (Math.abs(mouse.x - pressX) > 5 || Math.abs(mouse.y - pressY) > 5) dragHoldTimer.stop();
+                if (Math.abs(mouse.x - pressX) > 5 || Math.abs(mouse.y - pressY) > 5)
+                    playlistPanel.cancelDragHold();
                 return;
             }
             playlistPanel.updateDrag(lastSceneY);
         }
 
         onReleased: {
-            dragHoldTimer.stop();
+            if (playlistPanel) playlistPanel.cancelDragHold();
             if (playlistPanel && playlistPanel.isDragging) playlistPanel.endDrag();
         }
 
         onCanceled: {
-            dragHoldTimer.stop();
+            if (playlistPanel) playlistPanel.cancelDragHold();
             if (playlistPanel && playlistPanel.isDragging) playlistPanel.endDrag();
         }
     }
@@ -163,14 +165,5 @@ Rectangle {
     Component.onDestruction: {
         if (isBeingDragged && playlistPanel && playlistPanel.isDragging)
             playlistPanel.endDrag();
-    }
-
-    Timer {
-        id: dragHoldTimer; interval: 1000; repeat: false
-        onTriggered: {
-            if (playlistPanel && !playlistPanel.isFiltering) {
-                playlistPanel.beginDrag(itemIndex, dragArea.lastSceneY);
-            }
-        }
     }
 }
