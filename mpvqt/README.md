@@ -22,10 +22,10 @@ in the file.
 | File | Summary |
 | --- | --- |
 | `mpvabstractitem.cpp` | Uses an explicit `mpv_render_context *` instead of `auto` for the empty render context. |
-| `mpvcontroller.cpp` | Includes Luma's `mpv.conf`, forces mpv playback and embedding/performance properties, leaves the stream cache to `MpvItem::setSource()`, frees caller-created `mpv_node`s, handles unavailable properties safely, and exposes `setLogLevel()` for the optional `mpv.log`. |
+| `mpvcontroller.cpp` | Includes Luma's `mpv.conf`, forces mpv playback and embedding/performance properties, leaves the stream cache to `MpvItem::setSource()` and `video-sync` to the user, frees caller-created `mpv_node`s, handles unavailable properties safely, and exposes `setLogLevel()` for the optional `mpv.log`. |
 | `mpvcontroller.h` | Declares `setLogLevel()` for the optional `mpv.log`. |
-| `mpvrenderer.cpp` | Wayland-only display setup, casting/video-off guard, framebuffer clearing, clamped FBO sampling, no `ready()` emission, rendering the video only when mpv delivered a new frame (or an explicit repaint was requested) so UI animations reuse the framebuffer texture |
-| `mpvrenderer.h` | Removed the unused `m_isFramebufferReady` flag; added a required include and the frame-counter/force-render state. |
+| `mpvrenderer.cpp` | Wayland-only display setup, casting/video-off guard, framebuffer clearing, clamped FBO sampling, no `ready()` emission, rendering the video only when mpv delivered a new frame (or an explicit repaint was requested) so UI animations reuse the framebuffer texture, and reporting each presented frame to mpv with `mpv_render_context_report_swap()` |
+| `mpvrenderer.h` | Removed the unused `m_isFramebufferReady` flag; added required includes, the frame-counter/force-render state, and the swap-report connection state. |
 
 The detailed change lists are in the comment block at the top of each file.
 

@@ -22,6 +22,9 @@
  *     repaint was explicitly requested); unrelated scene repaints, such as UI
  *     animations, reuse the framebuffer texture instead of re-rendering the
  *     video at the compositor rate.
+ *   - Report every presented video frame to mpv
+ *     (mpv_render_context_report_swap) so display-synchronised playback modes
+ *     know when frames reach the screen instead of guessing and dropping them.
  */
 
 #include "mpvrenderer.h"
@@ -32,6 +35,7 @@
 #include <QOpenGLFramebufferObject>
 #include <QQuickWindow>
 #include <QOpenGLFunctions>
+#include <QThread>
 
 #include "mpvabstractitem.h"
 #include "mpvabstractitem_p.h"
@@ -58,6 +62,8 @@ MpvRenderer::MpvRenderer() {}
 
 MpvRenderer::~MpvRenderer()
 {
+    *m_alive = false;
+    QObject::disconnect(m_swapConnection);
     if (m_mpvResourceManager) m_mpvResourceManager->freeContext();
 }
 
@@ -136,6 +142,7 @@ void MpvRenderer::render()
     };
 
     mpv_render_context_render(m_mpvResourceManager->mpvRenderContext, params);
+    m_renderedInPaint = true;
 }
 
 QOpenGLFramebufferObject *MpvRenderer::createFramebufferObject(const QSize &size)
@@ -195,6 +202,27 @@ mpv_render_context *MpvRenderer::createMpvRenderContext()
     }
 
     mpv_render_context_set_update_callback(renderCtx, on_mpv_redraw, this);
+
+    // Tell mpv when a frame is really on screen. mpv's display-synchronised
+    // timing (video-sync=display-resample) measures the delay between render
+    // and presentation from these reports; without them it assumes the worst
+    // and drops frames it thinks were shown too late.
+    //
+    // The connection is made here because this runs on the render thread, and
+    // the report must be issued from the thread that owns the render context.
+    // frameSwapped is emitted on that thread with the threaded render loop.
+    if (QQuickWindow *window = m_mpvAItem ? m_mpvAItem->window() : nullptr) {
+        QThread *renderThread = QThread::currentThread();
+        m_swapConnection = QObject::connect(
+            window, &QQuickWindow::frameSwapped, window,
+            [this, alive = m_alive, renderThread]() {
+                if (!*alive || !m_renderedInPaint) return;
+                m_renderedInPaint = false;
+                if (QThread::currentThread() != renderThread) return;
+                if (m_mpvResourceManager && m_mpvResourceManager->mpvRenderContext)
+                    mpv_render_context_report_swap(m_mpvResourceManager->mpvRenderContext);
+            });
+    }
     return renderCtx;
 }
 

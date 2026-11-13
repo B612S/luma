@@ -6,6 +6,20 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Playback no longer drops frames when the display refresh rate is not a close
+  multiple of the video frame rate. 59.94 fps files on a 160 Hz output were the
+  worst case, and fullscreen made it obvious. Luma no longer replaces mpv's
+  default `video-sync=audio` with `display-resample` — the latter needs the
+  display rate to fit the video rate within its 5 % speed limit and drops
+  frames otherwise — and it now reports every presented frame back to mpv with
+  `mpv_render_context_report_swap()`, so mpv knows when frames actually reach
+  the screen instead of assuming they were late. On a 1920×1080 @ 159.95 Hz
+  VM a 1080p 59.94 fps file went from 350 dropped frames per 21 s in
+  fullscreen to 1.
+
+
 ## [1.0.0] - 2026-11-13
 
 First stable release. See [README.md](README.md) for the feature set.

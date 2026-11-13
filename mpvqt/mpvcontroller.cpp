@@ -15,7 +15,10 @@
  *   - Leave the stream cache to MpvItem::setSource(): 300 s / 256 MiB for
  *     finite network streams, 30 s / 64 MiB for live HLS, no demuxer cache
  *     for Icecast/Shoutcast radio, mpv's default for local files.
- *   - Set video-sync=display-resample when the current value is "audio".
+ *   - No longer force video-sync=display-resample over mpv's own default
+ *     ("audio"): display-resample needs the display refresh rate to be
+ *     a close multiple of the video frame rate, and drops frames when it
+ *     is not (seen with 59.94 fps files on a 160 Hz output).
  *   - Add setLogLevel() for the optional mpv.log.
  *   - Stop the event loop instead of spinning when mpv_wait_event() returns
  *     nullptr.
@@ -277,14 +280,11 @@ void MpvController::init()
     // HLS, and no demuxer cache for Icecast/Shoutcast radio. Forcing a cache
     // for local files made mpv keep hundreds of megabytes for no benefit.
 
-    // Smart settings (applied only if the user has not changed them)
-    char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");
-    if (sync_mode) {
-        if (QString::fromUtf8(sync_mode) == "audio") {
-            mpv_set_property_string(d_ptr->m_mpv, "video-sync", "display-resample");
-        }
-        mpv_free(sync_mode);
-    }
+    // video-sync is deliberately left alone: mpv's default ("audio") does not
+    // need the display refresh rate to be a multiple of the video frame
+    // rate, while video-sync=display-resample drops frames when it is not
+    // (for example 59.94 fps content on a 160 Hz output). mpv.conf can
+    // still select display-resample for setups where it fits.
 
     d_ptr->m_mpvHandleManager = std::make_shared<MpvHandleManager>(d_ptr->m_mpv);
 }

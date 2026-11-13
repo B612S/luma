@@ -13,6 +13,9 @@
  *     repaint was explicitly requested); unrelated scene repaints, such as UI
  *     animations, reuse the framebuffer texture instead of re-rendering the
  *     video at the compositor rate.
+ *   - Report every actually presented video frame to mpv
+ *     (mpv_render_context_report_swap) so display-synchronised playback modes
+ *     know when frames reach the screen instead of guessing and dropping them.
  */
 
 #ifndef MPVRENDERER_H
@@ -21,7 +24,9 @@
 #include <QtQuick/QQuickFramebufferObject>
 #include <QOpenGLFramebufferObject>
 #include <QElapsedTimer>
+#include <QMetaObject>
 #include <mpv/render_gl.h>
+#include <memory>
 #include "mpvabstractitem.h"
 
 class MpvAbstractItem;
@@ -49,6 +54,12 @@ private:
     bool m_forceRender = true;
     bool m_lastCasting = false;
     bool m_lastVideoDisabled = false;
+    // The player needs to know when a rendered frame is actually presented
+    // (mpv_render_context_report_swap). Without that feedback the display
+    // sampling code has to guess, and guesses make it drop frames.
+    QMetaObject::Connection m_swapConnection;
+    bool m_renderedInPaint = false;
+    std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
     QElapsedTimer m_frameTimer;
     using GenQueriesFn = void (*)(GLsizei, GLuint *);
     using BeginQueryFn = void (*)(GLenum, GLuint);
