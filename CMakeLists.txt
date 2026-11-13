@@ -44,7 +44,7 @@ find_package(PkgConfig REQUIRED)
 
 # libmpv 2.6 (mpv 0.42) is required: the libcurl network backend from that
 # release accepts SOCKS5/SOCKS5h proxies directly, without a local HTTP bridge.
-pkg_check_modules(MPV REQUIRED mpv>=2.6)
+pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv>=2.6)
 
 # TagLib — reading and writing audio file tags.
 pkg_check_modules(TAGLIB REQUIRED taglib)
@@ -227,7 +227,7 @@ target_link_libraries(luma PRIVATE
     Qt6::Concurrent
     Qt6::OpenGL
     Qt6::OpenGLWidgets
-    ${MPV_LIBRARIES}
+    PkgConfig::MPV
     ${TAGLIB_LIBRARIES}
     ${WAYLAND_CLIENT_LIBRARIES}
     ${XKB_LIBRARIES}

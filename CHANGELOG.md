@@ -384,6 +384,9 @@ First stable release. See [README.md](README.md) for the feature set.
 
 ### Fixed
 
+- The AppImage build links the libmpv it builds from source through pkg-config,
+  so the private prefix's library directory reaches the linker instead of being
+  assumed to be on the default search path.
 - Casts from remote sources no longer stall at every 20-second chunk boundary.
   The next chunk is encoded one step ahead of the receiver (but never more than
   one chunk ahead, so a long cast does not encode the whole file in the

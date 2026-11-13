@@ -131,7 +131,7 @@ target_link_libraries(tst_media_open PRIVATE
     Qt6::Concurrent
     Qt6::OpenGL
     Qt6::OpenGLWidgets
-    ${MPV_LIBRARIES}
+    PkgConfig::MPV
     ${TAGLIB_LIBRARIES}
 )
 target_compile_definitions(tst_media_open PRIVATE
