@@ -6,6 +6,10 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-13
+
+First stable release. See [README.md](README.md) for the feature set.
+
 ### Added
 
 - Chromecast can cast YouTube and other yt-dlp links. The cast uses the direct
@@ -838,7 +842,3 @@ All notable changes to Luma are documented here. The format is based on
 - The unofficial X11/xcb fallback. X11 is not supported and support is not planned.
 - The “Close” button in the keyboard shortcuts help; the help still hides as soon as `?`
   is released or the window loses focus.
-
-## [1.0.0]
-
-Initial versioned baseline. See [README.md](README.md) for the feature set.
