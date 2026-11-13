@@ -8,34 +8,36 @@ endif()
 
 # The tested part of the application: no mpv, GUI or QML.
 add_library(luma_testcore STATIC
-    ${CMAKE_SOURCE_DIR}/core/ConfigManager.cpp
-    ${CMAKE_SOURCE_DIR}/core/ConfigManager.hpp
-    ${CMAKE_SOURCE_DIR}/core/Logger.cpp
-    ${CMAKE_SOURCE_DIR}/core/Logger.hpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistModel.cpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistModel.hpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistFilterModel.cpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistFilterModel.hpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistManager.cpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistManager.hpp
-    ${CMAKE_SOURCE_DIR}/core/AsyncFileWriter.cpp
-    ${CMAKE_SOURCE_DIR}/core/AsyncFileWriter.hpp
-    ${CMAKE_SOURCE_DIR}/core/PlaybackPositions.cpp
-    ${CMAKE_SOURCE_DIR}/core/PlaybackPositions.hpp
-    ${CMAKE_SOURCE_DIR}/core/Equalizer.cpp
-    ${CMAKE_SOURCE_DIR}/core/Equalizer.hpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.cpp
-    ${CMAKE_SOURCE_DIR}/core/PlaylistSaver.hpp
-    ${CMAKE_SOURCE_DIR}/core/PluginManifest.cpp
-    ${CMAKE_SOURCE_DIR}/core/PluginManifest.hpp
-    ${CMAKE_SOURCE_DIR}/core/PluginLocalization.cpp
-    ${CMAKE_SOURCE_DIR}/core/PluginLocalization.hpp
-    ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.cpp
-    ${CMAKE_SOURCE_DIR}/core/RadioNameResolver.hpp
-    ${CMAKE_SOURCE_DIR}/core/TagScanner.cpp
-    ${CMAKE_SOURCE_DIR}/core/TagScanner.hpp
-    ${CMAKE_SOURCE_DIR}/core/ShortcutAction.cpp
-    ${CMAKE_SOURCE_DIR}/core/ShortcutAction.hpp
+    ${CMAKE_SOURCE_DIR}/core/app/ConfigManager.cpp
+    ${CMAKE_SOURCE_DIR}/core/app/ConfigManager.hpp
+    ${CMAKE_SOURCE_DIR}/core/app/Logger.cpp
+    ${CMAKE_SOURCE_DIR}/core/app/Logger.hpp
+    ${CMAKE_SOURCE_DIR}/core/cast/CastDeviceLock.cpp
+    ${CMAKE_SOURCE_DIR}/core/cast/CastDeviceLock.hpp
+    ${CMAKE_SOURCE_DIR}/core/media/Equalizer.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/Equalizer.hpp
+    ${CMAKE_SOURCE_DIR}/core/media/PlaybackPositions.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/PlaybackPositions.hpp
+    ${CMAKE_SOURCE_DIR}/core/media/RadioNameResolver.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/RadioNameResolver.hpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistFilterModel.cpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistFilterModel.hpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistManager.cpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistManager.hpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistModel.cpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistModel.hpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistSaver.cpp
+    ${CMAKE_SOURCE_DIR}/core/playlist/PlaylistSaver.hpp
+    ${CMAKE_SOURCE_DIR}/core/plugins/PluginLocalization.cpp
+    ${CMAKE_SOURCE_DIR}/core/plugins/PluginLocalization.hpp
+    ${CMAKE_SOURCE_DIR}/core/plugins/PluginManifest.cpp
+    ${CMAKE_SOURCE_DIR}/core/plugins/PluginManifest.hpp
+    ${CMAKE_SOURCE_DIR}/core/ui/ShortcutAction.cpp
+    ${CMAKE_SOURCE_DIR}/core/ui/ShortcutAction.hpp
+    ${CMAKE_SOURCE_DIR}/core/tags/TagScanner.cpp
+    ${CMAKE_SOURCE_DIR}/core/tags/TagScanner.hpp
+    ${CMAKE_SOURCE_DIR}/core/util/AsyncFileWriter.cpp
+    ${CMAKE_SOURCE_DIR}/core/util/AsyncFileWriter.hpp
 )
 
 target_include_directories(luma_testcore PUBLIC
@@ -58,6 +60,7 @@ target_link_libraries(luma_testcore PUBLIC
 )
 
 set(LUMA_TESTS
+    tst_castlock
     tst_shortcuts
     tst_playlistmodel
     tst_configmanager
@@ -95,19 +98,18 @@ endif()
 # the real YouTube URL; disable it with LUMA_TEST_NO_NETWORK for offline runs.
 add_executable(tst_media_open
     tst_media_open.cpp
-    ${CMAKE_SOURCE_DIR}/core/MediaManager.cpp
-    ${CMAKE_SOURCE_DIR}/core/YtDlpRuntime.cpp
-    ${CMAKE_SOURCE_DIR}/core/MediaInfoService.cpp
-    ${CMAKE_SOURCE_DIR}/core/MediaNotifier.cpp
-    ${CMAKE_SOURCE_DIR}/core/TrailingSilenceDetector.cpp
-    ${CMAKE_SOURCE_DIR}/core/MediaFileActions.cpp
-    ${CMAKE_SOURCE_DIR}/core/IcyMetadataReader.cpp
-    ${CMAKE_SOURCE_DIR}/core/TagManager.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/MediaFileActions.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/MediaInfoService.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/MediaManager.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/MediaNotifier.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/TrailingSilenceDetector.cpp
+    ${CMAKE_SOURCE_DIR}/core/media/YtDlpRuntime.cpp
+    ${CMAKE_SOURCE_DIR}/core/tags/TagManager.cpp
+    ${CMAKE_SOURCE_DIR}/mpvqt/FrameDecoder.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/MpvItem.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/mpvabstractitem.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/mpvcontroller.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/mpvrenderer.cpp
-    ${CMAKE_SOURCE_DIR}/mpvqt/FrameDecoder.cpp
 )
 target_include_directories(tst_media_open PRIVATE
     ${CMAKE_SOURCE_DIR}

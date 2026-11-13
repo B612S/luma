@@ -2,8 +2,8 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
-#include "PluginManifest.hpp"
-#include "PluginLocalization.hpp"
+#include "plugins/PluginManifest.hpp"
+#include "plugins/PluginLocalization.hpp"
 
 class TestPluginManifest : public QObject {
     Q_OBJECT

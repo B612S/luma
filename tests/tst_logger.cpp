@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 
-#include "Logger.hpp"
+#include "app/Logger.hpp"
 #include "TestEnvironment.h"
 
 // Luma's own log level filtering and the per-component (mpv, yt-dlp) files.

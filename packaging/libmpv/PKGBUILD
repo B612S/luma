@@ -1,0 +1,99 @@
+# Maintainer: soneriald
+pkgname=libmpv
+pkgver=0.42.0
+pkgrel=1
+pkgdesc='a free, open source, and cross-platform media player (libmpv library only)'
+arch=('x86_64')
+url='https://mpv.io/'
+license=('GPL-2.0-or-later AND LGPL-2.1-or-later')
+depends=('alsa-lib' 'curl' 'ffmpeg' 'glibc' 'glslang' 'jack' 'lcms2' 'libarchive'
+         'libass' 'libbluray' 'libcdio' 'libcdio-paranoia' 'libdisplay-info'
+         'libdovi' 'libdrm' 'libdvdnav' 'libdvdread' 'libegl' 'libgl' 'libglvnd'
+         'libjpeg-turbo' 'libpulse' 'libsixel' 'libunwind' 'libva' 'libvdpau'
+         'libx11' 'libxext' 'libxfixes' 'libxkbcommon' 'libxpresent' 'libxrandr'
+         'libxss' 'libxv' 'luajit' 'mesa' 'mujs' 'libpipewire' 'rubberband'
+         'openal' 'shaderc' 'sndio' 'uchardet' 'vapoursynth' 'vulkan-icd-loader'
+         'wayland' 'zimg' 'zlib')
+makedepends=('meson' 'ladspa' 'vulkan-headers' 'wayland-protocols' 'ffnvcodec-headers'
+             'glad' 'python-jinja' 'python-markupsafe' 'xxhash')
+optdepends=('yt-dlp: for video-sharing websites playback')
+provides=('mpv' 'libmpv.so=2-64')
+conflicts=('mpv' 'libmpv-git')
+# Arch's libplacebo is still 7.360.1, but mpv 0.42.0 requires >= 7.387.0.
+# Build a static copy and link it into libmpv until the repositories catch up.
+_libplacebo_ver=7.387.0
+source=("mpv-${pkgver}.tar.gz::https://github.com/mpv-player/mpv/archive/refs/tags/v${pkgver}.tar.gz"
+        "libplacebo-${_libplacebo_ver}.tar.gz::https://github.com/haasn/libplacebo/archive/refs/tags/v${_libplacebo_ver}.tar.gz"
+        "static-libplacebo.patch")
+sha256sums=('bcfebbfa2b65a6d88dc97ea18117831072373e38b5785a2afb874ed4df5070dd'
+            'f9e62d3774a9c4cfd198ec3abaa88294aaade2e31c04d5ab02bcf4abc98b1df5'
+            'dc05c83c62e655980fed0e03a7b5448e7c4d0301d5671ead058fcf3cbd749f2f')
+
+prepare() {
+  cd "mpv-${pkgver}"
+
+  # Link the bundled libplacebo statically so the package does not depend on
+  # a system libplacebo version that is not available yet.
+  patch -Np1 -i "${srcdir}/static-libplacebo.patch"
+}
+
+build() {
+  # Keep build paths out of the binaries (and out of the embedded meson
+  # configuration string).
+  export CFLAGS="${CFLAGS} -ffile-prefix-map=${srcdir}=/usr/src"
+  export CXXFLAGS="${CXXFLAGS} -ffile-prefix-map=${srcdir}=/usr/src"
+
+  # libplacebo: static build, only used as an input for libmpv.
+  meson setup "libplacebo-${_libplacebo_ver}/build" "libplacebo-${_libplacebo_ver}" \
+    --prefix="${srcdir}/libplacebo-prefix" \
+    --libdir=lib \
+    --buildtype=plain \
+    -Ddefault_library=static \
+    -Ddemos=false \
+    -Dtests=false \
+    -Dbench=false \
+    -Dfuzz=false \
+    -Dvulkan=enabled \
+    -Dopengl=enabled \
+    -Dglslang=enabled \
+    -Dshaderc=enabled \
+    -Dlcms=enabled \
+    -Ddovi=enabled \
+    -Dlibdovi=enabled \
+    -Dunwind=enabled \
+    -Dxxhash=enabled
+  meson compile -C "libplacebo-${_libplacebo_ver}/build"
+  meson install -C "libplacebo-${_libplacebo_ver}/build"
+
+  export PKG_CONFIG_PATH="${srcdir}/libplacebo-prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
+  arch-meson "mpv-${pkgver}" build \
+    --auto-features auto \
+    -Dgpl=true \
+    -Dcplayer=false \
+    -Dlibmpv=true \
+    -Dbuild-date=false \
+    -Dtests=false \
+    -Dfuzzers=false \
+    -Dgl-x11=enabled \
+    -Dcaca=disabled \
+    -Dcdda=enabled \
+    -Ddvbin=enabled \
+    -Ddvdnav=enabled \
+    -Dlibarchive=enabled \
+    -Dopenal=enabled \
+    -Dhtml-build=disabled \
+    -Dmanpage-build=disabled \
+    -Dpdf-build=disabled \
+    -Dc_link_args=-Wl,--exclude-libs,ALL
+
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+
+  # Remove entries that are only needed for static linking.
+  sed -i -e '/Requires\.private/d' -e '/Libs\.private/d' \
+    "${pkgdir}/usr/lib/pkgconfig/mpv.pc"
+}

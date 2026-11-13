@@ -43,6 +43,9 @@
 <message><source>osd_cast_started</source><translation>Трансляция на %1</translation></message>
 <message><source>osd_cast_stopped</source><translation>Трансляция остановлена</translation></message>
 <message><source>osd_cast_no_file</source><translation>Сначала откройте файл</translation></message>
+<message><source>osd_cast_failed</source><translation>Не удалось начать трансляцию</translation></message>
+<message><source>osd_cast_busy</source><translation>На %1 уже транслирует другое окно Luma</translation></message>
+<message><source>osd_cast_preparing</source><translation>Подготовка трансляции…</translation></message>
 </context>
 
 <context>
@@ -76,8 +79,7 @@
 
 <context>
 <name>Main</name>
-<message><source>cast_title</source><translation>Трансляция на ТВ</translation></message>
-<message><source>cast_controls_hint</source><translation>Управление — на нижней панели</translation></message>
+<message><source>cast_title</source><translation>Трансляция на %1</translation></message>
 </context>
 
 <context>
@@ -93,6 +95,7 @@
 <message><source>settings_default_volume</source><translation>Громкость при запуске</translation></message>
 <message><source>settings_notifications</source><translation>Показывать уведомления</translation></message>
 <message><source>settings_resume_playback</source><translation>Продолжать с последней позиции</translation></message>
+<message><source>settings_inhibit_sleep</source><translation>Не давать системе засыпать при воспроизведении</translation></message>
 <message><source>settings_single_instance</source><translation>Один экземпляр</translation></message>
 <message><source>settings_play_mode</source><translation>Режим воспроизведения плейлиста «По умолчанию»</translation></message>
 <message><source>settings_play_mode_hint</source><translation>Действует только для плейлиста «По умолчанию». У остальных плейлистов свой режим — его можно изменить в «Воспроизведение» → «Режим воспроизведения».</translation></message>
@@ -276,7 +279,7 @@
 <message><source>playlist_watch_add_folder</source><translation>Добавить отслеживаемую папку</translation></message>
 <message><source>dialog_add_url</source><translation>Добавить ссылку</translation></message>
 <message><source>playlist_default</source><translation>По умолчанию</translation></message>
-<message><source>playlist_files_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
+<message><source>playlist_files_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.ts *.m2ts *.mts *.mpg *.mpeg *.vob *.m4v *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
 </context>
 
 <context>
@@ -378,7 +381,7 @@
 <message><source>dialog_open_audio</source><translation>Загрузить аудио</translation></message>
 <message><source>dialog_audio_filter</source><translation>Аудиофайлы (*.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
 <message><source>track_default_name</source><translation>Дорожка %1</translation></message>
-<message><source>dialog_media_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
+<message><source>dialog_media_filter</source><translation>Медиафайлы (*.mp4 *.mkv *.avi *.webm *.mov *.ts *.m2ts *.mts *.mpg *.mpeg *.vob *.m4v *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;Все файлы (*)</translation></message>
 <message><source>stream_opening</source><translation>Открытие %1</translation></message>
 <message><source>download_failed_open</source><translation>Не удалось открыть ссылку</translation></message>
 <message><source>download_failed_start</source><translation>Не удалось запустить yt-dlp</translation></message>
@@ -501,6 +504,11 @@
 <message><source>unavailable_title</source><translation>Файл недоступен</translation></message>
 <message><source>unavailable_text</source><translation>Не удалось открыть файл: возможно, он был перемещён или удалён.</translation></message>
 <message><source>unavailable_ok</source><translation>ОК</translation></message>
+</context>
+
+<context>
+<name>SleepInhibitor</name>
+<message><source>Playing media</source><translation>Воспроизведение медиа</translation></message>
 </context>
 
 </TS>

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Luma: a Linux video player. C++17 + Qt 6.9/QML (Kirigami) GUI on top of libmpv, with
+Luma: a Linux video player. C++23 + Qt 6.9/QML (Kirigami) GUI on top of libmpv 2.6+ (mpv 0.42+), with
 FFmpeg for thumbnails and Chromecast casting. CMake is the only build system.
 
 **Platform: Wayland only.** Luma targets Wayland compositors; X11 is not supported and
@@ -28,7 +28,8 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   expected message). There is no lint/format config at the repo root.
   `tst_media_open` is a separate libmpv integration test: it runs
   headless with `vo=null`/`ao=null`, uses the fixtures in `tests/data/`, and is labelled
-  `integration;libmpv`. Its YouTube case uses the real `yt-dlp`, network and
+  `integration;libmpv`. `cast_stream_test` is a manual, opt-in LAN HLS test
+  (`-DLUMA_BUILD_CAST_TEST=ON`) and is deliberately not registered with ctest. Its YouTube case uses the real `yt-dlp`, network and
   `~/.config/luma/yt-dlp.conf` (including the proxy); it runs only when
   `LUMA_TEST_YOUTUBE_URL` is set, and can be disabled with `LUMA_TEST_NO_NETWORK=1`.
 - The binary is `build/bin/luma` (`CMAKE_RUNTIME_OUTPUT_DIRECTORY`), not `build/luma`.
@@ -37,7 +38,7 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   packaging change, a change to a bundled dependency, or when verifying an
   AppImage-only issue. Never rebuild it as routine verification: use the CMake build
   and tests above. Rebuild only after the user asks or agrees.
-- Dependencies come from `find_package(Qt6 ...)` plus `pkg_check_modules` for `mpv`,
+- Dependencies come from `find_package(Qt6 ...)` plus `pkg_check_modules` for `mpv` (2.6+),
   `libavformat`, `libavcodec`, `libswscale`, `libavutil`, `wayland-client` and
   `xkbcommon`. `Qt6::Concurrent` is used for background file/tag reads. Global
   shortcuts use the optional XDG Desktop Portal `GlobalShortcuts` interface
@@ -65,7 +66,8 @@ reported as done — do not test only the default one:
   that named-playlist/settings/equalizer changes are synchronized, the Default
   playlist stays per-window, and every window exposes its own MPRIS player
   (`org.mpris.MediaPlayer2.luma.i<pid>`, visible in `playerctl -l`); global shortcuts
-  must stay disabled.
+  must stay disabled. A TV may be cast to by only one window at a time: the other
+  window refuses with an OSD message, and a different TV still works.
 
 State which modes were exercised when reporting the result. Changes touching shared
 state (playlists, config/equalizer, MPRIS, single-instance plumbing) need the
@@ -92,8 +94,24 @@ settings/menu behavior.
   disabled, then `vo=libmpv` and `keep-open=no` are forced. The playback settings are
   stored in `mpv.conf` in mpv syntax (`hwdec=...`, `ao=...`); legacy `[playback]` keys
   from `luma.conf` are migrated there and removed.
-- Casting shells out to external `avahi-browse` (discovery) and `ffmpeg` (HLS
-  re-encode over LAN); it silently fails if they are not on `PATH`.
+- Casting shells out to external `avahi-browse` (discovery) and `ffmpeg` (an
+  on-demand VOD HLS server: a full playlist, two-second segments generated in 20-second RAM
+  chunks and evicted); it silently fails if they are not on `PATH`. No cast
+  media is written to disk. A per-device `QLockFile` lease in
+  `$XDG_RUNTIME_DIR/luma/` (cache-dir fallback) keeps two instances from casting
+  to the same TV; if the lease cannot be created at all, casting still proceeds.
+  A yt-dlp cast uses the direct video/audio URLs that `MediaManager` resolved
+  (`castSourceFor`), not the page URL. Network inputs go through the configured
+  proxy: HTTP(S) directly, SOCKS5 through the loopback `SocksHttpProxy` (FFmpeg
+  cannot speak SOCKS; the TV still gets plain HLS on the LAN). The receiver
+  starts once the first two-second segment is complete (the rest of the chunk
+  streams while it buffers); yt-dlp's duration is passed in to skip ffprobe.
+  The next HLS chunk is prefetched one chunk ahead of the receiver.
+- `KWinBridge` writes helper scripts under `~/.cache/luma/kwin/` and loads them
+  through KWin's D-Bus scripting interface. They are unloaded and deleted on a
+  normal exit; stale per-PID scripts from a crashed run are cleaned at startup.
+  It exposes `org.luma.KWin.p<PID>` while running so the watcher can report
+  PiP geometry, unregisters it on exit, and keeps that geometry in memory only.
 
 ## Architecture map
 
@@ -104,13 +122,16 @@ settings/menu behavior.
 - C++↔QML wiring is partly by `objectName`: the C++ side looks up `"mpv"`,
   `"playlistPanel"` and `"statsPanel"`. Renaming those QML objects silently breaks
   shortcuts and panel toggles.
-- `core/` — application logic: `MediaManager` (playback orchestration: open/next/prev,
-  tracks, stream URL resolution, file dialogs; delegates yt-dlp runtime to
-  `YtDlpRuntime`, file info/tags/bitrate to `MediaInfoService`, notifications to
-  `MediaNotifier`, trailing-silence detection to `TrailingSilenceDetector`, and file
-  actions to `MediaFileActions`), `OsdManager` (OSD state machine), `PlaylistManager` +
-  `PlaylistModel` (JSON playlists), `MprisManager` (MPRIS D-Bus), `Cast*` (Cast V2 over
-  TLS + local HLS server), `ConfigManager`, `Logger`.
+- `core/` — application logic, grouped by domain: `media/` (`MediaManager` —
+  playback orchestration: open/next/prev, tracks, stream URL resolution, file dialogs;
+  delegates yt-dlp runtime to `YtDlpRuntime`, file info/tags/bitrate to
+  `MediaInfoService`, notifications to `MediaNotifier`, trailing-silence detection to
+  `TrailingSilenceDetector`, and file actions to `MediaFileActions`), `playlist/`
+  (`PlaylistManager`, `PlaylistModel`, `PlaylistFilterModel`, `PlaylistSaver`),
+  `cast/` (Cast V2 over TLS + on-demand VOD HLS server), `plugins/` (host, runtime and window),
+  `platform/` (MPRIS, global shortcuts, KWin/PiP, sleep inhibition),
+  `ui/` (`OsdManager`, shortcut handling), `tags/` (tag scan/management), `app/`
+  (`ConfigManager`, `Logger`) and `util/` (`AsyncFileWriter`).
 - `mpvqt/` — vendored KDE mpvqt v1.2.1 (LGPL-2.1-only OR LGPL-3.0-only OR
   LicenseRef-KDE-Accepted-LGPL) with local modifications (config include, forced
   properties, casting guards, no X11 renderer path). Vendored files **may** be edited where
@@ -122,7 +143,7 @@ settings/menu behavior.
 - `qml/` — flat directory of QML components; no Qt Quick Designer or compiled UI forms.
 - Plugins are JavaScript integrations auto-loaded from
   `~/.local/share/luma/plugins/<id>/` and bundled read-only plugins from
-  `/usr/share/luma/plugins/<id>/`; the host lives in `core/Plugin*.{hpp,cpp}`
+  `/usr/share/luma/plugins/<id>/`; the host lives in `core/plugins/Plugin*.{hpp,cpp}`
   and `qml/Plugin*.qml`. **Settings → Plugins** can enable/disable and configure
   plugins, show descriptions/versions/permissions and add or delete user plugin
   folders; bundled plugins are not removable. New plugins start disabled; direct
@@ -131,9 +152,9 @@ settings/menu behavior.
   See [`docs/PLUGINS.md`](docs/PLUGINS.md).
 - Keyboard handling is `ShortcutHandler::eventFilter`. Bindings are loaded from
   `~/.config/luma/shortcuts.conf` (local and global) and matched by evdev keycode
-  (Wayland native scan code); `core/ShortcutAction.hpp` holds the action metadata
+  (Wayland native scan code); `core/ui/ShortcutAction.hpp` holds the action metadata
   and default table. Global shortcuts use `org.freedesktop.portal.GlobalShortcuts`
-  through `core/GlobalShortcuts.*`; the portal is optional and global bindings are
+  through `core/platform/GlobalShortcuts.*`; the portal is optional and global bindings are
   disabled when `ui/single_instance=false`. The `?` help key is deliberately hardcoded.
   The README has the default hotkey table.
 
@@ -150,7 +171,9 @@ settings/menu behavior.
   rules and rebuild rules are in `VERSIONING.md`. `luma.desktop`'s `Version`
   key is the desktop-entry spec version, not the app version.
 - Packaging: `PKGBUILD` (Arch, local) copies the working tree and installs
-  `luma.desktop` and `assets/luma.png`; `build-deb.sh` creates a best-effort
-  Debian package, and `.github/workflows/packages.yml` builds the `.deb`,
-  AppImage and Arch package on release/manual request. `.gitignore` covers `src/`, `pkg/`,
-  `AppDir/`, and package artifacts.
+  `luma.desktop` and `assets/luma.png`; the AppImage script builds and bundles
+  libmpv/libplacebo from pinned sources; the Arch package depends on
+  `libmpv>=0.42`, built from the temporary `packaging/libmpv` PKGBUILD until
+  the repositories catch up. `.github/workflows/packages.yml` builds the
+  AppImage and Arch package on release/manual request. `.gitignore` covers
+  `src/`, `pkg/`, `AppDir/`, and package artifacts.

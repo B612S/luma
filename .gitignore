@@ -1,12 +1,10 @@
 # Build artifacts
 build/
-build-deb/
 pkg/
 src/
 AppDir
 *.pkg.tar.zst
 *.pkg.tar.xz
-*.deb
 *.AppImage
 
 # CMake

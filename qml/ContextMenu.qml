@@ -16,6 +16,12 @@ LumaMenu {
     property bool hasVideo: false
     property bool hasAudio: false
     property bool playbackAvailable: false
+    // Set when this menu paused the local player just for cast preparation, so
+    // a refused or failed cast can resume playback instead of leaving it paused.
+    property bool pausedForCast: false
+    // The "Casting to ..." toast belongs to the start of a cast session;
+    // switching files while casting only updates the overlay.
+    property bool castToastShown: false
 
     signal toggleCropRequested()
     signal togglePlaylistRequested()
@@ -23,6 +29,35 @@ LumaMenu {
     signal fitWindowRequested()
     signal openUrlRequested()
     signal openEqualizerRequested()
+
+    Connections {
+        target: CastManager
+        function onCastStarted(deviceName) {
+            menu.pausedForCast = false
+            if (!menu.castToastShown) {
+                menu.castToastShown = true
+                Osd.showInfo(qsTr("osd_cast_started").arg(deviceName))
+            }
+        }
+        function onCastRequestedChanged() {
+            if (!CastManager.castRequested) menu.castToastShown = false
+        }
+        function onCastFailed(error) {
+            menu.restorePlaybackAfterRefusedCast()
+            console.warn("Cast failed:", error)
+            Osd.showInfo(qsTr("osd_cast_failed"))
+        }
+        function onCastBusy(deviceName) {
+            menu.restorePlaybackAfterRefusedCast()
+            Osd.showInfo(qsTr("osd_cast_busy").arg(deviceName))
+        }
+    }
+
+    function restorePlaybackAfterRefusedCast() {
+        if (!pausedForCast) return
+        pausedForCast = false
+        if (mpv && mpv.paused) mpv.paused = false
+    }
 
     readonly property bool hasChapters: mpv !== null && mpv.chapterList !== undefined
                                         && mpv.chapterList.length > 1
@@ -399,8 +434,15 @@ LumaMenu {
                             Osd.showInfo(qsTr("osd_cast_no_file"))
                             return
                         }
-                        CastManager.castTo(modelData.address, modelData.port, filePath)
-                        Osd.showInfo(qsTr("osd_cast_started").arg(modelData.name))
+                        // Stop decoding locally before the cast server starts
+                        // re-encoding the same 1080p file.
+                        if (mpv && !mpv.paused) {
+                            mpv.paused = true
+                            menu.pausedForCast = true
+                        }
+                        Osd.showInfo(qsTr("osd_cast_preparing"))
+                        CastManager.castTo(modelData.address, modelData.port, filePath,
+                                           "", modelData.name)
                         menu.close()
                     }
                 }

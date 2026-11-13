@@ -1,5 +1,4 @@
 #include <QApplication>
-#include <QThread>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
@@ -32,19 +31,19 @@
 #include <cstdlib>
 #include <memory>
 
-#include "core/ConfigManager.hpp"
-#include "core/Equalizer.hpp"
-#include "core/PlaylistManager.hpp"
-#include "core/MprisManager.hpp"
-#include "core/MediaManager.hpp"
-#include "core/PluginManager.hpp"
-#include "core/OsdManager.hpp"
-#include "core/KWinBridge.hpp"
-#include "core/ShortcutHandler.hpp"
-#include "core/Logger.hpp"
-#include "core/ThumbnailProvider.hpp"
-#include "core/CastManager.hpp"
-#include "core/SocksHttpProxy.hpp"
+#include "app/ConfigManager.hpp"
+#include "media/Equalizer.hpp"
+#include "playlist/PlaylistManager.hpp"
+#include "platform/MprisManager.hpp"
+#include "media/MediaManager.hpp"
+#include "plugins/PluginManager.hpp"
+#include "ui/OsdManager.hpp"
+#include "platform/KWinBridge.hpp"
+#include "platform/SleepInhibitor.hpp"
+#include "ui/ShortcutHandler.hpp"
+#include "app/Logger.hpp"
+#include "media/ThumbnailProvider.hpp"
+#include "cast/CastManager.hpp"
 #include "mpvqt/MpvItem.hpp"
 
 #ifndef LUMA_VERSION
@@ -400,28 +399,36 @@ int main(int argc, char *argv[]) {
 
     CastManager castManager;
     castManager.setEqualizer(&equalizer);
-
-    // Keeps the picture-in-picture window above the others on KDE Plasma.
-    KWinBridge kwinBridge;
-
-    // Local HTTP bridge for SOCKS proxies: mpv/FFmpeg cannot do SOCKS themselves.
-    // It runs on its own thread: otherwise copying the stream competed with
-    // video rendering on the GUI thread and network playback stuttered.
-    QThread streamProxyThread;
-    auto *streamProxy = new SocksHttpProxy;
-    streamProxy->moveToThread(&streamProxyThread);
-    streamProxyThread.setObjectName(QStringLiteral("SocksHttpProxy"));
-    streamProxyThread.start();
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {
-        if (!streamProxyThread.isRunning()) return;
-        QThread *mainThread = QThread::currentThread();
-        QMetaObject::invokeMethod(streamProxy, [streamProxy, mainThread]() {
-            streamProxy->stop();
-            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
-            streamProxy->moveToThread(mainThread);
-        }, Qt::BlockingQueuedConnection);
+    // Casting a yt-dlp stream must use the direct video/audio URLs, not the
+    // page URL stored in the playlist. The resolver reads what MediaManager
+    // already resolved for the playing media.
+    castManager.setSourceResolver([&media](const QString &filePath) {
+        return media.castSourceFor(filePath);
+    });
+    // The cast encoder uses the configured proxy for remote sources. The
+    // player's own playback path is not touched (libmpv handles SOCKS itself).
+    castManager.setProxyUrl(config.ytdlpProxy());
+    QObject::connect(&config, &ConfigManager::ytdlpSettingsChanged, &castManager,
+                     [&config, &castManager]() {
+        castManager.setProxyUrl(config.ytdlpProxy());
+    });
+    QObject::connect(&media, &MediaManager::fileChanged,
+                     &castManager, &CastManager::onMediaFileChanged);
+    QObject::connect(&castManager, &CastManager::castingChanged, &osd,
+                     [&osd, &castManager]() {
+        osd.setCastMode(castManager.casting());
+        osd.setCastPosition(castManager.remotePosition(), castManager.remoteDuration(),
+                            castManager.isRemotePlaying());
+    });
+    QObject::connect(&castManager, &CastManager::remoteStatusChanged, &osd,
+                     [&osd, &castManager]() {
+        osd.setCastPosition(castManager.remotePosition(), castManager.remoteDuration(),
+                            castManager.isRemotePlaying());
     });
 
+    // Keeps the picture-in-picture window above the others on KDE Plasma and
+    // restores/persists its geometry through KWin scripting.
+    KWinBridge kwinBridge;
 
     // The picture-in-picture window draws its own shadow inside the window.
     // The transparent margin around it keeps the composition free of the 1px
@@ -484,6 +491,26 @@ int main(int argc, char *argv[]) {
     if (mpv) {
         media.setMpv(mpv);
         osd.setMpv(mpv);
+
+        // ---- Sleep inhibition ----
+        // Keep the session awake while something is playing. Pausing or
+        // stopping releases the portal inhibition; the setting lets users opt
+        // out (for example while listening to music with the screen off).
+        auto *sleepInhibitor = new SleepInhibitor(&app);
+        auto updateSleepInhibitor = [&config, &media, mpv, sleepInhibitor]() {
+            sleepInhibitor->setActive(config.inhibitSleep() && media.hasMedia()
+                                      && !mpv->paused());
+        };
+        QObject::connect(mpv, &MpvItem::pausedChanged,
+                         sleepInhibitor, updateSleepInhibitor);
+        QObject::connect(mpv, &MpvItem::sourceChanged,
+                         sleepInhibitor, updateSleepInhibitor);
+        QObject::connect(&media, &MediaManager::hasMediaChanged,
+                         sleepInhibitor, updateSleepInhibitor);
+        QObject::connect(&config, &ConfigManager::inhibitSleepChanged,
+                         sleepInhibitor, updateSleepInhibitor);
+        updateSleepInhibitor();
+
         // Probe system and private yt-dlp installations once at startup, so the
         // first URL already prefers system packages and the UI has versions.
         media.refreshYtdlpRuntime();
@@ -546,41 +573,11 @@ int main(int argc, char *argv[]) {
         QObject::connect(&config, &ConfigManager::hwdecChanged, mpv, applyPlaybackSettings);
 
         // ---- Proxy for streams ----
-        // yt-dlp gets the proxy on its own, but mpv/FFmpeg cannot do SOCKS. For them
-        // we start a local HTTP bridge: mpv downloads the stream through it, so
-        // Range requests and seeking work as with plain HTTP.
-        auto applyStreamProxy = [&config, mpv, streamProxy, &streamProxyThread]() {
-            if (!streamProxyThread.isRunning())
-                return;
-            const QString proxy = config.ytdlpProxy();
-            const int sep = proxy.indexOf(QStringLiteral("://"));
-            const QString scheme = sep > 0 ? proxy.left(sep).toLower() : QString();
-
-            if (scheme == QLatin1String("socks5") || scheme == QLatin1String("socks5h")) {
-                QString localUrl;
-                QString error;
-                QMetaObject::invokeMethod(streamProxy, [streamProxy, proxy, &localUrl, &error]() {
-                    if (streamProxy->start(QUrl(proxy)))
-                        localUrl = streamProxy->localUrl();
-                    else
-                        error = streamProxy->lastError();
-                }, Qt::BlockingQueuedConnection);
-                if (!localUrl.isEmpty()) {
-                    mpv->setProperty("http-proxy", localUrl);
-                } else {
-                    qWarning() << "SocksHttpProxy:" << error;
-                    mpv->setProperty("http-proxy", QStringLiteral(""));
-                }
-            } else if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
-                // FFmpeg understands an HTTP proxy itself, no bridge needed.
-                QMetaObject::invokeMethod(streamProxy, [streamProxy]() { streamProxy->stop(); },
-                                          Qt::BlockingQueuedConnection);
-                mpv->setProperty("http-proxy", proxy);
-            } else {
-                QMetaObject::invokeMethod(streamProxy, [streamProxy]() { streamProxy->stop(); },
-                                          Qt::BlockingQueuedConnection);
-                mpv->setProperty("http-proxy", QStringLiteral(""));
-            }
+        // yt-dlp gets the proxy on its own. mpv 0.42's libcurl backend accepts
+        // the same URL directly, including SOCKS5/SOCKS5h, so Range requests and
+        // seeking work without a local proxy bridge.
+        auto applyStreamProxy = [&config, mpv]() {
+            mpv->setProperty("http-proxy", config.ytdlpProxy());
         };
         applyStreamProxy();
         QObject::connect(&config, &ConfigManager::ytdlpSettingsChanged, mpv, applyStreamProxy);
@@ -741,8 +738,8 @@ int main(int argc, char *argv[]) {
         if (mpv && config.rememberVolume())
             config.setVolume(static_cast<int>(mpv->volume()));
 
-        // Stop playback and the bridge before mpv/QML teardown, so
-        // network threads do not leave the process hanging with audio still playing.
+        // Stop playback before mpv/QML teardown, so network threads do not
+        // leave the process hanging with audio still playing.
         startExitWatchdog();
         if (mpv) {
             mpv->commandBlocking(QStringList() << QStringLiteral("stop"));
@@ -752,8 +749,5 @@ int main(int argc, char *argv[]) {
     });
 
     const int exitCode = app.exec();
-    streamProxyThread.quit();
-    streamProxyThread.wait();
-    delete streamProxy;
     return exitCode;
 }

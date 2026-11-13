@@ -19,13 +19,12 @@ concurrency:
 
 jobs:
   # Resolve the release tag and the per-format version strings once, so the
-  # three build jobs below can run in parallel.
+  # two build jobs below can run in parallel.
   meta:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
-      deb_version: ${{ steps.version.outputs.deb_version }}
       arch_version: ${{ steps.version.outputs.arch_version }}
     steps:
       - name: Resolve release version
@@ -40,14 +39,11 @@ jobs:
             exit 1
           fi
           VERSION="${TAG#v}"
-          # Debian orders a pre-release before the final version only with "~"
-          # (1.0.0~rc2 < 1.0.0); Arch pkgver cannot contain "-".
-          DEB_VERSION="${VERSION/-/\~}"
+          # Arch pkgver cannot contain "-".
           ARCH_VERSION="${VERSION/-/}"
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
-            echo "deb_version=$DEB_VERSION"
             echo "arch_version=$ARCH_VERSION"
           } >> "$GITHUB_OUTPUT"
 
@@ -62,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [arch, deb, appimage]
+        package: [arch, appimage]
 
     steps:
       - name: Install build dependencies
@@ -70,9 +66,17 @@ jobs:
           pacman -Syu --noconfirm --needed \
             base-devel git cmake ninja pkgconf curl \
             qt6-base qt6-declarative qt6-svg qt6-wayland qt6-tools \
-            wayland libxkbcommon mpv ffmpeg taglib kirigami \
+            wayland libxkbcommon ffmpeg taglib kirigami \
             hicolor-icon-theme plasma-integration qqc2-desktop-style \
-            avahi dpkg patchelf github-cli
+            avahi patchelf github-cli \
+            meson ladspa vulkan-headers wayland-protocols ffnvcodec-headers \
+            glad python-jinja python-markupsafe xxhash glslang shaderc \
+            libdovi libunwind libxpresent libxfixes libcdio libcdio-paranoia \
+            libdvdnav libdvdread libbluray libsixel libvdpau libxss libxv \
+            libx11 libxext libxrandr luajit vulkan-icd-loader \
+            openal rubberband uchardet vapoursynth zimg sndio libpipewire \
+            alsa-lib jack lcms2 libarchive libass libdisplay-info libdrm \
+            libegl libgl libglvnd libjpeg-turbo libpulse libva mesa mujs zlib
 
       - name: Check out repository
         run: |
@@ -82,26 +86,27 @@ jobs:
           git fetch --depth 1 origin "${GITHUB_REF}"
           git checkout --detach FETCH_HEAD
 
+      - name: Build temporary libmpv package
+        if: matrix.package == 'arch'
+        run: |
+          useradd -m -s /bin/bash builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su - builder -c "cd '$GITHUB_WORKSPACE/packaging/libmpv' && makepkg -f --nodeps"
+          pacman -U --noconfirm "$GITHUB_WORKSPACE"/packaging/libmpv/libmpv-*.pkg.tar.zst
+          rm -rf "$GITHUB_WORKSPACE/packaging/libmpv/src" \
+                 "$GITHUB_WORKSPACE/packaging/libmpv/pkg" \
+                 "$GITHUB_WORKSPACE"/packaging/libmpv/libmpv-*.pkg.tar.zst
+
       - name: Build Arch package
         if: matrix.package == 'arch'
         env:
           LUMA_PKGVER: ${{ needs.meta.outputs.arch_version }}
         run: |
-          useradd -m -s /bin/bash builder
-          chown -R builder:builder "$GITHUB_WORKSPACE"
           su - builder -c "cd '$GITHUB_WORKSPACE' && LUMA_PKGVER='$LUMA_PKGVER' makepkg -f --nodeps"
           PKG="$(find "$GITHUB_WORKSPACE" -maxdepth 1 -name 'luma-*.pkg.tar.zst' -print -quit)"
           test -n "$PKG"
           mkdir -p dist
           cp "$PKG" "dist/$(basename "$PKG")"
-
-      - name: Build Debian package
-        if: matrix.package == 'deb'
-        env:
-          DEB_VERSION: ${{ needs.meta.outputs.deb_version }}
-        run: |
-          chmod +x build-deb.sh
-          ./build-deb.sh
 
       - name: Build AppImage
         if: matrix.package == 'appimage'
@@ -120,7 +125,6 @@ jobs:
         run: |
           case "$PACKAGE" in
             arch) FILES="dist/*.pkg.tar.zst" ;;
-            deb) FILES="dist/*.deb" ;;
             appimage) FILES="dist/*.AppImage" ;;
           esac
           gh release upload "$TAG" $FILES --clobber

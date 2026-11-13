@@ -351,8 +351,9 @@ Item {
 
                 MouseArea {
                     anchors.fill: parent
+                    enabled: !CastManager.castRequested
                     onClicked: {
-                        if (!pip.mpv) return;
+                        if (!pip.mpv || CastManager.castRequested) return;
                         pip.mpv.muted = !pip.mpv.muted;
                     }
                 }
@@ -366,7 +367,8 @@ Item {
                 height: 18
                 padding: 0
                 from: 0; to: 100
-                onMoved: if (pip.mpv) pip.mpv.volume = value
+                enabled: !CastManager.castRequested
+                onMoved: if (pip.mpv && !CastManager.castRequested) pip.mpv.volume = value
 
                 background: Item {
                     x: 0
@@ -411,7 +413,11 @@ Item {
     MouseArea {
         id: hoverArea
         anchors.fill: parent
-        z: 100
+        // In the windowed card this layer must stay below the edge/corner
+        // resize handles: a full-window MouseArea with ArrowCursor used to sit
+        // on top and hide their resize cursors. In fullscreen it moves back on
+        // top so the controls can hide and the cursor can disappear.
+        z: pip.fullscreen ? 100 : -1
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
         cursorShape: pip.fullscreen && !pip.showControls ? Qt.BlankCursor : Qt.ArrowCursor

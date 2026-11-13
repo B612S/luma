@@ -43,6 +43,9 @@
 <message><source>osd_cast_started</source><translation>Casting to %1</translation></message>
 <message><source>osd_cast_stopped</source><translation>Casting stopped</translation></message>
 <message><source>osd_cast_no_file</source><translation>Open a file first</translation></message>
+<message><source>osd_cast_failed</source><translation>Cast failed</translation></message>
+<message><source>osd_cast_busy</source><translation>Another Luma window is already casting to %1</translation></message>
+<message><source>osd_cast_preparing</source><translation>Preparing cast…</translation></message>
 </context>
 
 <context>
@@ -76,8 +79,7 @@
 
 <context>
 <name>Main</name>
-<message><source>cast_title</source><translation>Casting to TV</translation></message>
-<message><source>cast_controls_hint</source><translation>Playback controls are available in the bottom panel</translation></message>
+<message><source>cast_title</source><translation>Casting to %1</translation></message>
 </context>
 
 <context>
@@ -93,6 +95,7 @@
 <message><source>settings_default_volume</source><translation>Startup volume</translation></message>
 <message><source>settings_notifications</source><translation>Show notifications</translation></message>
 <message><source>settings_resume_playback</source><translation>Continue from the last position</translation></message>
+<message><source>settings_inhibit_sleep</source><translation>Prevent sleep during playback</translation></message>
 <message><source>settings_single_instance</source><translation>Single instance</translation></message>
 <message><source>settings_play_mode</source><translation>Default playlist playback mode</translation></message>
 <message><source>settings_play_mode_hint</source><translation>Used only by the Default playlist. Named playlists keep their own mode (Playback → Playback mode).</translation></message>
@@ -276,7 +279,7 @@
 <message><source>playlist_watch_add_folder</source><translation>Add watched folder</translation></message>
 <message><source>dialog_add_url</source><translation>Add link</translation></message>
 <message><source>playlist_default</source><translation>Default</translation></message>
-<message><source>playlist_files_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
+<message><source>playlist_files_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.ts *.m2ts *.mts *.mpg *.mpeg *.vob *.m4v *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
 </context>
 
 <context>
@@ -378,7 +381,7 @@
 <message><source>dialog_open_audio</source><translation>Load audio file</translation></message>
 <message><source>dialog_audio_filter</source><translation>Audio files (*.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
 <message><source>track_default_name</source><translation>Track %1</translation></message>
-<message><source>dialog_media_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
+<message><source>dialog_media_filter</source><translation>Media files (*.mp4 *.mkv *.avi *.webm *.mov *.ts *.m2ts *.mts *.mpg *.mpeg *.vob *.m4v *.mp3 *.flac *.aac *.wav *.ogg *.m4a *.opus);;All files (*)</translation></message>
 <message><source>stream_opening</source><translation>Opening %1</translation></message>
 <message><source>download_failed_open</source><translation>Could not open the link</translation></message>
 <message><source>download_failed_start</source><translation>Could not start yt-dlp</translation></message>
@@ -501,6 +504,11 @@
 <message><source>unavailable_title</source><translation>File unavailable</translation></message>
 <message><source>unavailable_text</source><translation>The file could not be opened because it is missing or has been moved.</translation></message>
 <message><source>unavailable_ok</source><translation>OK</translation></message>
+</context>
+
+<context>
+<name>SleepInhibitor</name>
+<message><source>Playing media</source><translation>Playing media</translation></message>
 </context>
 
 </TS>

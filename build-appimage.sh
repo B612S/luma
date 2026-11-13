@@ -7,10 +7,12 @@
 # none is planned. Build on the oldest distribution you intend to support: the
 # AppImage cannot bundle the build host's glibc.
 #
-# Requirements: cmake, ninja (or make), a C++17 compiler, Qt 6.9 development
-# packages, qmake6, curl, ffmpeg, avahi-browse, and the runtime QML modules used
-# by the app (Kirigami, qqc2-desktop-style). Network access is needed the first
-# time to download linuxdeploy/appimagetool.
+# Requirements: cmake (3.20+), ninja, meson, a C++23 compiler (GCC 13+ /
+# Clang 17+), Qt 6.9 development
+# packages, qmake6, curl, ffmpeg, avahi-browse, the libplacebo/mpv build
+# dependencies (including the Python "glad" module), and the runtime QML modules
+# used by the app (Kirigami, qqc2-desktop-style). Network access is needed the
+# first time to download linuxdeploy/appimagetool and the libmpv sources.
 set -Eeuo pipefail
 trap 'status=$?; echo "build-appimage.sh: failed at line $LINENO (exit $status)" >&2' ERR
 
@@ -30,12 +32,16 @@ if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
     exit 1
 fi
 
-for tool in cmake curl qmake6 ffmpeg avahi-browse; do
+for tool in cmake curl qmake6 ffmpeg avahi-browse meson ninja pkg-config python3; do
     command -v "$tool" >/dev/null 2>&1 || {
         echo "Missing required tool: $tool" >&2
         exit 1
     }
 done
+python3 -c 'import glad' >/dev/null 2>&1 || {
+    echo "The Python 'glad' module is required to build libplacebo (Arch: pacman -S glad)" >&2
+    exit 1
+}
 CMAKE_GENERATOR=""
 if command -v ninja >/dev/null 2>&1; then
     CMAKE_GENERATOR="-G Ninja"
@@ -82,6 +88,24 @@ if [[ ! -x "$RUNTIME" ]]; then
     chmod +x "$RUNTIME"
 fi
 
+# Build the libmpv/libplacebo pair bundled into the image. Distributions can
+# lag behind the mpv release Luma requires, so build both from pinned sources.
+if [[ "$BUILD_DIR" = /* ]]; then
+    LIBMPV_PREFIX="${LIBMPV_PREFIX:-$BUILD_DIR/libmpv-prefix}"
+    LIBMPV_BUILD_DIR="${LIBMPV_BUILD_DIR:-$BUILD_DIR/libmpv-build}"
+else
+    LIBMPV_PREFIX="${LIBMPV_PREFIX:-$SCRIPT_DIR/$BUILD_DIR/libmpv-prefix}"
+    LIBMPV_BUILD_DIR="${LIBMPV_BUILD_DIR:-$SCRIPT_DIR/$BUILD_DIR/libmpv-build}"
+fi
+LIBMPV_ARGS=(--prefix "$LIBMPV_PREFIX" --build-dir "$LIBMPV_BUILD_DIR" --jobs "$JOBS")
+if [[ -n "${LIBMPV_SOURCES:-}" ]]; then
+    LIBMPV_ARGS+=(--sources "$LIBMPV_SOURCES")
+fi
+"$SCRIPT_DIR/packaging/libmpv/build-libmpv.sh" "${LIBMPV_ARGS[@]}"
+export PKG_CONFIG_PATH="$LIBMPV_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export CMAKE_PREFIX_PATH="$LIBMPV_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+export LD_LIBRARY_PATH="$LIBMPV_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 # Run AppImage tools without FUSE (useful in containers/CI).
 export APPIMAGE_EXTRACT_AND_RUN=1
 # The linuxdeploy bundle ships an older strip that cannot handle .relr.dyn.
@@ -99,6 +123,10 @@ cmake --build "$BUILD_DIR" -j "$JOBS"
 
 rm -rf "$APPDIR"
 DESTDIR="$SCRIPT_DIR/$APPDIR" cmake --install "$BUILD_DIR"
+
+mkdir -p "$APPDIR/usr/lib"
+cp -a "$LIBMPV_PREFIX/lib/libmpv.so"* "$APPDIR/usr/lib/"
+cp -a "$LIBMPV_PREFIX/lib/libplacebo.so"* "$APPDIR/usr/lib/"
 
 # Luma is Wayland-only, so the Wayland platform plugin is added explicitly.
 # (The Qt plugin may still deploy xcb by default; that is not a supported
@@ -249,7 +277,13 @@ for dir in wayland-graphics-integration-client wayland-decoration-client wayland
     fi
 done
 
-# Arch's libmpv links to libmujs with an absolute DT_NEEDED path
+# Make sure the bundled libs are the freshly built ones, not the build host's
+# copies that linuxdeploy may have picked up.
+mkdir -p "$APPDIR/usr/lib"
+cp -a "$LIBMPV_PREFIX/lib/libmpv.so"* "$APPDIR/usr/lib/"
+cp -a "$LIBMPV_PREFIX/lib/libplacebo.so"* "$APPDIR/usr/lib/"
+
+# libmpv can link to libmujs with an absolute DT_NEEDED path
 # (/usr/lib/libmujs.so). Absolute paths bypass the AppImage's bundled
 # libraries, so rewrite every absolute dependency to a plain library name.
 PATCHELF="$(command -v patchelf || true)"

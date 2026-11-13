@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" LUMA_VERSION LIMIT_COUNT 1)
 string(STRIP "${LUMA_VERSION}" LUMA_VERSION)
@@ -26,8 +26,9 @@ if(NOT CMAKE_INSTALL_DATADIR)
     set(CMAKE_INSTALL_DATADIR "share")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
@@ -41,7 +42,9 @@ find_package(Qt6 6.9 REQUIRED COMPONENTS
 )
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(MPV REQUIRED mpv)
+# libmpv 2.6 (mpv 0.42) is required: the libcurl network backend from that
+# release accepts SOCKS5/SOCKS5h proxies directly, without a local HTTP bridge.
+pkg_check_modules(MPV REQUIRED mpv>=2.6)
 
 # TagLib — reading and writing audio file tags.
 pkg_check_modules(TAGLIB REQUIRED taglib)
@@ -60,60 +63,65 @@ qt_standard_project_setup(REQUIRES 6.9)
 
 qt_add_executable(luma
     main.cpp
-    core/ConfigManager.cpp
-    core/GlobalShortcuts.cpp
-    core/MprisManager.cpp
-    core/Logger.cpp
-    core/PlaylistModel.cpp
-    core/PlaylistFilterModel.cpp
-    core/PlaylistManager.cpp
-    core/AsyncFileWriter.cpp
-    core/AsyncFileWriter.hpp
-    core/PlaybackPositions.cpp
-    core/PlaybackPositions.hpp
-    core/Equalizer.cpp
-    core/Equalizer.hpp
-    core/PlaylistSaver.cpp
-    core/PlaylistSaver.hpp
-    core/MediaManager.cpp
-    core/YtDlpRuntime.cpp
-    core/MediaInfoService.cpp
-    core/MediaNotifier.cpp
-    core/TrailingSilenceDetector.cpp
-    core/MediaFileActions.cpp
-    core/PluginManifest.cpp
-    core/PluginLocalization.cpp
-    core/PluginApi.cpp
-    core/PluginRuntime.cpp
-    core/PluginManager.cpp
-    core/PluginWindow.cpp
-    core/IcyMetadataReader.cpp
-    core/IcyMetadataReader.hpp
-    core/RadioNameResolver.cpp
-    core/RadioNameResolver.hpp
-    core/OsdManager.cpp
-    core/KWinBridge.cpp
-    core/TagManager.cpp
-    core/TagScanner.cpp
-    core/ShortcutAction.cpp
-    core/ShortcutHandler.cpp
-    core/ThumbnailProvider.hpp
-    core/CastDiscovery.cpp
-    core/CastStreamServer.cpp
-    core/CastV2Client.cpp
-    core/CastManager.cpp
-    core/SocksHttpProxy.cpp
-    core/SocksHttpProxy.hpp
+    core/app/ConfigManager.cpp
+    core/app/Logger.cpp
+    core/media/Equalizer.cpp
+    core/media/Equalizer.hpp
+    core/media/MediaFileActions.cpp
+    core/media/MediaInfoService.cpp
+    core/media/MediaManager.cpp
+    core/media/MediaNotifier.cpp
+    core/media/PlaybackPositions.cpp
+    core/media/PlaybackPositions.hpp
+    core/media/RadioNameResolver.cpp
+    core/media/RadioNameResolver.hpp
+    core/media/ThumbnailProvider.hpp
+    core/media/TrailingSilenceDetector.cpp
+    core/media/YtDlpRuntime.cpp
+    core/playlist/PlaylistFilterModel.cpp
+    core/playlist/PlaylistManager.cpp
+    core/playlist/PlaylistModel.cpp
+    core/playlist/PlaylistSaver.cpp
+    core/playlist/PlaylistSaver.hpp
+    core/cast/CastDiscovery.cpp
+    core/cast/CastDeviceLock.cpp
+    core/cast/CastManager.cpp
+    core/cast/CastMemoryHlsServer.cpp
+    core/cast/CastMemoryHlsServer.hpp
+    core/cast/CastV2Client.cpp
+    core/cast/SocksHttpProxy.cpp
+    core/platform/GlobalShortcuts.cpp
+    core/platform/KWinBridge.cpp
+    core/platform/MprisManager.cpp
+    core/platform/SleepInhibitor.cpp
+    core/plugins/PluginApi.cpp
+    core/plugins/PluginLocalization.cpp
+    core/plugins/PluginManager.cpp
+    core/plugins/PluginManifest.cpp
+    core/plugins/PluginRuntime.cpp
+    core/plugins/PluginWindow.cpp
+    core/ui/OsdManager.cpp
+    core/ui/ShortcutAction.cpp
+    core/ui/ShortcutHandler.cpp
+    core/tags/TagManager.cpp
+    core/tags/TagScanner.cpp
+    core/util/AsyncFileWriter.cpp
+    core/util/AsyncFileWriter.hpp
+    mpvqt/FrameDecoder.cpp
+    mpvqt/MpvItem.cpp
     mpvqt/mpvabstractitem.cpp
     mpvqt/mpvcontroller.cpp
     mpvqt/mpvrenderer.cpp
-    mpvqt/MpvItem.cpp
-    mpvqt/FrameDecoder.cpp
 )
 
 qt_add_qml_module(luma
     URI luma
     VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+    # Kirigami and qqc2-desktop-style are runtime-only QML imports, not build
+    # dependencies. Without this, qmlimportscanner tries to link their static
+    # plugin targets (KF6Kirigamiplugin, ...), which do not exist here, and
+    # emits a warning for every Kirigami submodule.
+    NO_IMPORT_SCAN
     QML_FILES
         qml/Main.qml
         qml/ControlBar.qml
@@ -144,27 +152,27 @@ qt_add_qml_module(luma
         qml/FileUnavailableDialog.qml
         qml/FocusScroller.qml
     SOURCES
-        mpvqt/MpvItem.hpp
+        core/app/ConfigManager.hpp
+        core/app/Logger.hpp
+        core/media/Equalizer.hpp
+        core/media/MediaManager.hpp
+        core/media/ThumbnailProvider.hpp
+        core/playlist/PlaylistFilterModel.hpp
+        core/playlist/PlaylistManager.hpp
+        core/playlist/PlaylistModel.hpp
+        core/cast/CastDiscovery.hpp
+        core/cast/CastManager.hpp
+        core/cast/CastV2Client.hpp
+        core/platform/GlobalShortcuts.hpp
+        core/platform/KWinBridge.hpp
+        core/platform/MprisManager.hpp
+        core/platform/SleepInhibitor.hpp
+        core/ui/OsdManager.hpp
+        core/ui/ShortcutAction.hpp
+        core/ui/ShortcutHandler.hpp
+        core/tags/TagManager.hpp
         mpvqt/FrameDecoder.hpp
-        core/ConfigManager.hpp
-        core/GlobalShortcuts.hpp
-        core/MprisManager.hpp
-        core/ShortcutAction.hpp
-        core/ShortcutHandler.hpp
-        core/PlaylistModel.hpp
-        core/PlaylistFilterModel.hpp
-        core/PlaylistManager.hpp
-        core/Equalizer.hpp
-        core/MediaManager.hpp
-        core/OsdManager.hpp
-        core/KWinBridge.hpp
-        core/TagManager.hpp
-        core/Logger.hpp
-        core/ThumbnailProvider.hpp
-        core/CastDiscovery.hpp
-        core/CastStreamServer.hpp
-        core/CastV2Client.hpp
-        core/CastManager.hpp
+        mpvqt/MpvItem.hpp
 )
 
 qt_add_resources(luma "assets"
@@ -193,6 +201,9 @@ install(DIRECTORY plugins/ DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/plugins)
 
 target_include_directories(luma PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core
+    # The generated QML type registration includes QML_ELEMENT headers by
+    # basename, so the directory with PlaylistFilterModel.hpp must be visible.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/playlist
     ${CMAKE_CURRENT_SOURCE_DIR}/mpvqt
     ${MPV_INCLUDE_DIRS}
     ${TAGLIB_INCLUDE_DIRS}
@@ -245,5 +256,38 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/luma/ DESTINATION ${CMAKE_INSTALL_
 option(LUMA_BUILD_TESTS "Build autotests (Qt Test)" OFF)
 if (LUMA_BUILD_TESTS)
     enable_testing()
-    add_subdirectory(tests)
+
+add_subdirectory(tests)
+endif()
+
+# ---- Manual cast streaming test (not part of ctest) ----
+option(LUMA_BUILD_CAST_TEST "Build the manual Chromecast/HLS streaming test" OFF)
+if (LUMA_BUILD_CAST_TEST)
+    add_executable(cast_stream_test
+        tests/cast_stream_test.cpp
+        core/cast/CastMemoryHlsServer.cpp
+        core/cast/CastMemoryHlsServer.hpp
+        core/cast/SocksHttpProxy.cpp
+    )
+    target_include_directories(cast_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/core)
+    target_link_libraries(cast_stream_test PRIVATE Qt6::Core Qt6::Network Qt6::Concurrent)
+
+    # Full CastManager/TV smoke test: actually connects to a Chromecast and
+    # performs native HLS seeking. Manual only.
+    add_executable(cast_tv_smoke
+        tests/cast_tv_smoke.cpp
+        core/cast/CastDeviceLock.cpp
+        core/cast/CastManager.cpp
+        core/cast/CastDiscovery.cpp
+        core/cast/CastV2Client.cpp
+        core/cast/CastMemoryHlsServer.cpp
+        core/cast/SocksHttpProxy.cpp
+        core/media/Equalizer.cpp
+        core/app/ConfigManager.cpp)
+    target_include_directories(cast_tv_smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/mpvqt)
+    target_link_libraries(cast_tv_smoke PRIVATE Qt6::Core Qt6::Network Qt6::Concurrent)
+    set_target_properties(cast_tv_smoke PROPERTIES AUTOMOC ON)
 endif()

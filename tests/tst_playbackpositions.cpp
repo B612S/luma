@@ -5,7 +5,7 @@
 #include <QtTest>
 #include <QTemporaryDir>
 
-#include "PlaybackPositions.hpp"
+#include "media/PlaybackPositions.hpp"
 #include "TestEnvironment.h"
 
 class TestPlaybackPositions : public QObject

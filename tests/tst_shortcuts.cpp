@@ -3,7 +3,7 @@
 #include <QPair>
 #include <QSet>
 
-#include "ShortcutAction.hpp"
+#include "ui/ShortcutAction.hpp"
 #include "TestEnvironment.h"
 
 // Checks the hotkey table: bindings, uniqueness, matching

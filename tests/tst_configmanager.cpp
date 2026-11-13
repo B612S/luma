@@ -6,7 +6,7 @@
 #include <QStandardPaths>
 #include <QTextStream>
 
-#include "ConfigManager.hpp"
+#include "app/ConfigManager.hpp"
 #include "TestEnvironment.h"
 
 // Settings: default values, control bar mode,
@@ -22,6 +22,7 @@ private slots:
     void playbackSettings();
     void playbackSettingsPersist();
     void controlBarModePersists();
+    void inhibitSleepToggle();
     void unsupportedLanguageFallsBack();
     void languageResolution();
     void musicCrossfade();
@@ -54,6 +55,7 @@ void TestConfigManager::defaults()
     QCOMPARE(config.language(), QStringLiteral("auto"));
     QCOMPARE(config.playlistMode(), QStringLiteral("sequential"));
     QVERIFY(config.notifications());
+    QVERIFY(config.inhibitSleep());
     QVERIFY(config.showPanelsFullscreen());
     QCOMPARE(config.controlBarMode(), QStringLiteral("float"));
     QCOMPARE(config.ytdlpQuality(), QStringLiteral("best"));
@@ -198,6 +200,31 @@ void TestConfigManager::controlBarModePersists()
     QCOMPARE(config2.controlBarMode(), QStringLiteral("float"));
 }
 
+void TestConfigManager::inhibitSleepToggle()
+{
+    {
+        ConfigManager config;
+        QVERIFY(config.inhibitSleep());
+
+        QSignalSpy changed(&config, &ConfigManager::inhibitSleepChanged);
+        config.setInhibitSleep(false);
+        QCOMPARE(changed.count(), 1);
+        QVERIFY(!config.inhibitSleep());
+
+        // Setting the same value must not emit another change.
+        config.setInhibitSleep(false);
+        QCOMPARE(changed.count(), 1);
+    }
+
+    {
+        QSettings settings(lumaDir() + "/luma.conf", QSettings::IniFormat);
+        QCOMPARE(settings.value("ui/inhibit_sleep").toBool(), false);
+    }
+
+    ConfigManager config2;
+    QVERIFY(!config2.inhibitSleep());
+}
+
 void TestConfigManager::unsupportedLanguageFallsBack()
 {
     ConfigManager config;
@@ -257,6 +284,7 @@ void TestConfigManager::reloadsExternalChanges()
     ConfigManager config;
     QVERIFY(config.singleInstance());
     QVERIFY(config.notifications());
+    QVERIFY(config.inhibitSleep());
     QCOMPARE(config.playlistMode(), QStringLiteral("sequential"));
     QCOMPARE(config.controlBarMode(), QStringLiteral("float"));
     QCOMPARE(config.hwdec(), QStringLiteral("auto"));
@@ -267,6 +295,7 @@ void TestConfigManager::reloadsExternalChanges()
         QSettings other(lumaDir() + "/luma.conf", QSettings::IniFormat);
         other.setValue("ui/single_instance", false);
         other.setValue("ui/notifications", false);
+        other.setValue("ui/inhibit_sleep", false);
         other.setValue("playlist/mode", "repeat");
         other.setValue("ui/control_bar_mode", "hidden");
         other.sync();
@@ -274,6 +303,7 @@ void TestConfigManager::reloadsExternalChanges()
 
     QTRY_VERIFY_WITH_TIMEOUT(!config.singleInstance(), 5000);
     QVERIFY(!config.notifications());
+    QVERIFY(!config.inhibitSleep());
     QCOMPARE(config.playlistMode(), QStringLiteral("repeat"));
     QCOMPARE(config.controlBarMode(), QStringLiteral("hidden"));
 

@@ -8,6 +8,15 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Added
 
+- Chromecast can cast YouTube and other yt-dlp links. The cast uses the direct
+  video/audio URLs that the player already resolved (the playlist keeps the
+  original page link), fetches them through the configured proxy — a SOCKS5
+  proxy via a loopback HTTP bridge, because the cast encoder (FFmpeg) cannot
+  use SOCKS itself — and encodes both inputs into HLS. The TV still receives
+  plain HLS from the LAN and never sees the proxy.
+- Sleep inhibition: while media is playing, Luma asks the XDG Desktop Portal to
+  block the screensaver and system suspend, and releases the inhibition on pause,
+  stop or exit. **Settings → General** can turn the behaviour off.
 - The About dialog shows the git revision next to the version, for example
   `1.0.0-c52a683`. The hash is omitted for source tarballs.
 - A plugin information button in Settings opens a compact, plugin-localized
@@ -42,10 +51,10 @@ All notable changes to Luma are documented here. The format is based on
   Smooth Motion (display-refresh/fixed-FPS playback) and HDR Output.
 - Context menus hide track and video-only entries when they do not apply
   instead of showing disabled rows.
-- GitHub Actions builds the Debian package, AppImage and Arch package in
-  separate parallel jobs on published releases or on manual request. The jobs
-  use pre-release-aware versions (`1.0.0~rc2` for Debian, `1.0.0rc2` for Arch),
-  and local `makepkg` remains available for on-demand rebuilds.
+- GitHub Actions builds the AppImage and Arch package in separate parallel
+  jobs on published releases or on manual request. The jobs use
+  pre-release-aware versions (`1.0.0rc2` for Arch), and local `makepkg` remains
+  available for on-demand rebuilds.
 - New plugins start disabled. Direct `mpv` access (`mpv:raw`) and external
   programs (`process`, through `luma.process.run(program, ...)`) use separate
   warning dialogs and separate approvals; both are requested before the plugin
@@ -186,6 +195,36 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- A cast from a yt-dlp source starts as soon as the first two-second segment is
+  encoded instead of waiting for the whole 20-second chunk: the receiver loads
+  the playlist while the rest of the chunk is still being produced and fills
+  its buffer from the arriving segments. The cast also skips the network
+  ffprobe when yt-dlp already reported the duration, and a source that cannot
+  be read fails the cast immediately instead of after the preparation timeout.
+- The cast overlay title shows the TV name (“Casting to Smart TV Pro”) instead
+  of the generic “Casting to TV”. The “Casting to …” toast is shown once when a
+  cast session starts; switching files while casting only updates the overlay.
+- In multi-instance mode, two windows can no longer cast to the same TV at the
+  same time. The window that tries to start a cast while another one already
+  owns that TV is refused (with an OSD message) and the running cast stays
+  untouched. The TV is released as soon as casting stops, the owning window
+  exits, or its process dies; a lease left by a crashed instance is taken over
+  automatically. Different TVs can still be cast to from different windows.
+- The project now builds as C++23 (`CMAKE_CXX_STANDARD 23`, no GNU extensions);
+  CMake 3.20+ and a C++23 compiler (GCC 13+ / Clang 17+) are required. The Cast
+  V2 framing uses `std::byteswap`, ffprobe result parsing uses `std::expected`,
+  and temporary chapter/HLS directories are owned by `std::unique_ptr`.
+- Radio metadata now comes from mpv 0.42's libcurl ICY support instead of a
+  second HTTP connection; `IcyMetadataReader` was removed. Live detection also
+  recognizes Icecast mounts that do not end in `.mp3` (for example SomaFM's
+  `...-mp3`), so those streams show `LIVE` and no seek bar. Luma also disables
+  mpv's own ytdl_hook for URLs it resolved itself, and Icecast/Shoutcast radio
+  no longer uses a demuxer cache; both were necessary for servers such as
+  TorontoCast to deliver `icy-title` updates to the playlist and notifications.
+- SOCKS proxies are passed directly to mpv's libcurl backend instead of a
+  local HTTP bridge, so seeking and Range requests still work but Luma no
+  longer runs a proxy server of its own. Building now requires libmpv 2.6+
+  (mpv 0.42+), which provides that backend.
 - HDR Output no longer duplicates the plugin enable switch in its own
   settings: the plugin applies whenever it is enabled in Settings → Plugins,
   and only the tone-mapping choice remains configurable.
@@ -337,6 +376,89 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Casts from remote sources no longer stall at every 20-second chunk boundary.
+  The next chunk is encoded one step ahead of the receiver (but never more than
+  one chunk ahead, so a long cast does not encode the whole file in the
+  background), remote sources use four encoder threads, and the preparation
+  timeout for network sources is 30 seconds (local files keep the short 15 s).
+- Starting a cast no longer freezes the UI for a few seconds. The Cast
+  connection now bypasses the system proxy: Qt otherwise resolves it
+  synchronously on the GUI thread, and with a WPAD/PAC auto-detected proxy
+  (KDE `ProxyType=3` in `kioslaverc`) that lookup blocks until the discovery
+  times out before the Chromecast socket even connects.
+- Chromecast now receives a complete VOD HLS playlist instead of a live/event
+  playlist. Native receiver seeking works; segment files are generated on demand
+  in 20-second chunks in RAM with two-second segments, and old chunks are evicted, so no multi-gigabyte
+  disk or RAM cache is kept. Chunk encoding uses one low-priority encoder thread so preparing a cast
+  cannot freeze the UI. MPEG-TS is re-encoded into clean H.264/AAC HLS.
+- Cast preparation no longer blocks the UI: ffprobe runs asynchronously instead
+  of freezing the event loop with a multi-second wait.
+- Cast seeking is debounced and sent as a native Cast SEEK. The VOD HLS server
+  generates the requested 30-second chunk on demand, while the seek OSD keeps
+  showing the cast target instead of reading the paused local player.
+- Cast discovery now ignores the duplicate link-local IPv6 record and keeps
+  only the TV's IPv4 address. Selecting the IPv6 entry made the receiver fetch
+  a `127.0.0.1` HLS URL, which surfaced as the TV ambient slideshow with no
+  controls. Discovery, receiver ready, LOAD, HLS URL and HTTP requests now log
+  for diagnostics.
+- While a Chromecast session is active, opening or switching to another file
+  sends that file to the same TV instead of leaving the old cast running. The
+  cast overlay stays up while the VOD HLS stream is prepared.
+- MPEG-TS cast sources are re-encoded to clean H.264/AAC HLS instead of being
+  copied. Timestamp/B-frame issues in some TS files made Chromecast show a
+  slideshow with no audio (for example the `Аватар` TS recording).
+- The cast seek OSD now uses the receiver's current position/duration and keeps
+  the pending seek target while the TV buffers. It no longer falls back to the
+  paused local mpv position; the seek bar uses the same cast-aware OSD path.
+- Cast encoding now runs in one `SCHED_IDLE` thread (also `nice 19`), and HLS
+  chunks are 20 seconds long, so preparing the first chunk does not stall the UI.
+  Temporary cast directories are deleted off the GUI thread.
+- While casting (including the preparation phase), local volume controls
+  (slider, mute button, PiP volume, volume keys and mouse wheel) are disabled;
+  `CastManager::setVolume` ignores stray requests. `SET_VOLUME` was also moved
+  from the media namespace to the receiver namespace. The old media-namespace
+  volume command could tear down the active Cast session.
+- The cast overlay title now follows `Media.currentFileName`, so it updates when
+  the playing file changes.
+- The file dialog and folder scan accept `.ts`, `.m2ts`, `.mts`, `.mpg`, `.mpeg`,
+  `.vob` and `.m4v` in addition to the existing video extensions.
+- Cast chunk encoding uses one low-priority encoder thread and 20-second chunks,
+  so preparing a cast no longer makes the UI unresponsive.
+- Casting keeps its HLS data in `/dev/shm` (RAM): the full VOD playlist is
+  listed, 30-second segment chunks are generated on demand, and old chunks are
+  evicted. Nothing is written to disk as a multi-gigabyte cast cache.
+- Radio/ICY titles are applied immediately when mpv reports them; they are no
+  longer delayed by the demuxer-cache distance. Combined with the cache-free
+  Icecast/Shoutcast path (including a 16 KiB low-level stream buffer instead of
+  128 KiB), the playlist and notification stay current and radio starts close
+  to the live edge instead of 15-20 seconds behind it.
+- KWin helper scripts and their cached sources are unloaded and deleted on a
+  normal exit. On startup, stale scripts/cache files left by a crashed instance
+  are cleaned up.
+- Hiding and showing Luma restores the window to the position and size it had
+  when hidden. A KWin scripting watcher remembers normal and PiP geometries for
+  the current application run (normal window and `Luma PiP` separately); nothing
+  is persisted between launches. PiP size is kept in QML and its position is
+  applied through KWin when PiP is entered again.
+
+- One-shot shortcuts no longer run twice when the same key arrives both as a
+  local key event and as a global shortcut (or when the portal emits it twice).
+  This fixes Ctrl+Shift+F hiding and immediately showing the window again and
+  stops Next/Previous from skipping a playlist entry. Holding volume/seek keys
+  and auto-repeat still work normally.
+- Entering PiP from the context menu no longer draws the menu's closing
+  animation inside the new PiP window: the menu is closed first and PiP is
+  entered after the popup has finished closing.
+- PiP edges and corners show the resize cursor again. The full-window hover
+  overlay used to sit above the resize handles with an arrow cursor; it now
+  stays below them in the windowed card and only moves on top in fullscreen.
+- The OSD is no longer cleared as soon as a new source starts: an info toast
+  (such as "Opening ...") keeps its normal timeout, and a pinned time counter
+  survives track changes. Seek and volume overlays from the previous file are
+  still cleared.
+- Keyboard focus in dialogs scrolls the containing Flickable into view again.
+  The old code called a non-existent `Flickable.ensureVisible()`, so focus could
+  move to an item below the viewport and every move logged a `TypeError`.
 - Resource Monitor shows the player's own GPU usage instead of the system-wide
   figure. The plugin reads the per-client engine counters from
   `/proc/<pid>/fdinfo` (drm-usage-stats) on AMD/Intel and the player's
@@ -702,6 +824,12 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Removed
 
+- The cast overlay no longer shows the “Playback controls are available in the
+  bottom panel” hint; it shows only the cast title and the current file name.
+- The Debian package build script was removed. The AppImage now builds and
+  bundles libmpv 0.42 and libplacebo 7.387 from pinned sources; the Arch
+  package uses the temporary `packaging/libmpv` PKGBUILD until the
+  distribution catches up.
 - The unfinished Flatpak packaging; portable builds are handled by the AppImage script.
 - The unofficial X11/xcb fallback. X11 is not supported and support is not planned.
 - The “Close” button in the keyboard shortcuts help; the help still hides as soon as `?`

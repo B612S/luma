@@ -68,9 +68,52 @@ ApplicationWindow {
 
     // ---- Picture in picture (small window above the others) ----
     property bool pipMode: false
+    property bool pendingPipFromMenu: false
     property bool pipWasFullscreen: false
     property rect pipSavedGeometry: Qt.rect(0, 0, 0, 0)
+    // Last windowed PiP geometry for the current run. KWinBridge restores the
+    // position through KWin's scripting API; the size is applied here.
+    property rect pipWindowGeometry: Qt.rect(0, 0, 0, 0)
     property bool shortcutsHelpVisible: false
+
+    function showPipWindow(w, h) {
+        // On Wayland window flags only apply to a hidden window. The size is
+        // set before show() as well: the window's first buffer is then created
+        // at the PiP size, and KWin's open animation runs for that geometry.
+        root.hide();
+        root.flags = root.flags | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint;
+        root.width = w;
+        root.height = h;
+
+        // Wayland cannot raise the window itself: KWin keeps the PiP window
+        // above the others with a small helper script.
+        KWinBridge.setPipActive(true);
+        Qt.callLater(function() {
+            if (!root.pipMode) return;
+            root.show();
+            root.requestActivate();
+        });
+        Qt.callLater(function() {
+            if (!root.pipMode) return;
+            root.width = w;
+            root.height = h;
+            Qt.callLater(function() {
+                if (root.pipMode) KWinBridge.restorePipGeometry();
+            });
+        });
+        idleTimer.restart();
+    }
+
+    function savePipGeometry() {
+        if (!pipMode || visibility === Window.FullScreen) return;
+        if (width >= minimumWidth && height >= minimumHeight)
+            pipWindowGeometry = Qt.rect(x, y, width, height);
+    }
+
+    onWidthChanged: root.savePipGeometry()
+    onHeightChanged: root.savePipGeometry()
+    onXChanged: root.savePipGeometry()
+    onYChanged: root.savePipGeometry()
 
     function togglePip() {
         if (pipMode) exitPip();
@@ -106,41 +149,29 @@ ApplicationWindow {
         if (videoW > 0 && videoH > 0)
             aspect = Math.max(0.4, Math.min(3, videoW / videoH));
         const margin = root.pipContentMargin * 2;
-        let contentW = Math.min(480, Math.round(screenW * 0.4));
-        let contentH = Math.round(contentW / aspect);
-        if (contentH > screenH * 0.5 - margin) {
-            contentH = Math.round(screenH * 0.5 - margin);
-            contentW = Math.round(contentH * aspect);
+        let w = 0;
+        let h = 0;
+        if (root.pipWindowGeometry.width >= root.minimumWidth
+                && root.pipWindowGeometry.height >= root.minimumHeight) {
+            w = Math.min(Math.round(root.pipWindowGeometry.width), Math.round(screenW * 0.9));
+            h = Math.min(Math.round(root.pipWindowGeometry.height), Math.round(screenH * 0.9));
+        } else {
+            let contentW = Math.min(480, Math.round(screenW * 0.4));
+            let contentH = Math.round(contentW / aspect);
+            if (contentH > screenH * 0.5 - margin) {
+                contentH = Math.round(screenH * 0.5 - margin);
+                contentW = Math.round(contentH * aspect);
+            }
+            w = contentW + margin;
+            h = contentH + margin;
         }
-        const w = contentW + margin;
-        const h = contentH + margin;
 
-        // On Wayland window flags only apply to a hidden window. The size is
-        // set before show() as well: the window's first buffer is then created
-        // at the PiP size, and KWin's open animation runs for that geometry.
-        root.hide();
-        root.flags = root.flags | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint;
-        root.width = w;
-        root.height = h;
-
-        // Wayland cannot raise the window itself: KWin keeps the PiP window
-        // above the others with a small helper script.
-        KWinBridge.setPipActive(true);
-        Qt.callLater(function() {
-            if (!root.pipMode) return;
-            root.show();
-            root.requestActivate();
-        });
-        Qt.callLater(function() {
-            if (!root.pipMode) return;
-            root.width = w;
-            root.height = h;
-        });
-        idleTimer.restart();
+        root.showPipWindow(w, h);
     }
 
     function exitPip() {
         if (!pipMode) return;
+        root.savePipGeometry();
         pipMode = false;
         if (root.visibility === Window.FullScreen) root.showNormal();
 
@@ -155,9 +186,9 @@ ApplicationWindow {
         }
         root.show();
         KWinBridge.setPipActive(false);
-        // Do not restore x/y here: Wayland ignores client-side top-level
-        // positioning, and setting it after show can fight KWin's placement.
-        // KWin places the re-created window; the saved size is enough.
+        // Wayland has no client-side top-level positioning. KWinBridge restores
+        // the saved position of the re-created window through KWin's scripting
+        // interface; this size is a fallback for compositors without it.
         Qt.callLater(function() {
             if (root.pipMode || pipSavedGeometry.width <= 0) return;
             root.width = pipSavedGeometry.width;
@@ -251,6 +282,15 @@ ApplicationWindow {
     }
 
     Connections {
+        target: contextMenu
+        function onClosed() {
+            if (!root.pendingPipFromMenu) return;
+            root.pendingPipFromMenu = false;
+            Qt.callLater(root.togglePip);
+        }
+    }
+
+    Connections {
         target: Config
         function onControlBarModeChanged() {
             if (root.controlBarHidden) root.controlsVisible = false;
@@ -292,6 +332,16 @@ ApplicationWindow {
             // a pointer, but the bar itself may still auto-hide.
             if (!root.currentOpenMenu && !root.isDialogOpen) root.cursorVisible = false;
             if (!root.controlBarPinnedMode) root.controlsVisible = false;
+        }
+    }
+
+    Connections {
+        target: CastManager
+        function onCastingChanged() {
+            // The TV owns playback while casting; keep the hidden local player
+            // from decoding the same 1080p file and competing for the GUI thread.
+            if (CastManager.casting && mpv && !mpv.paused)
+                mpv.paused = true
         }
     }
 
@@ -421,9 +471,11 @@ ApplicationWindow {
         }
         Column {
             anchors.centerIn: parent; spacing: 16
-            Text { text: qsTr("cast_title"); color: "gray"; font.pixelSize: 24; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
-            Text { text: Media.playlist.currentFile().split('/').pop(); color: "white"; font.pixelSize: 18; anchors.horizontalCenter: parent.horizontalCenter }
-            Text { text: qsTr("cast_controls_hint"); color: "gray"; font.pixelSize: 14; anchors.horizontalCenter: parent.horizontalCenter; visible: CastManager.isRemotePlaying }
+            Text { text: qsTr("cast_title").arg(CastManager.deviceName); color: "gray"; font.pixelSize: 24; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+            Text {
+                text: CastManager.mediaTitle
+                color: "white"; font.pixelSize: 18; anchors.horizontalCenter: parent.horizontalCenter
+            }
         }
     }
 
@@ -496,7 +548,13 @@ ApplicationWindow {
         id: contextMenu
         mpv: mpv; z: 1000; parent: Overlay.overlay
         onToggleCropRequested: root.toggleCropRequested()
-        onTogglePipRequested: root.togglePip()
+        onTogglePipRequested: {
+            // Close the popup first. Entering PiP recreates and shrinks the
+            // window, and the menu's exit animation would otherwise be drawn
+            // inside the new PiP window.
+            root.pendingPipFromMenu = true;
+            contextMenu.close();
+        }
         onFitWindowRequested: root.fitWindowToVideo()
         onOpenUrlRequested: root.openUrlDialog()
         onOpenEqualizerRequested: equalizerDialog.open()

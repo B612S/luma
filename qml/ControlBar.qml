@@ -306,7 +306,10 @@ Rectangle {
                                                   : root.displayPosition)
 
                 onValueChanged: {
-                    if (seeking) root.seekTarget = value;
+                    if (seeking) {
+                        root.seekTarget = value;
+                        Osd.requestSeekOsd(value, root.displayDuration);
+                    }
                 }
 
                 onPressedChanged: {
@@ -318,10 +321,12 @@ Rectangle {
                         root.seekPending = false;
                         root.seekTarget = value;
                         root.isSeeking = true;
+                        Osd.requestSeekOsd(value, root.displayDuration);
                         shortcuts.setSliderSeeking(true);
                     } else if (seeking) {
                         const target = seekSlider.value;
                         root.seekTarget = target;
+                        Osd.requestSeekOsd(target, root.displayDuration);
                         // Keep the handle at the requested position while mpv
                         // performs the seek; displayPosition may still report
                         // the old position for a moment.
@@ -356,7 +361,10 @@ Rectangle {
                     id: seekDelayTimer
                     interval: 300
                     onTriggered: {
-                        Osd.requestTimeOsd(root.seekTarget, root.displayDuration)
+                        // Keep the cast seek target in the OSD while the TV is
+                        // buffering; requestTimeOsd would drop it and fall back
+                        // to the paused local mpv position.
+                        Osd.requestSeekOsd(root.seekTarget, root.displayDuration)
                         Qt.callLater(() => { Osd.endTemporaryOsd() })
                     }
                 }
@@ -538,15 +546,10 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent
+                enabled: !CastManager.castRequested
                 onClicked: {
                     if (CastManager.casting) {
-                        if (CastManager.remoteVolume > 0) {
-                            CastManager.setVolume(0)
-                            Osd.showVolume(0)
-                        } else {
-                            CastManager.setVolume(50)
-                            Osd.showVolume(50)
-                        }
+                        // Volume is blocked while casting.
                     } else {
                         if (mpv.volume === 0) {
                             mpv.volume = 50;
@@ -562,6 +565,8 @@ Rectangle {
 
         Slider {
             id: volSlider
+            enabled: !CastManager.castRequested
+            opacity: CastManager.castRequested ? 0.55 : 1.0
             from: 0
             to: 100
             focus: false

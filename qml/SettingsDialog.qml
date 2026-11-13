@@ -295,6 +295,13 @@ Dialog {
                                 Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.resumePlayback; onToggled: Config.resumePlayback = checked }
                             }
 
+                            Label { text: qsTr("settings_inhibit_sleep"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter; wrapMode: Text.WordWrap }
+                            Item {
+                                Layout.preferredWidth: settingsDialog.controlWidth
+                                Layout.preferredHeight: 40
+                                Switch { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; checked: Config.inhibitSleep; onToggled: Config.inhibitSleep = checked }
+                            }
+
                             Label { text: qsTr("settings_single_instance"); color: Kirigami.Theme.textColor; font.pixelSize: 14; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter }
                             Item {
                                 Layout.preferredWidth: settingsDialog.controlWidth

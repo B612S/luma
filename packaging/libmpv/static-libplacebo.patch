@@ -1,0 +1,11 @@
+--- a/meson.build
++++ b/meson.build
+@@ -27,7 +27,7 @@
+ libswresample = dependency('libswresample', version: '>= 4.12.100')
+ libswscale = dependency('libswscale', version: '>= 7.5.100')
+ 
+-libplacebo = dependency('libplacebo', version: '>=7.387.0',
++libplacebo = dependency('libplacebo', version: '>=7.387.0', static: true,
+                 default_options: ['default_library=static', 'demos=false'])
+ 
+ libass = dependency('libass', version: '>= 0.12.2')

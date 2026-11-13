@@ -38,10 +38,19 @@
 - **Links via yt-dlp** — open a URL from the menu and Luma resolves the direct stream
   with `yt-dlp`. Video-on-demand keeps normal seeking; live links switch to a live-edge
   mode with a `LIVE` indicator and no seek bar. The video title is shown in the
-  notification and playlist. SOCKS proxies work through a local HTTP bridge, so mpv never
-  bypasses the proxy.
-- **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`,
-  HLS re-encode via `ffmpeg`).
+  notification and playlist. SOCKS proxies are passed directly to mpv's libcurl backend, so
+  seeking and Range requests work without a local bridge.
+- **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`;
+  the receiver gets a complete VOD HLS playlist, so native seeking works. HLS
+  segments are generated on demand in 20-second RAM chunks and old chunks are
+  evicted; nothing large is cached on disk. Changing files or playlist entries
+  while casting sends the new file to the same TV. YouTube and other yt-dlp
+  links are cast too: the cast takes the direct video/audio URLs the player has
+  already resolved and fetches them through the configured proxy (a SOCKS proxy
+  via a loopback bridge, because the cast encoder cannot use SOCKS itself). The
+  TV still receives plain HLS from the LAN. A network cast starts once its first
+  two-second segment is ready; the receiver buffers while the rest of the chunk
+  is encoded, and the next chunk is prepared ahead.
 - **10/20-band equalizer** — graphic EQ with a preamp, builtin curves and your own
   presets (only the custom ones can be reset). Right-click a slider to reset it to
   0 dB. It applies to everything mpv plays (files, links and radio) and is also applied
@@ -53,7 +62,9 @@
   overlapping the two tracks.
 - **Picture in picture** — `P` or the context menu turns the window into a small
   frameless player (drag/resize it; play/pause, seek, time, volume, return) and back.
-  On KDE Plasma the PiP window stays above the other windows.
+  On KDE Plasma the PiP window stays above the other windows. Hiding and showing
+  Luma restores the normal or PiP window to its previous position and size for the
+  current run; geometry is not persisted between launches.
 - **Window fit** — `W` or **Playback → Fit window to video** in the context menu
   fits the window to the video's aspect ratio once, within the size the window already
   has: it becomes narrower or shorter to remove the black bars instead of growing to the
@@ -61,6 +72,9 @@
 - **Resume playback** — local audio/video files and yt-dlp links continue from where
   they stopped after a restart. Live streams always start at the live edge. The position
   cache is bounded and can be turned off in **Settings → General**.
+- **Sleep inhibition** — while a file, link or radio is playing, Luma asks the desktop
+  portal to keep the screen and the system awake. Pausing or stopping releases the
+  inhibition. It can be turned off in **Settings → General**.
 - **Chapters** — previous/next chapter with `PageUp` / `PageDown` or the Playback menu,
   and chapter ticks on the seek bar (hidden in **Settings → Interface**). Chapters from
   YouTube links are supported as well.
@@ -98,10 +112,10 @@ Build dependencies:
 | --- | --- |
 | Qt 6.9+ | Core, Gui, Quick, QuickControls2, Widgets, DBus, Network, Concurrent, OpenGL, OpenGLWidgets, **WaylandClient**, LinguistTools |
 | Wayland client libraries | `wayland-client` and `xkbcommon` development files (required; there is no X11 backend) |
-| libmpv | `mpv` / `mpv-libs` |
+| libmpv | `mpv` 0.42+ / `mpv-libs` (libmpv 2.6+) |
 | TagLib | reading and writing audio tags (`taglib`) |
 | FFmpeg development libraries | `libavformat`, `libavcodec`, `libswscale`, `libavutil` |
-| CMake ≥ 3.16, Ninja (or Make), a C++17 compiler | |
+| CMake ≥ 3.20, Ninja (or Make), a C++23 compiler (GCC 13+ / Clang 17+) | |
 
 Runtime-only QML modules (CMake will **not** detect them, the app fails with a QML import
 error instead):
@@ -118,8 +132,12 @@ On Arch Linux:
 
 ```bash
 sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-wayland \
-    kirigami qqc2-desktop-style mpv ffmpeg taglib
+    kirigami qqc2-desktop-style ffmpeg taglib
 ```
+
+libmpv 0.42 is not in the repositories yet; build it from
+[`packaging/libmpv`](packaging/libmpv/) before configuring Luma (see
+[Arch Linux package](#arch-linux-package)).
 
 ## Build
 
@@ -140,34 +158,27 @@ sudo cmake --install build
 
 ## Arch Linux package
 
-A `PKGBUILD` is included:
+A `PKGBUILD` is included. It needs libmpv 0.42, which is not in the
+repositories yet, so build the temporary package from `packaging/libmpv`
+first (it links libplacebo 7.387 statically):
 
 ```bash
+cd packaging/libmpv
+makepkg -si
+cd ../..
 makepkg -si
 ```
-
-## Debian package
-
-Build a best-effort portable `.deb` with:
-
-```bash
-./build-deb.sh
-# -> dist/luma_<version>_amd64.deb
-```
-
-The package installs the same binary, QML module, translations, desktop file
-and icon as the CMake install. It expects a Qt 6.9 + Kirigami runtime on the
-target system; the Luma project is Arch-first.
 
 ## CI packages
 
 [`.github/workflows/packages.yml`](.github/workflows/packages.yml) builds the
-`.deb`, AppImage and Arch package on every published GitHub release and can
-also be started manually from the Actions tab; a manual run requires an
-existing release tag so the built files can be attached to it.
+AppImage and Arch package on every published GitHub release and can also be
+started manually from the Actions tab; a manual run requires an existing
+release tag so the built files can be attached to it.
 
-CI also builds the Arch package with `makepkg -f --nodeps` and attaches it to
-the release. For a local build, use `makepkg -si` on request.
+CI builds the temporary libmpv package before the Arch package with
+`makepkg -f --nodeps` and attaches the result to the release. For a local
+build, build `packaging/libmpv` first and then use `makepkg -si` on request.
 
 ## AppImage
 
@@ -178,14 +189,18 @@ Build a portable AppImage with:
 # -> dist/luma-<version>-x86_64.AppImage
 ```
 
-The script builds a Release AppDir and bundles Qt/QML (including Kirigami and
-`qqc2-desktop-style`), libmpv, FFmpeg, TagLib and the Wayland platform plugins; the
-resulting image is Wayland-only. On Plasma it loads the bundled KDE platform theme, so
+The script builds a fresh libmpv 0.42 and libplacebo 7.387 from pinned sources,
+then builds a Release AppDir and bundles Qt/QML (including Kirigami and
+`qqc2-desktop-style`), libmpv, libplacebo, FFmpeg, TagLib and the Wayland
+platform plugins; the resulting image is Wayland-only. Building it needs
+`meson`, `ninja`, the Python `glad` module and the usual mpv/libplacebo build
+dependencies; the script downloads the pinned tarballs unless
+`LIBMPV_SOURCES` points to a directory that already contains them. On Plasma it loads the bundled KDE platform theme, so
 the AppImage inherits the system font, colour scheme, widget style and icon theme; on
 other desktops it falls back to the Breeze style. A small Breeze set is shipped only as
 a hicolor fallback for icon names the system theme lacks. On first use it downloads
 `linuxdeploy`, its Qt plugin and `appimagetool` into `.appimage-tools/`. `ffmpeg` and
-`avahi-browse` are bundled for HLS casting and Chromecast discovery. System `yt-dlp` and `yt-dlp-ejs` are used when available. If they are missing,
+`avahi-browse` are bundled for HLS casting and Chromecast discovery; cast segments are kept in a rolling in-memory window and are not written to disk. System `yt-dlp` and `yt-dlp-ejs` are used when available. If they are missing,
 *Settings → Playback → Internet playback* can install private copies into
 `~/.local/share/luma` without touching the system Python; Luma checks those copies
 for updates and shows the versions it uses. Deno is preferred from the system; if it
@@ -221,6 +236,36 @@ the real `yt-dlp` and network; it reuses `~/.config/luma/yt-dlp.conf` (including
 proxy). It is skipped unless `LUMA_TEST_YOUTUBE_URL` is set, e.g.
 `LUMA_TEST_YOUTUBE_URL=https://www.youtube.com/watch?v=jNQXAC9IVRw`. Set
 `LUMA_TEST_NO_NETWORK=1` for an offline run.
+
+### Manual casting tests
+
+There are two **manual** cast tests; neither is part of `ctest`:
+
+```bash
+cmake -B build -S . -DLUMA_BUILD_CAST_TEST=ON
+cmake --build build -j"$(nproc)" --target cast_stream_test cast_tv_smoke
+```
+
+`cast_stream_test` starts the HLS VOD server and decodes it locally with FFmpeg:
+
+```bash
+./build/bin/cast_stream_test /path/to/video.mp4
+```
+
+It can also run only the server and a client on another machine:
+
+```bash
+./build/bin/cast_stream_test --serve /path/to/video.mp4
+./build/bin/cast_stream_test --client 'http://192.168.1.10:PORT/stream/.../playlist.m3u8'
+```
+
+`cast_tv_smoke` uses the real `CastManager` and `CastV2Client` against a TV. It
+plays, then seeks to 60 s, 1 h and 5 s, and optionally switches to a second file:
+
+```bash
+./build/bin/cast_tv_smoke /path/to/video.mp4 192.168.1.50
+./build/bin/cast_tv_smoke /path/to/video.mp4 192.168.1.50 8009 /path/to/second.mkv
+```
 
 ## Usage
 
@@ -320,7 +365,12 @@ instances may run.
 
 Every instance registers a separate MPRIS player
 (`org.mpris.MediaPlayer2.luma.i<pid>`), so `playerctl -l` and the desktop media
-applet list and control each window independently. Changing the
+applet list and control each window independently. A TV can be cast to by only
+one window at a time: the instance that starts the cast holds a per-device lease
+in `$XDG_RUNTIME_DIR/luma/`, and another window that picks the same TV is
+refused with an OSD message while the running cast keeps playing. The lease is
+released when casting stops or the window exits; one left by a crashed instance
+is taken over automatically. Changing the
 `single_instance` setting takes effect on the next launch (the local server and
 the MPRIS name are created at startup).
 
@@ -334,6 +384,7 @@ volume=80
 language=auto            # auto, en, ru
 single_instance=true
 resume_playback=true
+inhibit_sleep=true
 notifications=true
 append_to_playlist=false
 control_bar_mode=float   # hidden, float, pinned
@@ -384,10 +435,9 @@ any other lines you add, e.g.:
 ```
 
 The proxy is set as a type (`SOCKS5`, `SOCKS5h`, `HTTP`, `HTTPS`) plus an address in
-`host:port` form. yt-dlp uses it to resolve the stream. For SOCKS5, Luma additionally
-starts a local HTTP bridge: mpv fetches the stream (including seeking and Range requests)
-through it, so a SOCKS-only proxy works without extra tools. HTTP proxies are passed to
-mpv directly. No files are downloaded.
+`host:port` form. yt-dlp uses it to resolve the stream, and mpv uses the same proxy for
+the direct stream through its libcurl backend (SOCKS5/SOCKS5h included), so seeking and
+Range requests work without a local bridge. No files are downloaded.
 
 *Playback → Internet playback* shows the runtime status, including the versions in
 use and whether updates are available for Luma's private copies. System packages are
@@ -432,7 +482,8 @@ Luma is built on these projects:
 - [KDE Kirigami](https://invent.kde.org/frameworks/kirigami) and
   [qqc2-desktop-style](https://invent.kde.org/frameworks/qqc2-desktop-style) — UI.
 - [mpv / libmpv](https://mpv.io/) and [mpvqt](https://invent.kde.org/libraries/mpvqt) —
-  playback engine and Qt bindings.
+  playback engine and Qt bindings; [libplacebo](https://github.com/haasn/libplacebo) —
+  GPU rendering backend (bundled in the AppImage).
 - [FFmpeg](https://ffmpeg.org/) — thumbnails and HLS for casting.
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — resolving links from video sites;
   [Deno](https://deno.com/) — its JavaScript runtime for YouTube challenges.

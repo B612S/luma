@@ -11,7 +11,7 @@
 #include <QTimer>
 #include <QUrl>
 #include "mpvcontroller.h"
-#include "core/ThumbnailProvider.hpp"
+#include "media/ThumbnailProvider.hpp"
 #include "mpvqt/FrameDecoder.hpp"
 
 ThumbnailWorker::ThumbnailWorker(QObject *parent) : QObject(parent) {}
@@ -222,7 +222,7 @@ void MpvItem::setExternalAudio(const QString &url) {
     m_externalAudio = url;
 }
 
-void MpvItem::setSource(const QString &src, bool live) {
+void MpvItem::setSource(const QString &src, bool live, bool noYtdl) {
     m_source = src;
     // Frames decoded for the previous file are never requested again, and the
     // QML preview still holds the last one. Drop both so switching files does
@@ -241,17 +241,27 @@ void MpvItem::setSource(const QString &src, bool live) {
     // and forcing the stream cache made RSS grow by hundreds of megabytes.
     const QUrl url(src);
     const bool network = !url.scheme().isEmpty() && !url.isLocalFile();
+    setProperty("stream-buffer-size", QStringLiteral("128KiB"));
     if (live) {
-        // Live TV/radio: no rewind/DVR, but a forward buffer is still needed
-        // to absorb HLS segment and network jitter. HLS needs a larger window;
-        // Icecast/Shoutcast radio does not, and a long radio buffer made the
-        // ICY title run ~15 s ahead of the audio.
+        // Live TV needs a forward buffer for HLS segments. Icecast/Shoutcast
+        // radio is different: with the demuxer cache enabled mpv stopped
+        // delivering icy-title updates for some servers (TorontoCast), while
+        // disabling it keeps both playback and the per-track metadata working.
         const bool hls = url.path().endsWith(QStringLiteral(".m3u8"), Qt::CaseInsensitive)
                          || url.path().endsWith(QStringLiteral(".mpd"), Qt::CaseInsensitive);
-        setProperty("cache", QStringLiteral("yes"));
-        setProperty("cache-secs", hls ? 30.0 : 4.0);
-        setProperty("demuxer-max-bytes", hls ? QStringLiteral("64MiB") : QStringLiteral("16MiB"));
-        setProperty("demuxer-max-back-bytes", QStringLiteral("0"));
+        if (hls) {
+            setProperty("cache", QStringLiteral("yes"));
+            setProperty("cache-secs", 30.0);
+            setProperty("demuxer-max-bytes", QStringLiteral("64MiB"));
+            setProperty("demuxer-max-back-bytes", QStringLiteral("0"));
+        } else {
+            // The default 128 KiB stream buffer is 8-16 s of radio audio at
+            // typical bitrates, which made tuning in start that far behind the
+            // live edge. A small buffer keeps ICY metadata working while
+            // starting close to the current song.
+            setProperty("cache", QStringLiteral("no"));
+            setProperty("stream-buffer-size", QStringLiteral("16KiB"));
+        }
 
         // Twitch puts a PREROLL stitched ad at the beginning of the live
         // playlist; starting at segment 0 shows "Commercial break in progress"
@@ -286,6 +296,8 @@ void MpvItem::setSource(const QString &src, bool live) {
         loadOptions << QStringLiteral("audio-file=\"%1\"").arg(audio);
     }
     m_externalAudio.clear();
+    if (noYtdl)
+        loadOptions << QStringLiteral("ytdl=no");
     const QString chaptersFile = m_chaptersFile;
     m_chaptersFile.clear();
 

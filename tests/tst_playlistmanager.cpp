@@ -4,9 +4,9 @@
 #include <QFile>
 #include <QStandardPaths>
 
-#include "ConfigManager.hpp"
-#include "PlaylistManager.hpp"
-#include "PlaylistModel.hpp"
+#include "app/ConfigManager.hpp"
+#include "playlist/PlaylistManager.hpp"
+#include "playlist/PlaylistModel.hpp"
 #include "TestEnvironment.h"
 
 // Playlists: create/rename/delete, adding links,

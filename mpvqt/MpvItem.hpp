@@ -66,7 +66,7 @@ public:
     void setMuted(bool m);
     QString source() const { return m_source; }
     // `live` disables the rewind/DVR cache and keeps only a small forward buffer.
-    void setSource(const QString &src, bool live = false);
+    void setSource(const QString &src, bool live = false, bool noYtdl = false);
     // Audio stream to attach to the next source. yt-dlp returns video and
     // audio as separate URLs; this is passed as a file-local option so mpv
     // opens both tracks together instead of adding audio after fileLoaded.

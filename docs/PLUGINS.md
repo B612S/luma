@@ -569,16 +569,16 @@ deliberately powerful; review a plugin's manifest before enabling it.
 ## Host architecture
 
 ```
-core/PluginManifest.*      plugin.json parsing and validation
-core/PluginManager.*       discovery in ~/.local/share/luma/plugins and
-                           /usr/share/luma/plugins, runtimes, event fan-out,
-                           windows and plugin settings
-core/PluginRuntime.*       one QJSEngine, lifecycle, menu callbacks
-core/PluginApi.*           API namespaces and permission checks
-core/PluginWindow.*        host-rendered window object
-qml/PluginMenu.qml         plugin actions in the native menus
-qml/PluginWindowDialog.qml window host
-qml/PluginWindowField.qml  native control renderer
+core/plugins/PluginManifest.*  plugin.json parsing and validation
+core/plugins/PluginManager.*   discovery in ~/.local/share/luma/plugins and
+                               /usr/share/luma/plugins, runtimes, event fan-out,
+                               windows and plugin settings
+core/plugins/PluginRuntime.*   one QJSEngine, lifecycle, menu callbacks
+core/plugins/PluginApi.*       API namespaces and permission checks
+core/plugins/PluginWindow.*    host-rendered window object
+qml/PluginMenu.qml             plugin actions in the native menus
+qml/PluginWindowDialog.qml     window host
+qml/PluginWindowField.qml      native control renderer
 ```
 
 Plugins are scanned at startup; **Settings → Plugins** shows the installed

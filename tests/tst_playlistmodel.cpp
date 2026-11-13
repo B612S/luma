@@ -4,8 +4,8 @@
 #include <QTemporaryDir>
 #include <QFile>
 
-#include "PlaylistModel.hpp"
-#include "PlaylistFilterModel.hpp"
+#include "playlist/PlaylistModel.hpp"
+#include "playlist/PlaylistFilterModel.hpp"
 #include "TestEnvironment.h"
 
 // Playlist logic without a GUI: loading, order, current track, live stream tags.

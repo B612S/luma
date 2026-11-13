@@ -8,9 +8,9 @@
 #include <QTemporaryDir>
 #include <cmath>
 
-#include "ConfigManager.hpp"
-#include "MediaManager.hpp"
-#include "PlaylistManager.hpp"
+#include "app/ConfigManager.hpp"
+#include "media/MediaManager.hpp"
+#include "playlist/PlaylistManager.hpp"
 #include "mpvqt/MpvItem.hpp"
 #include "mpvqt/FrameDecoder.hpp"
 
@@ -103,6 +103,11 @@ void TestMediaOpen::initTestCase()
     m_media->setMpv(m_mpv);
     m_media->setPlaylistManager(m_playlists);
     m_media->setConfig(m_config);
+    // Mirror main.cpp: libmpv fetches resolved streams through the configured
+    // proxy (the app sets this on the player, the test must do the same for
+    // the network YouTube case).
+    if (!m_config->ytdlpProxy().isEmpty())
+        m_mpv->setProperty("http-proxy", m_config->ytdlpProxy());
     QVERIFY(!m_media->hasMedia());
 }
 
@@ -672,6 +677,15 @@ void TestMediaOpen::realYouTubeLink()
     QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 30000);
     QTRY_VERIFY_WITH_TIMEOUT(m_mpv->duration() > 0.0, 5000);
     QVERIFY(m_media->hasVideo());
+
+    // Casting must use the direct URLs, not the watch page stored in the
+    // playlist: FFmpeg cannot play a YouTube HTML page.
+    const CastSource source = m_media->castSourceFor(url);
+    QVERIFY(!source.videoUrl.isEmpty());
+    QVERIFY(source.videoUrl != url);
+    QVERIFY(!source.title.isEmpty());
+    // yt-dlp's duration lets the cast skip its network ffprobe.
+    QVERIFY(source.duration > 0.0);
 }
 
 int main(int argc, char **argv)

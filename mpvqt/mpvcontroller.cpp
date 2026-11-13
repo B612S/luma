@@ -13,7 +13,8 @@
  *     no extra window/OSC/mpv keyboard bindings, idle between playlist entries,
  *     demuxer thread, cache pause, no disk cache, and no mpv OSD.
  *   - Leave the stream cache to MpvItem::setSource(): 300 s / 256 MiB for
- *     network streams only, mpv's default (no demuxer cache) for local files.
+ *     finite network streams, 30 s / 64 MiB for live HLS, no demuxer cache
+ *     for Icecast/Shoutcast radio, mpv's default for local files.
  *   - Set video-sync=display-resample when the current value is "audio".
  *   - Add setLogLevel() for the optional mpv.log.
  *   - Stop the event loop instead of spinning when mpv_wait_event() returns
@@ -272,9 +273,9 @@ void MpvController::init()
     mpv_set_property_string(d_ptr->m_mpv, "osd-level", "0");
 
     // The stream cache is configured per source in MpvItem::setSource(): a
-    // 300 s / 256 MiB cache is only useful for network streams. Forcing it for
-    // local files made mpv keep hundreds of megabytes of demuxer data for no
-    // benefit (local files seek directly).
+    // 300 s / 256 MiB cache for finite network files, 30 s / 64 MiB for live
+    // HLS, and no demuxer cache for Icecast/Shoutcast radio. Forcing a cache
+    // for local files made mpv keep hundreds of megabytes for no benefit.
 
     // Smart settings (applied only if the user has not changed them)
     char *sync_mode = mpv_get_property_string(d_ptr->m_mpv, "video-sync");

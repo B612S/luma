@@ -22,7 +22,9 @@ depends=(
     'qt6-wayland>=6.9.0'
     'wayland'
     'libxkbcommon'
-    'mpv'
+    # 0.42 is not in the repositories yet; packaging/libmpv/PKGBUILD provides
+    # this temporary package until libplacebo is updated.
+    'libmpv>=0.42'
     'ffmpeg'
     'taglib'
     'kirigami'
@@ -60,6 +62,9 @@ prepare() {
         --exclude='./AppDir' \
         --exclude='./squashfs-root' \
         --exclude='./.appimage-tools' \
+        --exclude='./packaging/libmpv/src' \
+        --exclude='./packaging/libmpv/pkg' \
+        --exclude='./packaging/libmpv/*.pkg.tar.zst' \
         -cf - . | tar -C "$srcdir/luma" -xf -
 }
 

@@ -4,8 +4,8 @@
 #include <QDir>
 #include <QStandardPaths>
 
-#include "ConfigManager.hpp"
-#include "Equalizer.hpp"
+#include "app/ConfigManager.hpp"
+#include "media/Equalizer.hpp"
 #include "TestEnvironment.h"
 
 class TestEqualizer : public QObject
