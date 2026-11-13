@@ -195,6 +195,7 @@ install(FILES
 
 install(FILES luma.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES assets/luma.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+install(FILES assets/luma.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 # Optional bundled JavaScript plugins. Their data stays in the user's data
 # directory; only the plugin code is installed here.
 install(DIRECTORY plugins/ DESTINATION ${CMAKE_INSTALL_DATADIR}/luma/plugins)

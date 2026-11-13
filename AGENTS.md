@@ -171,7 +171,8 @@ settings/menu behavior.
   rules and rebuild rules are in `VERSIONING.md`. `luma.desktop`'s `Version`
   key is the desktop-entry spec version, not the app version.
 - Packaging: `PKGBUILD` (Arch, local) copies the working tree and installs
-  `luma.desktop` and `assets/luma.png`; the AppImage script builds and bundles
+  `luma.desktop`, `assets/luma.png` (256x256) and `assets/luma.svg`
+  (hicolor/scalable); the AppImage script builds and bundles
   libmpv/libplacebo from pinned sources; the Arch package depends on
   `libmpv>=0.42`, built from the temporary `packaging/libmpv` PKGBUILD until
   the repositories catch up. `.github/workflows/packages.yml` builds the

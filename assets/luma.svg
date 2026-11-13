@@ -1,9 +1,17 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="112" fill="#f26b21"/>
-
-  <!-- Outline play triangle. Its height (256) matches the diameter of the
-       conversion ring in luma-converter.svg (64 of 256), and the stroke
-       width matches that ring's 12 of 256, so the two icons read as a set. -->
-  <polygon points="172.36,128 377.64,256 172.36,384" fill="none"
-           stroke="#ffffff" stroke-width="24" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+  <!-- Luma icon: dark plate with the brand-coloured play mark.
+       Papirus idiom on a 64x64 grid: 56-unit plate, 1-unit shadow, 1-unit top
+       light. The play triangle is optically centred (its centroid sits on the
+       plate centre) and drawn with a round-joined stroke for softened corners. -->
+  <rect x="4" y="5" width="56" height="56" rx="8" fill="#000000" fill-opacity="0.2"/>
+  <rect x="4" y="4" width="56" height="56" rx="8" fill="#3F444E"/>
+  <path d="M 12 4 H 52 A 8 8 0 0 1 60 12 A 7 7 0 0 0 53 5 H 11 A 7 7 0 0 0 4 12 A 8 8 0 0 1 12 4 Z" fill="#ffffff" fill-opacity="0.08"/>
+  <g opacity="0.25">
+    <g transform="translate(0 1)">
+      <path d="M 23.5 16.5 L 49 32 L 23.5 47.5 Z" fill="#000000" stroke="#000000" stroke-width="4" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <g>
+    <path d="M 23.5 16.5 L 49 32 L 23.5 47.5 Z" fill="#FF8A44" stroke="#FF8A44" stroke-width="4" stroke-linejoin="round"/>
+  </g>
 </svg>

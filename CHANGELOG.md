@@ -195,6 +195,10 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Changed
 
+- The application icon is redrawn in the Papirus idiom: a dark plate with a
+  brand-coloured play mark, a plate shadow and a top light. The vector source
+  `assets/luma.svg` is now installed as a scalable icon next to the 256x256 PNG,
+  and `assets/luma.png` is regenerated from it.
 - A cast from a yt-dlp source starts as soon as the first two-second segment is
   encoded instead of waiting for the whole 20-second chunk: the receiver loads
   the playlist while the rest of the chunk is still being produced and fills
