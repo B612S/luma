@@ -41,5 +41,8 @@ Thumbs.db
 .probe
 .icontest
 
+# Local profiling runs and their captures
+.luma-prof/
+
 # Temporary test artifacts
 .tmp-*/
