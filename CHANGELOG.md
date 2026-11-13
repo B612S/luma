@@ -6,6 +6,8 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-13
+
 ### Fixed
 
 - Playback no longer drops frames when the display refresh rate is not a close
@@ -18,7 +20,6 @@ All notable changes to Luma are documented here. The format is based on
   the screen instead of assuming they were late. On a 1920×1080 @ 159.95 Hz
   VM a 1080p 59.94 fps file went from 350 dropped frames per 21 s in
   fullscreen to 1.
-
 
 ## [1.0.0] - 2026-11-13
 
