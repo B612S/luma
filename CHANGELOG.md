@@ -6,6 +6,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- A `LICENSE` file with the unmodified GPL-3.0 text. The project was already
+  documented as GPL-3.0-or-later in `README.md` and `PKGBUILD`, but the
+  repository itself had no license file, so GitHub reported no license and
+  redistributors had nothing to ship.
+
 ## [1.0.1] - 2026-11-13
 
 ### Fixed
