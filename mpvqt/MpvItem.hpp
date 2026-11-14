@@ -140,6 +140,9 @@ private slots:
 
 private:
     void dispatchThumbnail();
+    // Keeps mpv's title (the audio stream name) extension-free for local
+    // files, using a tag title when the demuxer provided one.
+    void syncLocalStreamTitle();
 
     QString m_source;
     QString m_externalAudio;

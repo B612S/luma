@@ -13,6 +13,19 @@ All notable changes to Luma are documented here. The format is based on
   repository itself had no license file, so GitHub reported no license and
   redistributors had nothing to ship.
 
+### Fixed
+
+- The desktop audio mixer no longer appends mpv's ` - mpv` suffix to Luma's
+  stream name. mpv passes its window-title template to the audio server as the
+  stream's `media.name`, and the default template ends with ` - mpv`; Luma now
+  sets a title template containing just the media title, after `mpv.conf`, so
+  the configuration cannot bring the suffix back.
+
+- Local files no longer appear with their file extension in the desktop audio
+  mixer or in MPRIS clients: both now use the extension-free base name shown in
+  the playlist (the mixer still prefers a real tag title when the file has
+  one).
+
 ## [1.0.1] - 2026-11-13
 
 ### Fixed

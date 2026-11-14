@@ -104,6 +104,7 @@ add_executable(tst_media_open
     ${CMAKE_SOURCE_DIR}/core/media/MediaNotifier.cpp
     ${CMAKE_SOURCE_DIR}/core/media/TrailingSilenceDetector.cpp
     ${CMAKE_SOURCE_DIR}/core/media/YtDlpRuntime.cpp
+    ${CMAKE_SOURCE_DIR}/core/platform/MprisManager.cpp
     ${CMAKE_SOURCE_DIR}/core/tags/TagManager.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/FrameDecoder.cpp
     ${CMAKE_SOURCE_DIR}/mpvqt/MpvItem.cpp

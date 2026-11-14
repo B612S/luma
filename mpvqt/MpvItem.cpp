@@ -1,6 +1,7 @@
 // Luma-specific file: not part of upstream KDE mpvqt (see mpvqt/README.md).
 #include "MpvItem.hpp"
 #include <QDebug>
+#include <QFileInfo>
 #include <QVariantMap>
 #include <QRectF>
 #include <QQuickWindow>
@@ -241,6 +242,21 @@ void MpvItem::setSource(const QString &src, bool live, bool noYtdl) {
     // and forcing the stream cache made RSS grow by hundreds of megabytes.
     const QUrl url(src);
     const bool network = !url.scheme().isEmpty() && !url.isLocalFile();
+
+    // The title option is also the audio stream's media.name in PipeWire and
+    // PulseAudio. mpv's media-title falls back to the file name with its
+    // extension, while Luma's playlist and notifications show local files
+    // without one, so use the same base name for local files. Streams keep
+    // mpv's media-title (ICY/yt-dlp); restoring the template on every network
+    // load also prevents a previous local file's literal title from leaking.
+    if (network) {
+        setProperty("title", QStringLiteral("${?media-title:${media-title}}"));
+    } else {
+        const QFileInfo fileInfo(url.isLocalFile() ? url.toLocalFile() : src);
+        const QString baseName = fileInfo.completeBaseName();
+        setProperty("title", baseName.isEmpty() ? fileInfo.fileName() : baseName);
+    }
+
     setProperty("stream-buffer-size", QStringLiteral("128KiB"));
     if (live) {
         // Live TV needs a forward buffer for HLS segments. Icecast/Shoutcast
@@ -321,6 +337,25 @@ void MpvItem::setSource(const QString &src, bool live, bool noYtdl) {
     // Start loading after QML closes the menu and repaints the frame:
     // mpv briefly stops video output when switching files.
     QTimer::singleShot(0, this, [this, loadCommand]() { command(loadCommand); });
+}
+
+void MpvItem::syncLocalStreamTitle()
+{
+    const QUrl sourceUrl(m_source);
+    if (!sourceUrl.scheme().isEmpty() && !sourceUrl.isLocalFile())
+        return;
+
+    const QFileInfo fileInfo(sourceUrl.isLocalFile() ? sourceUrl.toLocalFile() : m_source);
+    const QString fileName = fileInfo.fileName();
+    const QString baseName = fileInfo.completeBaseName();
+    const QString fallback = baseName.isEmpty() ? fileName : baseName;
+    // media-title is a real tag title unless mpv fell back to the file name.
+    // The mixer should never show the extension the playlist leaves out, but
+    // a tag title is better than the bare base name when one exists.
+    const QString title = (m_mediaTitle.isEmpty() || m_mediaTitle == fileName)
+                              ? fallback
+                              : m_mediaTitle;
+    setProperty("title", title);
 }
 
 void MpvItem::setChaptersFile(const QString &path) {
@@ -490,6 +525,7 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
             m_mediaTitle = title;
             emit mediaTitleChanged();
         }
+        syncLocalStreamTitle();
     }
     else if (property == "chapter-list") {
         const QVariantList chapters = value.toList();

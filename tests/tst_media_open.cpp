@@ -13,6 +13,7 @@
 #include "playlist/PlaylistManager.hpp"
 #include "mpvqt/MpvItem.hpp"
 #include "mpvqt/FrameDecoder.hpp"
+#include "platform/MprisManager.hpp"
 
 // These tests use the real libmpv. They are kept separate from the fast core
 // tests and run with QT_QPA_PLATFORM=offscreen and ao=null.
@@ -23,6 +24,7 @@ private slots:
     void initTestCase();
     void cleanupTestCase();
     void openAudio();
+    void mprisMetadataHasNoExtension();
     void openVideo();
     void folderScanMergesSiblings();
     void nextFollowsPlayingPlaylist();
@@ -78,7 +80,7 @@ void TestMediaOpen::initTestCase()
     QVERIFY(QDir().mkpath(configDir));
     QFile mpvConf(configDir + "/mpv.conf");
     QVERIFY(mpvConf.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    mpvConf.write("ao=null\nhwdec=no\n");
+    mpvConf.write("ao=null\nhwdec=no\ntitle=Luma test - mpv\n");
     mpvConf.close();
 
     // The integration test runs with a temporary XDG_CONFIG_HOME. Reuse the
@@ -99,6 +101,11 @@ void TestMediaOpen::initTestCase()
     m_config = new ConfigManager;
     m_playlists = new PlaylistManager(m_config);
     m_mpv = new MpvItem;
+    // The mixer label must not get mpv's default " - mpv" suffix back, even
+    // when mpv.conf asks for it (MpvController sets the title after the
+    // include).
+    QCOMPARE(m_mpv->property(QStringLiteral("title")).toString(),
+             QStringLiteral("${?media-title:${media-title}}"));
     m_media = new MediaManager(nullptr);
     m_media->setMpv(m_mpv);
     m_media->setPlaylistManager(m_playlists);
@@ -146,6 +153,28 @@ void TestMediaOpen::openAudio()
     QVERIFY2(videoCodec.isEmpty() || videoCodec == QLatin1String("no"),
              qPrintable("unexpected video codec for audio: " + videoCodec));
     QVERIFY(!m_media->hasVideo());
+    // The mixer/stream name must match the playlist: no file extension.
+    QCOMPARE(m_mpv->property(QStringLiteral("title")).toString(),
+             QStringLiteral("test_audio"));
+}
+
+void TestMediaOpen::mprisMetadataHasNoExtension()
+{
+    const QString file = m_temp.path() + "/Mpris Title.wav";
+    QVERIFY(QFile::copy(QStringLiteral(LUMA_TEST_DATA_DIR "/test_audio.wav"), file));
+
+    stopPlayback();
+    QSignalSpy loaded(m_mpv, &MpvItem::fileLoaded);
+    m_media->openFile(file);
+    QTRY_VERIFY_WITH_TIMEOUT(loaded.count() > 0, 10000);
+
+    MprisManager mpris(m_mpv, m_media,
+                       QStringLiteral("org.mpris.MediaPlayer2.luma.tst%1")
+                           .arg(QCoreApplication::applicationPid()),
+                       QStringLiteral("Luma test"));
+    const QVariantMap metadata = mpris.getMetadata();
+    QCOMPARE(metadata.value(QStringLiteral("xesam:title")).toString(),
+             QStringLiteral("Mpris Title"));
 }
 
 void TestMediaOpen::folderScanMergesSiblings()

@@ -104,7 +104,15 @@ QVariantMap MprisManager::getMetadata() const {
     QFileInfo fi(file);
     map["mpris:trackid"] = QVariant::fromValue(
         QDBusObjectPath("/org/mpris/MediaPlayer2/Track/" + QString::number(qHash(file))));
-    map["xesam:title"] = fi.fileName();
+    // Local files: show them without the extension, like the playlist and the
+    // notification. Streams keep the name mpv reports (URL file name).
+    QString title = fi.fileName();
+    const QUrl sourceUrl(file);
+    if (sourceUrl.scheme().isEmpty() || sourceUrl.isLocalFile()) {
+        const QString baseName = fi.completeBaseName();
+        if (!baseName.isEmpty()) title = baseName;
+    }
+    map["xesam:title"] = title;
     map["xesam:url"] = QUrl::fromLocalFile(file).toString();
 
     double dur = m_mpv->duration();

@@ -8,7 +8,8 @@
  *     ~/.config/luma/mpv.conf before mpv_initialize(), instead of the upstream
  *     ~/.config/mpvqt/mpvqt.conf loaded after initialization.
  *   - Force vo=libmpv (vo=null when built with LUMA_TEST_MPV_VO for headless
- *     tests), audio-client-name=luma and keep-open=no after initialization.
+ *     tests), audio-client-name=luma, keep-open=no and a suffix-free audio
+ *     stream title after initialization.
  *   - Force the embedding/performance invariants after loading mpv.conf:
  *     no extra window/OSC/mpv keyboard bindings, idle between playlist entries,
  *     demuxer thread, cache pause, no disk cache, and no mpv OSD.
@@ -258,6 +259,16 @@ void MpvController::init()
     mpv_set_property_string(d_ptr->m_mpv, "vo", "libmpv");
 #endif
     mpv_set_property_string(d_ptr->m_mpv, "audio-client-name", "luma");
+
+    // mpv reports its window-title template (--title) to the audio server as
+    // the stream's media.name, and the default template ends with " - mpv".
+    // Luma's window title comes from QML and libmpv owns no window, so only
+    // the media title matters here: the desktop mixer then shows
+    // "luma · <media title>" instead of "luma · <media title> - mpv". Set
+    // after mpv.conf so the user config cannot restore the suffix. This is
+    // the default for streams; MpvItem::setSource() replaces it per file
+    // (local files use an extension-free name).
+    mpv_set_property_string(d_ptr->m_mpv, "title", "${?media-title:${media-title}}");
 
     // CRITICAL: keep-open is disabled so mpv always sends EOF
     // and automatic advance to the next file works.
