@@ -5,7 +5,9 @@ src/
 AppDir
 *.pkg.tar.zst
 *.pkg.tar.xz
+*.pkg.tar.zst.sig
 *.AppImage
+*.AppImage.sig
 
 # CMake
 CMakeCache.txt
@@ -46,3 +48,4 @@ Thumbs.db
 
 # Temporary test artifacts
 .tmp-*/
+.verify/
