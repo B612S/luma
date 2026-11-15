@@ -676,11 +676,10 @@ QString PluginI18nApi::t(const QString &key, const QString &fallback) const
 {
     if (!m_runtime->manager())
         return fallback.isEmpty() ? key : fallback;
-    const QString translated = m_runtime->manager()->pluginTranslate(
-        m_runtime->manifest(), key);
-    if (translated == key && !fallback.isEmpty())
-        return fallback;
-    return translated;
+    // Without an explicit fallback the key doubles as the English text; this
+    // also keeps plugins that pass English source text as the key working.
+    return m_runtime->manager()->pluginTranslate(
+        m_runtime->manifest(), key, fallback.isEmpty() ? key : fallback);
 }
 
 // ---------------------------------------------------------------- stats

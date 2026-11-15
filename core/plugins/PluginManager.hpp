@@ -55,7 +55,8 @@ public:
     Q_INVOKABLE QVariantList pluginSettings(const QString &id) const;
     Q_INVOKABLE void setPluginSetting(const QString &id, const QString &key,
                                       const QVariant &value);
-    QString pluginTranslate(const PluginManifest &manifest, const QString &text) const;
+    QString pluginTranslate(const PluginManifest &manifest, const QString &key,
+                            const QString &fallback = QString()) const;
     Q_INVOKABLE void runMenuAction(const QString &actionId,
                                    const QVariantMap &context = {});
     Q_INVOKABLE void closeWindow(QObject *window);

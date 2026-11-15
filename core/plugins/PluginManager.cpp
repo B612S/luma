@@ -176,11 +176,14 @@ QVariantList PluginManager::plugins() const
     for (const PluginManifest &manifest : m_manifests) {
         QVariantMap map;
         map.insert(QStringLiteral("id"), manifest.id);
-        map.insert(QStringLiteral("name"), pluginTranslate(manifest, manifest.name));
+        map.insert(QStringLiteral("name"),
+                   pluginTranslate(manifest, QStringLiteral("name"), manifest.name));
         map.insert(QStringLiteral("version"), manifest.version);
         map.insert(QStringLiteral("description"),
-                   pluginTranslate(manifest, manifest.description));
-        map.insert(QStringLiteral("info"), pluginTranslate(manifest, manifest.info));
+                   pluginTranslate(manifest, QStringLiteral("description"),
+                                   manifest.description));
+        map.insert(QStringLiteral("info"),
+                   pluginTranslate(manifest, QStringLiteral("info"), manifest.info));
         map.insert(QStringLiteral("author"), manifest.author);
         map.insert(QStringLiteral("license"), manifest.license);
         map.insert(QStringLiteral("permissions"), manifest.permissions);
@@ -227,7 +230,8 @@ QList<PluginShortcutAction> PluginManager::shortcutActions() const
             PluginShortcutAction action;
             action.pluginId = manifest.id;
             action.actionId = def.id;
-            action.label = pluginTranslate(manifest, def.label);
+            action.label = pluginTranslate(
+                manifest, pluginShortcutTextKey(def.id), def.label);
             action.defaultKey = def.defaultKey;
             result.append(action);
         }
@@ -557,13 +561,14 @@ void PluginManager::removeWindow(PluginWindow *window)
 }
 
 QString PluginManager::pluginTranslate(const PluginManifest &manifest,
-                                      const QString &text) const
+                                      const QString &key,
+                                      const QString &fallback) const
 {
-    if (text.isEmpty())
-        return text;
+    if (key.isEmpty())
+        return fallback;
     const QVariantMap translations = loadPluginTranslations(
         manifest.directory, pluginLanguage(m_config));
-    return translatedPluginText(translations, text);
+    return translatedPluginText(translations, key, fallback);
 }
 
 QVariantList PluginManager::pluginSettings(const QString &id) const
@@ -582,16 +587,22 @@ QVariantList PluginManager::pluginSettings(const QString &id) const
         const QString key = item.value(QStringLiteral("key")).toString();
         for (const QString &field : {QStringLiteral("label"), QStringLiteral("description"),
                                      QStringLiteral("placeholder")}) {
-            if (item.contains(field))
-                item.insert(field, pluginTranslate(*it, item.value(field).toString()));
+            if (item.contains(field)) {
+                item.insert(field, pluginTranslate(*it, pluginSettingTextKey(key, field),
+                                                   item.value(field).toString()));
+            }
         }
         if (item.contains(QStringLiteral("options"))) {
             QVariantList options;
             for (const QVariant &option : item.value(QStringLiteral("options")).toList()) {
                 QVariantMap localized = option.toMap();
                 if (localized.contains(QStringLiteral("label"))) {
+                    const QString label = localized.value(QStringLiteral("label")).toString();
+                    const QVariant optionValue = localized.value(QStringLiteral("value"));
                     localized.insert(QStringLiteral("label"),
-                                     pluginTranslate(*it, localized.value(QStringLiteral("label")).toString()));
+                                     pluginTranslate(*it,
+                                                     pluginSettingOptionTextKey(key, optionValue),
+                                                     label));
                 }
                 options << localized;
             }

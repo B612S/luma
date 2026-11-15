@@ -1,1 +1,9 @@
-{}
+{
+  "name": "HDR Output",
+  "description": "Requests HDR passthrough and peak computation from mpv when the display and compositor support HDR.",
+  "info": "Requests HDR passthrough and peak computation from mpv.\nWorks only when the display, compositor and driver support HDR.\nThere is no stats page; the plugin applies while it is enabled.",
+  "settings.toneMapping.label": "Tone mapping",
+  "settings.toneMapping.options.auto": "Auto",
+  "settings.toneMapping.options.clip": "Clip",
+  "settings.toneMapping.options.bt.2390": "BT.2390"
+}

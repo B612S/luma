@@ -1,6 +1,9 @@
 #include <QtTest>
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMap>
 #include <QTemporaryDir>
 #include "plugins/PluginManifest.hpp"
 #include "plugins/PluginLocalization.hpp"
@@ -21,6 +24,9 @@ private slots:
     void acceptsPluginShortcuts();
     void ignoresUndeclaredShortcutPermission();
     void loadsPluginLocale();
+    void readsLegacyEnglishLocale();
+    void buildsTranslationKeys();
+    void bundledPluginLocalesUseTranslationKeys();
 };
 
 static void writeFile(const QString &path, const QByteArray &data)
@@ -180,12 +186,116 @@ void TestPluginManifest::loadsPluginLocale()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    writeFile(dir.path() + "/locales/ru.json", R"({"Hello":"Привет"})");
+    // en.json is the translation template; ru.json may translate a subset.
+    writeFile(dir.path() + "/locales/en.json",
+              R"({"name":"English name","settings.mode.label":"Mode"})");
+    writeFile(dir.path() + "/locales/ru.json", R"({"name":"Русское имя"})");
     const QVariantMap translations = loadPluginTranslations(dir.path(), QStringLiteral("ru"));
-    QCOMPARE(translatedPluginText(translations, QStringLiteral("Hello")),
-             QStringLiteral("Привет"));
-    QCOMPARE(translatedPluginText(translations, QStringLiteral("Missing")),
-             QStringLiteral("Missing"));
+    QCOMPARE(translatedPluginText(translations, QStringLiteral("name")),
+             QStringLiteral("Русское имя"));
+    // Missing in ru.json: the per-key English fallback, not the raw key.
+    QCOMPARE(translatedPluginText(translations, QStringLiteral("settings.mode.label")),
+             QStringLiteral("Mode"));
+    // Missing everywhere: the English fallback, or nothing when there is none
+    // (the host must not show "settings.other.label" in the UI).
+    QCOMPARE(translatedPluginText(translations, QStringLiteral("settings.other.label"),
+                                  QStringLiteral("Other")),
+             QStringLiteral("Other"));
+    QVERIFY(translatedPluginText(translations,
+                                 QStringLiteral("settings.other.label")).isEmpty());
+}
+
+// Locale files written before translation keys used the English text as the
+// key; installed plugins must keep their translations.
+void TestPluginManifest::readsLegacyEnglishLocale()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    writeFile(dir.path() + "/locales/ru.json", R"({"Frame rate":"Частота кадров"})");
+    const QVariantMap translations = loadPluginTranslations(dir.path(), QStringLiteral("ru"));
+    QCOMPARE(translatedPluginText(translations, QStringLiteral("settings.mode.label"),
+                                  QStringLiteral("Frame rate")),
+             QStringLiteral("Частота кадров"));
+}
+
+void TestPluginManifest::buildsTranslationKeys()
+{
+    QCOMPARE(pluginSettingTextKey(QStringLiteral("mode"), QStringLiteral("label")),
+             QStringLiteral("settings.mode.label"));
+    QCOMPARE(pluginSettingTextKey(QStringLiteral("mode"), QStringLiteral("description")),
+             QStringLiteral("settings.mode.description"));
+    QCOMPARE(pluginSettingOptionTextKey(QStringLiteral("mode"), QStringLiteral("display")),
+             QStringLiteral("settings.mode.options.display"));
+    QCOMPARE(pluginSettingOptionTextKey(QStringLiteral("mode"), 60),
+             QStringLiteral("settings.mode.options.60"));
+    QCOMPARE(pluginShortcutTextKey(QStringLiteral("toggle")),
+             QStringLiteral("shortcuts.toggle.label"));
+}
+
+namespace {
+QVariantMap readLocaleFile(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    return document.isObject() ? document.object().toVariantMap() : QVariantMap();
+}
+} // namespace
+
+// Bundled plugins ship complete en/ru locale files; every key the host derives
+// from plugin.json must exist or the UI would fall back to English silently.
+void TestPluginManifest::bundledPluginLocalesUseTranslationKeys()
+{
+    const QDir root(QStringLiteral(LUMA_PLUGINS_DIR));
+    QVERIFY(root.exists());
+    const QStringList plugins = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    QVERIFY(!plugins.isEmpty());
+
+    for (const QString &name : plugins) {
+        const QString directory = root.filePath(name);
+        const PluginManifest manifest = PluginManifest::fromDirectory(directory, true);
+        QVERIFY2(manifest.valid, qPrintable(name + ": " + manifest.error));
+
+        const QVariantMap en = readLocaleFile(directory + "/locales/en.json");
+        const QVariantMap ru = readLocaleFile(directory + "/locales/ru.json");
+        QVERIFY2(!en.isEmpty(), qPrintable(name + ": en.json is missing or empty"));
+        QVERIFY2(!ru.isEmpty(), qPrintable(name + ": ru.json is missing or empty"));
+
+        QMap<QString, QString> expected;
+        expected.insert(QStringLiteral("name"), manifest.name);
+        expected.insert(QStringLiteral("description"), manifest.description);
+        if (!manifest.info.isEmpty())
+            expected.insert(QStringLiteral("info"), manifest.info);
+        for (const QVariant &setting : manifest.settings) {
+            const QVariantMap map = setting.toMap();
+            const QString settingKey = map.value(QStringLiteral("key")).toString();
+            for (const QString &field : {QStringLiteral("label"), QStringLiteral("description"),
+                                         QStringLiteral("placeholder")}) {
+                if (map.contains(field)) {
+                    expected.insert(pluginSettingTextKey(settingKey, field),
+                                    map.value(field).toString());
+                }
+            }
+            for (const QVariant &option : map.value(QStringLiteral("options")).toList()) {
+                const QVariantMap optionMap = option.toMap();
+                expected.insert(pluginSettingOptionTextKey(
+                                    settingKey, optionMap.value(QStringLiteral("value"))),
+                                optionMap.value(QStringLiteral("label")).toString());
+            }
+        }
+        for (const PluginShortcutDef &shortcut : manifest.shortcuts) {
+            expected.insert(pluginShortcutTextKey(shortcut.id), shortcut.label);
+        }
+
+        for (auto it = expected.cbegin(); it != expected.cend(); ++it) {
+            QVERIFY2(en.contains(it.key()), qPrintable(name + ": en.json is missing " + it.key()));
+            QVERIFY2(ru.contains(it.key()), qPrintable(name + ": ru.json is missing " + it.key()));
+            // en.json is the translation template; keep it equal to the
+            // English text in plugin.json so the two cannot drift.
+            QCOMPARE(en.value(it.key()).toString(), it.value());
+        }
+    }
 }
 
 void TestPluginManifest::acceptsPluginShortcuts()

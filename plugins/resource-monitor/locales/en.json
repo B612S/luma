@@ -1,1 +1,6 @@
-{}
+{
+  "name": "Resource Monitor",
+  "description": "Draws live CPU, RAM and GPU graphs for the player on its own statistics page.",
+  "info": "Samples Luma CPU/RAM and the player's own GPU usage: per-process engine counters from `/proc/<pid>/fdinfo` on AMD/Intel, `nvidia-smi pmon` on NVIDIA. The system-wide GPU figure is only shown, labelled as such, when neither source is available.\nEnable it and approve process access.\nOpen Statistics (I), then press 3 (or its assigned number).\nGraphs cover the last ~2 minutes.",
+  "stats.title": "Resource usage"
+}

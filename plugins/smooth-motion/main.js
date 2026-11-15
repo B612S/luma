@@ -120,7 +120,7 @@ function addFilter(target) {
     filterActive = luma.mpv.command(["vf", "add", buildFilter(target)]);
     filterVerified = false;
     if (!filterActive)
-        statusText = luma.i18n.t("mpv rejected the filter; see the mpv log");
+        statusText = luma.i18n.t("status.filterRejected", "mpv rejected the filter; see the mpv log");
 }
 
 function isAutoHwdec(value) {
@@ -295,7 +295,7 @@ function monitorFilter() {
         if (now - verifyStartedAt > 1500) {
             filterActive = false;
             filterVerified = false;
-            statusText = luma.i18n.t("mpv disabled the filter; see the mpv log");
+            statusText = luma.i18n.t("status.filterDisabled", "mpv disabled the filter; see the mpv log");
         }
         return;
     }
@@ -374,6 +374,13 @@ function tick() {
     refreshStatsPage();
 }
 
+function modeLabel() {
+    const mode = String(luma.config.get("mode", "display"));
+    if (mode === "display")
+        return luma.i18n.t("settings.mode.options.display", "Display refresh rate");
+    return luma.i18n.t("settings.mode.options." + mode, mode + " fps");
+}
+
 function statsContent() {
     const snapshot = luma.stats.snapshot();
     const source = Number(snapshot["container-fps"]);
@@ -388,34 +395,34 @@ function statsContent() {
     const target = targetFps(snapshot);
     const drops = Number(snapshot["frame-drop-count"]);
 
-    let frameState = luma.i18n.t("Inactive");
+    let frameState = luma.i18n.t("state.inactive", "Inactive");
     if (interpolate) {
         if (pendingTarget || (filterActive && !filterVerified))
-            frameState = luma.i18n.t("Starting");
+            frameState = luma.i18n.t("state.starting", "Starting");
         else if (filterVerified)
-            frameState = luma.i18n.t("Active");
+            frameState = luma.i18n.t("state.active", "Active");
     }
 
     const content = [
-        { type: "label", text: luma.i18n.t("Source FPS") + ": " + formatFps(source) },
-        { type: "label", text: luma.i18n.t("Output FPS") + ": " + formatFps(output) },
-        { type: "label", text: luma.i18n.t("Display FPS") + ": " + formatFps(display) },
-        { type: "label", text: luma.i18n.t("Target FPS") + ": " + formatFps(target) },
+        { type: "label", text: luma.i18n.t("stats.sourceFps", "Source FPS") + ": " + formatFps(source) },
+        { type: "label", text: luma.i18n.t("stats.outputFps", "Output FPS") + ": " + formatFps(output) },
+        { type: "label", text: luma.i18n.t("stats.displayFps", "Display FPS") + ": " + formatFps(display) },
+        { type: "label", text: luma.i18n.t("stats.targetFps", "Target FPS") + ": " + formatFps(target) },
         { type: "separator" },
-        { type: "label", text: luma.i18n.t("Motion interpolation") + ": "
-                       + (interpolate ? luma.i18n.t("Enabled") : luma.i18n.t("Disabled")) },
-        { type: "label", text: luma.i18n.t("Frame generation") + ": " + frameState },
-        { type: "label", text: luma.i18n.t("Filter") + ": "
-                       + (filterActive ? "framerate" : luma.i18n.t("Inactive")) },
-        { type: "label", text: luma.i18n.t("Mode") + ": "
-                       + luma.i18n.t(String(luma.config.get("mode", "display"))) }
+        { type: "label", text: luma.i18n.t("stats.motionInterpolation", "Motion interpolation") + ": "
+                       + (interpolate ? luma.i18n.t("state.enabled", "Enabled") : luma.i18n.t("state.disabled", "Disabled")) },
+        { type: "label", text: luma.i18n.t("stats.frameGeneration", "Frame generation") + ": " + frameState },
+        { type: "label", text: luma.i18n.t("stats.filter", "Filter") + ": "
+                       + (filterActive ? "framerate" : luma.i18n.t("state.inactive", "Inactive")) },
+        { type: "label", text: luma.i18n.t("stats.mode", "Mode") + ": "
+                       + modeLabel() }
     ];
     if (filterVerified && isFinite(drops) && drops >= 0) {
-        content.push({ type: "label", text: luma.i18n.t("Dropped frames") + ": "
+        content.push({ type: "label", text: luma.i18n.t("stats.droppedFrames", "Dropped frames") + ": "
                               + droppedPerSecond.toFixed(1) + "/s" });
     }
     if (statusText !== "")
-        content.push({ type: "label", text: luma.i18n.t("Status") + ": " + statusText });
+        content.push({ type: "label", text: luma.i18n.t("stats.status", "Status") + ": " + statusText });
     return content;
 }
 
@@ -423,7 +430,7 @@ function refreshStatsPage() {
     if (!luma || !luma.stats)
         return;
     const result = luma.stats.setPage(
-        "smooth", luma.i18n.t("Smooth Motion stats"), statsContent());
+        "smooth", luma.i18n.t("stats.title", "Smooth Motion stats"), statsContent());
     if (result && result.ok === false) {
         if (statsPageError !== result.error) {
             statsPageError = result.error;
@@ -443,8 +450,8 @@ function toggleInterpolation() {
 function setInterpolation(enabled) {
     luma.config.set("interpolation", enabled);
     if (luma.ui && luma.ui.osd) {
-        luma.ui.osd(enabled ? luma.i18n.t("Smooth Motion enabled")
-                            : luma.i18n.t("Smooth Motion disabled"));
+        luma.ui.osd(enabled ? luma.i18n.t("osd.enabled", "Smooth Motion enabled")
+                            : luma.i18n.t("osd.disabled", "Smooth Motion disabled"));
     }
     apply(false);
     refreshStatsPage();

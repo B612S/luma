@@ -42,6 +42,7 @@ permissions; Native C++ plugins are deliberately not part of v1.
 com.example.hello/
   plugin.json
   main.js
+  locales/           # optional translations, see below
   assets/            # optional, read through luma.storage
 ```
 
@@ -122,6 +123,7 @@ Implemented events:
 | `positionChanged` | playback state plus `{ position, duration }` (about once per second) |
 | `pausedChanged` | `{ paused }` |
 | `volumeChanged` | `{ volume }` |
+| `languageChanged` | `{ language }` — the player's language changed; rebuild labels created with `luma.i18n.t()` |
 
 Callbacks run from host signals; keep them short and use the API for work.
 
@@ -335,25 +337,53 @@ com.example.plugin/
     ru.json
 ```
 
-Keys are the English strings used by the plugin:
+Locale files use translation keys, not English source text:
 
 ```json
 {
-  "Smooth Motion": "Плавное движение",
-  "Frame rate": "Частота кадров"
+  "name": "Плавное движение",
+  "description": "Генерирует кадры под частоту экрана или заданную частоту кадров.",
+  "settings.mode.label": "Частота кадров",
+  "settings.mode.options.display": "Частота обновления экрана",
+  "shortcuts.toggle.label": "Плавное движение вкл/выкл",
+  "info": "Генерирует кадры фильтром framerate в mpv.",
+  "stats.title": "Статистика плавного движения"
 }
 ```
 
-The host picks the language of the player (`Config.language`, or the system
-locale for `auto`) and falls back to `en.json`, then to the key itself. Plugin
-names, descriptions, settings labels/options/descriptions are translated by
-the host. JavaScript can translate its own labels with:
+The host derives these keys from `plugin.json`:
+
+| Key | Text |
+| --- | --- |
+| `name`, `description`, `info` | the matching `plugin.json` fields |
+| `settings.<key>.label` | the setting's `label` |
+| `settings.<key>.description` | the setting's `description` |
+| `settings.<key>.placeholder` | a text/textarea `placeholder` |
+| `settings.<key>.options.<value>` | a select option's `label` |
+| `shortcuts.<id>.label` | the shortcut's `label` |
+
+`<key>`, `<value>` and `<id>` are the setting `key`, the option `value` and the
+shortcut `id` from `plugin.json`.
+
+`en.json` is the translation template: it may list every key with its English
+text. A missing key falls back to `en.json`, then to the English text in
+`plugin.json`. The host picks the language of the player (`Config.language`, or
+the system locale for `auto`).
+
+JavaScript strings use `luma.i18n.t(key, fallback)`; the fallback is the English
+text shown when no translation exists:
 
 ```js
-luma.i18n.t("Frame rate", "Frame rate");
+luma.ui.osd(luma.i18n.t("osd.enabled", "Smooth Motion enabled"));
 ```
 
-Plugin translations must not be added to Luma's root `locales/*.ts`.
+Plugin names, descriptions, info, settings labels/options/descriptions and
+shortcut labels are translated by the host. Labels a plugin creates itself
+(menu actions, window titles and fields) should be rebuilt on the
+`languageChanged` event so they follow a language switch. Locale files written
+with English text as the key (the old format) are still read as a fallback, but
+new plugins should use keys. Plugin translations must not be added to Luma's
+root `locales/*.ts`.
 
 ### Statistics
 

@@ -19,6 +19,22 @@ QString pluginLanguage(ConfigManager *config)
     return code;
 }
 
+QString pluginSettingTextKey(const QString &settingKey, const QString &field)
+{
+    return QStringLiteral("settings.") + settingKey + QLatin1Char('.') + field;
+}
+
+QString pluginSettingOptionTextKey(const QString &settingKey, const QVariant &value)
+{
+    return pluginSettingTextKey(settingKey,
+                                QStringLiteral("options.") + value.toString());
+}
+
+QString pluginShortcutTextKey(const QString &shortcutId)
+{
+    return QStringLiteral("shortcuts.") + shortcutId + QStringLiteral(".label");
+}
+
 QVariantMap loadPluginTranslations(const QString &pluginDirectory,
                                    const QString &language)
 {
@@ -33,13 +49,39 @@ QVariantMap loadPluginTranslations(const QString &pluginDirectory,
         return document.object().toVariantMap();
     };
 
-    QVariantMap result = load(language);
-    if (result.isEmpty() && language != QLatin1String("en"))
-        result = load(QStringLiteral("en"));
+    // English is the template every other language falls back to per key, so
+    // a partial translation never shows raw key names.
+    QVariantMap result = load(QStringLiteral("en"));
+    if (language != QLatin1String("en")) {
+        const QVariantMap localized = load(language);
+        for (auto it = localized.cbegin(); it != localized.cend(); ++it) {
+            if (!it.value().toString().isEmpty())
+                result.insert(it.key(), it.value());
+        }
+    }
     return result;
 }
 
-QString translatedPluginText(const QVariantMap &translations, const QString &text)
+QString translatedPluginText(const QVariantMap &translations, const QString &key,
+                             const QString &fallback)
 {
-    return translations.value(text, text).toString();
+    if (key.isEmpty())
+        return fallback;
+
+    const QString translated = translations.value(key).toString();
+    if (!translated.isEmpty())
+        return translated;
+
+    // Locale files written before translation keys used the English source
+    // text as the key. Keep reading those so installed plugins keep their
+    // translations until their authors move to keys.
+    if (!fallback.isEmpty()) {
+        const QString legacy = translations.value(fallback).toString();
+        if (!legacy.isEmpty())
+            return legacy;
+    }
+    // An empty fallback means the caller has no English text for this key
+    // (for example an optional plugin.json field); returning the key would
+    // leak "info" or "description" into the UI.
+    return fallback;
 }

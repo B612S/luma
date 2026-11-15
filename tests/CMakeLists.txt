@@ -82,6 +82,10 @@ foreach(test_name IN LISTS LUMA_TESTS)
     )
 endforeach()
 
+# The bundled plugins' locale files must stay in sync with their manifests.
+target_compile_definitions(tst_pluginmanifest PRIVATE
+    LUMA_PLUGINS_DIR="${CMAKE_SOURCE_DIR}/plugins")
+
 # Wayland-only policy: the binary must refuse to start without a Wayland
 # session instead of falling back to X11. It exits before QApplication is
 # created, so no display or mpv is needed.

@@ -21,6 +21,14 @@ All notable changes to Luma are documented here. The format is based on
   title stays `Luma`. The PiP window keeps its exact `Luma PiP` title, which
   the KWin geometry script matches on.
 
+- Plugin translations use stable keys instead of English source text. The host
+  derives keys from `plugin.json` (`name`, `description`, `info`,
+  `settings.<key>.label|description|placeholder`,
+  `settings.<key>.options.<value>` and `shortcuts.<id>.label`), and
+  `luma.i18n.t()` takes a key plus the English fallback. Bundled plugins and
+  `docs/PLUGINS.md` use the new keys; locale files written with English text as
+  the key keep working as a fallback.
+
 ### Fixed
 
 - The desktop audio mixer labels Luma's stream `Luma` instead of lowercase

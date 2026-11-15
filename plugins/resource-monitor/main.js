@@ -336,7 +336,7 @@ function svgPage() {
 function publish() {
     if (!luma || !luma.stats)
         return;
-    const result = luma.stats.setPage("resources", luma.i18n.t("Resource usage"), [
+    const result = luma.stats.setPage("resources", luma.i18n.t("stats.title", "Resource usage"), [
         { type: "svg", svg: base64(svgPage()), height: 330 }
     ], 3);
     if (result && result.ok === false) {
