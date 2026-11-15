@@ -32,7 +32,10 @@ function isLumaWindow(window) {
 }
 
 function geometryKey(window) {
-    return window.caption;
+    // A normal window's caption carries the current media title ("Luma - ..."),
+    // so key the remembered geometry by window kind: the key has to survive
+    // track changes, or the window forgets its position.
+    return window.caption.indexOf("Luma PiP") === 0 ? "Luma PiP" : "Luma";
 }
 
 var savedGeometries = {};

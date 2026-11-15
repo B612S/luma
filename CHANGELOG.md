@@ -13,7 +13,23 @@ All notable changes to Luma are documented here. The format is based on
   repository itself had no license file, so GitHub reported no license and
   redistributors had nothing to ship.
 
+### Changed
+
+- The window title shows what is playing, as `Luma - <media title>`. The title
+  comes from the same extension-free name the desktop audio mixer shows, so a
+  local file no longer appears with its extension; with nothing loaded the
+  title stays `Luma`. The PiP window keeps its exact `Luma PiP` title, which
+  the KWin geometry script matches on.
+
 ### Fixed
+
+- The desktop audio mixer labels Luma's stream `Luma` instead of lowercase
+  `luma` with the PipeWire, PulseAudio and ALSA audio outputs, without losing
+  Luma's application icon: PipeWire's public `pw_get_application_name()` and
+  `pw_get_prgname()` hooks provide the display name for native PipeWire and
+  the PipeWire ALSA plugin, and `PULSE_PROP_OVERRIDE` does it for PulseAudio.
+  The audio stream itself keeps the lowercase `luma` application/icon name the
+  mixer uses to find the icon.
 
 - The desktop audio mixer no longer appends mpv's ` - mpv` suffix to Luma's
   stream name. mpv passes its window-title template to the audio server as the

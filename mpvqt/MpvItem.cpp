@@ -58,6 +58,9 @@ MpvItem::MpvItem(QQuickItem *parent) : MpvAbstractItem(parent) {
         const QVariant deinterlace = m_observedValues.value(QStringLiteral("deinterlace"));
 
         if (mediaTitle.isValid()) m_mediaTitle = mediaTitle.toString();
+        // The title may already have arrived before fileLoaded; keep the mixer
+        // title and the window title in sync with it from the first frame.
+        syncStreamTitle();
         if (duration.isValid()) m_duration = duration.toDouble();
         if (volume.isValid()) m_volume = volume.toDouble();
         if (mute.isValid()) m_muted = mute.toBool();
@@ -193,6 +196,8 @@ void MpvItem::stopPlayback() {
     // Unload the file instead of pausing at the end: mpv drops the last frame
     // and the renderer clears its framebuffer to black on the next paint.
     command(QStringList() << QStringLiteral("stop"));
+    // Nothing is loaded any more: the window title goes back to plain "Luma".
+    setStreamTitle(QString());
 
     // mpv stops reporting time-pos/duration while idle and the property-change
     // handler keeps the last value, so the control bar would still show the
@@ -251,10 +256,15 @@ void MpvItem::setSource(const QString &src, bool live, bool noYtdl) {
     // load also prevents a previous local file's literal title from leaking.
     if (network) {
         setProperty("title", QStringLiteral("${?media-title:${media-title}}"));
+        // media-title arrives asynchronously; the window title stays plain
+        // "Luma" until then.
+        setStreamTitle(QString());
     } else {
         const QFileInfo fileInfo(url.isLocalFile() ? url.toLocalFile() : src);
         const QString baseName = fileInfo.completeBaseName();
-        setProperty("title", baseName.isEmpty() ? fileInfo.fileName() : baseName);
+        const QString title = baseName.isEmpty() ? fileInfo.fileName() : baseName;
+        setProperty("title", title);
+        setStreamTitle(title);
     }
 
     setProperty("stream-buffer-size", QStringLiteral("128KiB"));
@@ -339,11 +349,25 @@ void MpvItem::setSource(const QString &src, bool live, bool noYtdl) {
     QTimer::singleShot(0, this, [this, loadCommand]() { command(loadCommand); });
 }
 
-void MpvItem::syncLocalStreamTitle()
+void MpvItem::syncStreamTitle()
 {
     const QUrl sourceUrl(m_source);
-    if (!sourceUrl.scheme().isEmpty() && !sourceUrl.isLocalFile())
+    const bool network = !sourceUrl.scheme().isEmpty() && !sourceUrl.isLocalFile();
+
+    // After `stop`, and before mpv knows the title, media-title is empty: the
+    // mixer stream is gone, so clear the window title instead of bringing the
+    // previous file's name back.
+    if (m_mediaTitle.isEmpty()) {
+        setStreamTitle(QString());
         return;
+    }
+
+    // Streams use mpv's media-title as-is (ICY/yt-dlp); for the mixer the
+    // title option already carries the suffix-free template.
+    if (network) {
+        setStreamTitle(m_mediaTitle);
+        return;
+    }
 
     const QFileInfo fileInfo(sourceUrl.isLocalFile() ? sourceUrl.toLocalFile() : m_source);
     const QString fileName = fileInfo.fileName();
@@ -352,10 +376,17 @@ void MpvItem::syncLocalStreamTitle()
     // media-title is a real tag title unless mpv fell back to the file name.
     // The mixer should never show the extension the playlist leaves out, but
     // a tag title is better than the bare base name when one exists.
-    const QString title = (m_mediaTitle.isEmpty() || m_mediaTitle == fileName)
-                              ? fallback
-                              : m_mediaTitle;
+    const QString title = (m_mediaTitle == fileName) ? fallback : m_mediaTitle;
     setProperty("title", title);
+    // Same string for the audio stream name (media.name) and the window title.
+    setStreamTitle(title);
+}
+
+void MpvItem::setStreamTitle(const QString &title)
+{
+    if (m_streamTitle == title) return;
+    m_streamTitle = title;
+    emit streamTitleChanged();
 }
 
 void MpvItem::setChaptersFile(const QString &path) {
@@ -525,7 +556,7 @@ void MpvItem::onMpvPropertyChanged(const QString &property, const QVariant &valu
             m_mediaTitle = title;
             emit mediaTitleChanged();
         }
-        syncLocalStreamTitle();
+        syncStreamTitle();
     }
     else if (property == "chapter-list") {
         const QVariantList chapters = value.toList();

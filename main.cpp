@@ -53,6 +53,28 @@
 #define LUMA_GIT_HASH ""
 #endif
 
+// libmpv creates its PipeWire client without an application name, so
+// PipeWire falls back to the executable name ("luma"), and the desktop audio
+// mixer labels the stream with that client name. PipeWire looks up this public
+// hook (normally provided by a toolkit) before falling back, so export it from
+// the executable: the mixer then shows "Luma". The stream properties that mpv
+// sets itself (application.name/application.icon-name) stay lowercase "luma",
+// which is also the installed theme icon name.
+extern "C" __attribute__((visibility("default"))) const char *pw_get_application_name(void)
+{
+    return "Luma";
+}
+
+// The PipeWire ALSA plugin names its client, node and description after this
+// hook ("PipeWire ALSA [luma]", "alsa_playback.luma", ...). Report the
+// display name here too, so the ALSA output is labelled "Luma" as well.
+// PipeWire also uses it for application.process.binary; the audio stream
+// carries the lowercase icon name separately, so icon lookup is unaffected.
+extern "C" __attribute__((visibility("default"))) const char *pw_get_prgname(void)
+{
+    return "Luma";
+}
+
 namespace {
 // A command line with a few paths is tiny; cap the single-instance handshake.
 constexpr qsizetype kMaxInstanceArgs = 64 * 1024;
@@ -251,6 +273,19 @@ int main(int argc, char *argv[]) {
     // Ignore whatever QT_QPA_PLATFORM contains (xcb, offscreen, …): only the
     // Wayland platform plugin is supported.
     qputenv("QT_QPA_PLATFORM", QByteArray("wayland"));
+    // libmpv names its PulseAudio client after audio-client-name, which must
+    // stay the lowercase "luma" theme icon name for the mixer icon. Override
+    // only the client's display name in libpulse's proplist: the mixer labels
+    // the stream with the client's application.name. The override is a
+    // whitespace-separated list, so keep the user's properties after ours (and
+    // let them win if they already set application.name).
+    QByteArray pulseOverrides = "application.name=Luma";
+    const QByteArray userPulseOverrides = qgetenv("PULSE_PROP_OVERRIDE");
+    if (!userPulseOverrides.isEmpty()) {
+        pulseOverrides.append(' ');
+        pulseOverrides.append(userPulseOverrides);
+    }
+    qputenv("PULSE_PROP_OVERRIDE", pulseOverrides);
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
     QApplication app(argc, argv);

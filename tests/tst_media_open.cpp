@@ -106,6 +106,12 @@ void TestMediaOpen::initTestCase()
     // include).
     QCOMPARE(m_mpv->property(QStringLiteral("title")).toString(),
              QStringLiteral("${?media-title:${media-title}}"));
+    // The mixer's icon lookup uses the stream's application.name/icon-name as
+    // a theme icon name, so the audio client name must stay the lowercase
+    // "luma" icon name. The capitalized client label comes from PipeWire
+    // (pw_get_application_name() in main.cpp), which this test does not link.
+    QCOMPARE(m_mpv->property(QStringLiteral("audio-client-name")).toString(),
+             QStringLiteral("luma"));
     m_media = new MediaManager(nullptr);
     m_media->setMpv(m_mpv);
     m_media->setPlaylistManager(m_playlists);
@@ -156,6 +162,8 @@ void TestMediaOpen::openAudio()
     // The mixer/stream name must match the playlist: no file extension.
     QCOMPARE(m_mpv->property(QStringLiteral("title")).toString(),
              QStringLiteral("test_audio"));
+    // The window title is built from the same clean name as the mixer.
+    QCOMPARE(m_mpv->streamTitle(), QStringLiteral("test_audio"));
 }
 
 void TestMediaOpen::mprisMetadataHasNoExtension()
@@ -534,6 +542,8 @@ void TestMediaOpen::endOfPlaylistStopsPlayback()
     QTRY_VERIFY_WITH_TIMEOUT(m_mpv->paused(), 2000);
     QVERIFY(!m_media->isLoading());
     QVERIFY(!m_media->hasMedia());
+    // The window title goes back to plain "Luma" once playback stops.
+    QTRY_COMPARE_WITH_TIMEOUT(m_mpv->streamTitle(), QString(), 2000);
 }
 
 // A playlist entry whose file was deleted must not be handed to mpv silently:

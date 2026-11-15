@@ -258,13 +258,19 @@ void MpvController::init()
 #else
     mpv_set_property_string(d_ptr->m_mpv, "vo", "libmpv");
 #endif
+    // mpv puts the audio client name into the stream's application.name and
+    // application.icon-name. PulseAudio-qt (the desktop mixer's model) uses
+    // those as a theme icon name, so it must stay the lowercase "luma" icon
+    // name. The mixer's client label comes from the sound server's client name:
+    // Luma capitalizes it through the PipeWire hooks (native PipeWire and the
+    // PipeWire ALSA plugin) and PULSE_PROP_OVERRIDE (PulseAudio) in main.cpp.
     mpv_set_property_string(d_ptr->m_mpv, "audio-client-name", "luma");
 
     // mpv reports its window-title template (--title) to the audio server as
     // the stream's media.name, and the default template ends with " - mpv".
     // Luma's window title comes from QML and libmpv owns no window, so only
     // the media title matters here: the desktop mixer then shows
-    // "luma · <media title>" instead of "luma · <media title> - mpv". Set
+    // "Luma · <media title>" instead of "Luma · <media title> - mpv". Set
     // after mpv.conf so the user config cannot restore the suffix. This is
     // the default for streams; MpvItem::setSource() replaces it per file
     // (local files use an extension-free name).

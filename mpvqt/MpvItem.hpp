@@ -41,6 +41,10 @@ class MpvItem : public MpvAbstractItem {
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
     Q_PROPERTY(QString source READ source WRITE setSource NOTIFY sourceChanged)
     Q_PROPERTY(QString mediaTitle READ mediaTitle NOTIFY mediaTitleChanged)
+    // The title the desktop mixer shows (mpv's media.name) and the window title
+    // is built from: mpv's media-title, without the file extension mpv falls
+    // back to for local files. Empty while nothing is loaded.
+    Q_PROPERTY(QString streamTitle READ streamTitle NOTIFY streamTitleChanged)
     Q_PROPERTY(bool videoDisabled READ videoDisabled NOTIFY videoDisabledChanged)
     Q_PROPERTY(bool deinterlaceEnabled READ deinterlaceEnabled NOTIFY deinterlaceChanged)
     Q_PROPERTY(bool cropEnabled READ cropEnabled NOTIFY cropEnabledChanged)
@@ -76,6 +80,8 @@ public:
     void setChaptersFile(const QString &path);
     // Current stream title (for radio — the ICY StreamTitle).
     QString mediaTitle() const { return m_mediaTitle; }
+    // Extension-free title shown in the mixer and in the window title.
+    QString streamTitle() const { return m_streamTitle; }
     bool videoDisabled() const { return m_videoDisabled; }
     bool deinterlaceEnabled() const { return m_deinterlaceEnabled; }
     bool cropEnabled() const { return m_cropEnabled; }
@@ -116,6 +122,7 @@ signals:
     void mutedChanged();
     void sourceChanged();
     void mediaTitleChanged();
+    void streamTitleChanged();
     void videoDisabledChanged();
     void fileEnded(const QString &reason);
     void fileLoaded();
@@ -140,15 +147,18 @@ private slots:
 
 private:
     void dispatchThumbnail();
-    // Keeps mpv's title (the audio stream name) extension-free for local
-    // files, using a tag title when the demuxer provided one.
-    void syncLocalStreamTitle();
+    // Keeps mpv's title (the audio stream name) and streamTitle in sync with
+    // media-title: extension-free for local files, and using a tag title when
+    // the demuxer provided one.
+    void syncStreamTitle();
+    void setStreamTitle(const QString &title);
 
     QString m_source;
     QString m_externalAudio;
     QString m_chaptersFile;
     bool m_chaptersFileSet = false;
     QString m_mediaTitle;
+    QString m_streamTitle;
     QHash<QString, QVariant> m_observedValues;
     double m_position = 0.0;
     double m_duration = 0.0;

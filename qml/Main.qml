@@ -12,8 +12,15 @@ ApplicationWindow {
     // but it can't be too tiny: the controls would start overlapping.
     minimumWidth: pipMode ? 320 : 640
     minimumHeight: pipMode ? 180 : 480
-    // The "PiP" title is what the KWin keep-above script looks for (see KWinBridge).
-    title: root.pipMode ? "Luma PiP" : "Luma"
+    // What the desktop mixer shows for the current stream: mpv's media-title
+    // without the file extension (see MpvItem::streamTitle).
+    readonly property string nowPlayingTitle: mpv ? mpv.streamTitle : ""
+    // The "PiP" title is what the KWin keep-above script looks for (see KWinBridge),
+    // so it stays exactly "Luma PiP" — unlike the normal window, it is not
+    // decorated with the media title.
+    title: root.pipMode ? "Luma PiP"
+                        : (Media.hasMedia && root.nowPlayingTitle.length > 0
+                           ? "Luma - " + root.nowPlayingTitle : "Luma")
     // Windowed PiP is a frameless card with no transparent border. The video is
     // overscanned by one pixel and the FBO texture is clamped, so the window
     // edge never samples outside the frame. A single semi-transparent pixel

@@ -181,6 +181,11 @@ qt_add_resources(luma "assets"
         assets/luma.png
 )
 
+# PipeWire resolves the client's display name through the public
+# pw_get_application_name() hook, which Luma provides in main.cpp. The symbol
+# only takes effect when it is exported from the executable (adds -rdynamic).
+set_target_properties(luma PROPERTIES ENABLE_EXPORTS ON)
+
 qt_add_translations(luma
     TS_FILES
         locales/en.ts
