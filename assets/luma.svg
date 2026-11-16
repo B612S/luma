@@ -1,17 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
-  <!-- Luma icon: dark plate with the brand-coloured play mark.
-       Papirus idiom on a 64x64 grid: 56-unit plate, 1-unit shadow, 1-unit top
-       light. The play triangle is optically centred (its centroid sits on the
-       plate centre) and drawn with a round-joined stroke for softened corners. -->
-  <rect x="4" y="5" width="56" height="56" rx="8" fill="#000000" fill-opacity="0.2"/>
-  <rect x="4" y="4" width="56" height="56" rx="8" fill="#3F444E"/>
-  <path d="M 12 4 H 52 A 8 8 0 0 1 60 12 A 7 7 0 0 0 53 5 H 11 A 7 7 0 0 0 4 12 A 8 8 0 0 1 12 4 Z" fill="#ffffff" fill-opacity="0.08"/>
-  <g opacity="0.25">
-    <g transform="translate(0 1)">
-      <path d="M 23.5 16.5 L 49 32 L 23.5 47.5 Z" fill="#000000" stroke="#000000" stroke-width="4" stroke-linejoin="round"/>
-    </g>
+  <!-- Luma icon in the Papirus idiom, without a plate: the brand-orange play
+       mark alone on a transparent 64x64 grid. The mark keeps the Papirus drop
+       shadow (black at 20%, one unit down). Its tip is rounded and its
+       bounding box is centred, so the triangle reads as centred instead of
+       crowding the right edge. -->
+  <g transform="translate(0 1)" opacity="0.2">
+    <path d="M 18.16 12.17 L 47.59 28.69 Q 53.5 32 47.59 35.31 L 18.16 51.83 Q 12.5 55 12.5 48.51 L 12.5 15.49 Q 12.5 9 18.16 12.17 Z" fill="#000000"/>
   </g>
-  <g>
-    <path d="M 23.5 16.5 L 49 32 L 23.5 47.5 Z" fill="#FF8A44" stroke="#FF8A44" stroke-width="4" stroke-linejoin="round"/>
-  </g>
+  <path d="M 18.16 12.17 L 47.59 28.69 Q 53.5 32 47.59 35.31 L 18.16 51.83 Q 12.5 55 12.5 48.51 L 12.5 15.49 Q 12.5 9 18.16 12.17 Z" fill="#FF8A44"/>
 </svg>

@@ -29,6 +29,11 @@ All notable changes to Luma are documented here. The format is based on
   `docs/PLUGINS.md` use the new keys; locale files written with English text as
   the key keep working as a fallback.
 
+- The application icon loses its dark plate: the orange play mark now stands on
+  its own on a transparent grid, with the Papirus drop shadow and a rounded
+  tip, and `assets/luma.png` is regenerated from `assets/luma.svg` at the
+  256x256 size the package installs.
+
 ### Fixed
 
 - The desktop audio mixer labels Luma's stream `Luma` instead of lowercase
