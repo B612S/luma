@@ -64,7 +64,7 @@ void CastDiscovery::parseAvahiOutput(const QString &output) {
         // and an IPv4 service. The Cast/HLS server is IPv4-only; using the
         // link-local IPv6 entry makes the TV fetch 127.0.0.1 and fall back to
         // its ambient slideshow. Only expose IPv4 records.
-        const QString currentAddress = currentAddressV4;
+        const QString &currentAddress = currentAddressV4;
         if (currentName.isEmpty() || currentAddress.isEmpty()) return;
 
         if (currentAddress.startsWith("127.") || currentAddress == "::1") return;

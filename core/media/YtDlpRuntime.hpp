@@ -41,8 +41,8 @@ private:
     void probeDenoVersion(const QString &exe);
     void checkDenoUpdate(const QString &localVersion);
     void runWheelInstall(const QString &package, const QString &dir,
-                         std::function<void(bool, const QString &)> done);
-    void runDenoInstall(std::function<void(bool, const QString &)> done);
+                         const std::function<void(bool, const QString &)> &done);
+    void runDenoInstall(const std::function<void(bool, const QString &)> &done);
 
     QVariantMap m_ytdlpRuntime;
     bool m_ytdlpVersionProbeRunning = false;

@@ -14,6 +14,8 @@ public:
     enum Level { Debug, Info, Warning, Critical };
 
     static Logger& instance();
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
 
     // Redirects Qt messages (including QML errors) to the log file.
     static void installMessageHandler();
@@ -35,10 +37,8 @@ public:
     void critical(const QString &msg) { log(Critical, msg); }
 
 private:
-    Logger(QObject *parent = nullptr);
-    ~Logger();
-    Logger(const Logger&) = delete;
-    Logger& operator=(const Logger&) = delete;
+    explicit Logger(QObject *parent = nullptr);
+    ~Logger() override;
 
     QString levelToString(Level level);
 

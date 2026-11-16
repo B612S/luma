@@ -96,7 +96,7 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
     }
     manifest.entry = canonicalEntry;
 
-    for (const QJsonValue &value : obj.value(QStringLiteral("permissions")).toArray()) {
+    for (const auto &value : obj.value(QStringLiteral("permissions")).toArray()) {
         const QString permission = value.toString();
         if (permission.isEmpty())
             continue;
@@ -117,7 +117,7 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
         QStringLiteral("text"), QStringLiteral("textarea"),
         QStringLiteral("number")
     };
-    for (const QJsonValue &value : settings) {
+    for (const auto &value : settings) {
         if (!value.isObject()) {
             manifest.error = QStringLiteral("invalid plugin setting");
             return manifest;
@@ -161,7 +161,7 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
         } else {
             const QJsonArray options = setting.value(QStringLiteral("options")).toArray();
             QVariantList parsedOptions;
-            for (const QJsonValue &optionValue : options) {
+            for (const auto &optionValue : options) {
                 if (!optionValue.isObject())
                     continue;
                 const QJsonObject option = optionValue.toObject();
@@ -194,7 +194,7 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
         static const QRegularExpression shortcutIdPattern(
             QStringLiteral("^[a-z0-9][a-z0-9_-]*$"));
         const QJsonArray shortcuts = obj.value(QStringLiteral("shortcuts")).toArray();
-        for (const QJsonValue &value : shortcuts) {
+        for (const auto &value : shortcuts) {
             if (!value.isObject() || manifest.shortcuts.size() >= 16)
                 continue;
             const QJsonObject shortcut = value.toObject();

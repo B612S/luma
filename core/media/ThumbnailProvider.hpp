@@ -30,7 +30,7 @@ public:
         QMutexLocker locker(&m_mutex);
         const auto it = m_images.constFind(id);
         if (it == m_images.constEnd()) return QImage();
-        const QImage img = it.value();
+        const QImage &img = it.value();
         if (size) *size = img.size();
         return img;
     }

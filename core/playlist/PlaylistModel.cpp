@@ -337,7 +337,7 @@ void PlaylistModel::setEntries(const QVariantList &entries, const QString &curre
 void PlaylistModel::setEntriesFromJson(const QJsonArray &entries, const QString &current) {
     QVector<Entry> list;
     list.reserve(entries.size());
-    for (const QJsonValue &v : entries) {
+    for (const auto &v : entries) {
         if (!v.isObject()) continue;
         Entry e = entryFromJson(v.toObject());
         if (e.path.isEmpty()) continue;

@@ -72,7 +72,7 @@ void Logger::installMessageHandler() {
             case QtDebugMsg:    level = Debug; break;
             case QtInfoMsg:     level = Info; break;
             case QtWarningMsg:  level = Warning; break;
-            case QtCriticalMsg: level = Critical; break;
+            case QtCriticalMsg:
             case QtFatalMsg:    level = Critical; break;
         }
 

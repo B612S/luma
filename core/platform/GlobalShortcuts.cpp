@@ -33,7 +33,8 @@ const QDBusArgument &operator>>(const QDBusArgument &argument, PortalShortcut &s
     argument.beginStructure();
     argument >> shortcut.id >> shortcut.properties;
     argument.endStructure();
-    return argument;
+    // Qt's stream operators return their argument; callers pass an lvalue.
+    return argument; // NOLINT(bugprone-return-const-ref-from-parameter)
 }
 
 constexpr auto kService = "org.freedesktop.portal.Desktop";

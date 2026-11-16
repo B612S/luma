@@ -244,9 +244,9 @@ void preloadTextEngines()
 }
 }
 
-void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
+static void handleArguments(const QStringList &args, MediaManager &media, QQuickWindow *rootWindow) {
     if (args.size() > 1) {
-        QString filePath = args.at(1);
+        const QString &filePath = args.at(1);
         QTimer::singleShot(100, &media, [&media, filePath]() { media.openFile(filePath); });
     }
     if (rootWindow) {
@@ -334,8 +334,8 @@ int main(int argc, char *argv[]) {
         if (!iconTheme.isEmpty())
             QIcon::setThemeName(iconTheme);
     }
-    app.setApplicationName("luma");
-    app.setApplicationVersion(versionWithRevision());
+    QCoreApplication::setApplicationName("luma");
+    QCoreApplication::setApplicationVersion(versionWithRevision());
     QGuiApplication::setDesktopFileName(QStringLiteral("luma"));
 
     // Diagnostic: a frozen UI shows up as a gap between these heartbeats.
@@ -352,7 +352,7 @@ int main(int argc, char *argv[]) {
             qDebug() << "[perf] GUI stall" << gap << "ms";
     });
     stallTimer->start();
-    app.setWindowIcon(QIcon(":/assets/luma.png"));
+    QGuiApplication::setWindowIcon(QIcon(":/assets/luma.png"));
     applyFontFallbackStack();
     preloadTextEngines();
 
@@ -371,7 +371,7 @@ int main(int argc, char *argv[]) {
         socket.connectToServer(serverName);
         if (socket.waitForConnected(500)) {
             QTextStream stream(&socket);
-            for (const QString &arg : app.arguments()) {
+            for (const QString &arg : QCoreApplication::arguments()) {
                 stream << arg << "\n";
             }
             stream.flush();
@@ -396,7 +396,7 @@ int main(int argc, char *argv[]) {
     QTranslator *translator = new QTranslator(&app);
 
     auto loadLanguage = [&](const QString &requested) {
-        app.removeTranslator(translator);
+        QCoreApplication::removeTranslator(translator);
         const QString language = ConfigManager::resolveLanguage(requested, QLocale::system().name());
         // Translations are embedded in the binary (qt_add_translations), so the
         // resource is tried first: it always matches this build.
@@ -407,7 +407,7 @@ int main(int argc, char *argv[]) {
         if (translator->load(resourcePath)
                 || translator->load(sysPath)
                 || translator->load(localPath)) {
-            app.installTranslator(translator);
+            QCoreApplication::installTranslator(translator);
         }
     };
 
@@ -708,7 +708,7 @@ int main(int argc, char *argv[]) {
     QObject::connect(&playlists, &PlaylistManager::activeModelChanged,
                      &media, &MediaManager::playlistChanged);
 
-    handleArguments(app.arguments(), media, root);
+    handleArguments(QCoreApplication::arguments(), media, root);
 
     // ---- Single instance: accepting new arguments ----
     if (config.singleInstance() && server) {
@@ -783,6 +783,6 @@ int main(int argc, char *argv[]) {
         castManager.stopCast();
     });
 
-    const int exitCode = app.exec();
+    const int exitCode = QApplication::exec();
     return exitCode;
 }

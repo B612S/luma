@@ -905,7 +905,7 @@ void MediaManager::scanFolderForPlaylist(const QString &filePath, quint64 genera
         }
         return entries;
     }));
-}
+} // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks): watcher is deleted in finished()
 
 void MediaManager::openFolder(const QString &folder) {
     if (!m_mpv || !m_playlists) return;
@@ -1163,7 +1163,7 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
 
             QString muxedUrl;
             const QJsonArray requested = info.value(QStringLiteral("requested_formats")).toArray();
-            for (const QJsonValue &value : requested) {
+            for (const auto &value : requested) {
                 const QJsonObject format = value.toObject();
                 const QString formatUrl = format.value(QStringLiteral("url")).toString();
                 if (formatUrl.isEmpty()) continue;
@@ -1198,7 +1198,7 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
             m_resolvedChapters.clear();
             m_resolvedDuration = info.value(QStringLiteral("duration")).toDouble(0.0);
             const QJsonArray chapters = info.value(QStringLiteral("chapters")).toArray();
-            for (const QJsonValue &value : chapters) {
+            for (const auto &value : chapters) {
                 const QJsonObject chapter = value.toObject();
                 const double start = chapter.value(QStringLiteral("start_time")).toDouble(-1.0);
                 if (start < 0.0) continue;
@@ -1215,7 +1215,7 @@ void MediaManager::finishUrlResolution(const QString &url, bool keepPlaylist, bo
             // Drop duplicate timestamps (mpv needs strictly increasing starts)
             // and fill in missing end times from the next chapter / duration.
             QVector<ChapterInfo> uniqueChapters;
-            for (ChapterInfo chapter : std::as_const(m_resolvedChapters)) {
+            for (const ChapterInfo &chapter : std::as_const(m_resolvedChapters)) {
                 if (!uniqueChapters.isEmpty()
                         && chapter.start - uniqueChapters.last().start < 0.01)
                     continue;
@@ -1385,7 +1385,7 @@ QString MediaManager::writeChaptersFile(const QVector<ChapterInfo> &chapters)
     if (!m_chaptersDir->isValid())
         return {};
 
-    const QString path = m_chaptersDir->path()
+    QString path = m_chaptersDir->path()
                          + QStringLiteral("/chapters-%1.txt").arg(++m_chaptersCounter);
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))

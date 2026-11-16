@@ -267,7 +267,7 @@ void ConfigManager::setVolume(int v) {
 }
 
 QString ConfigManager::language() const {
-    const QString lang = m_settings->value("ui/language", "auto").toString();
+    QString lang = m_settings->value("ui/language", "auto").toString();
     // "auto" follows the system locale; only languages with a compiled
     // translation are supported.
     if (lang == "auto") return lang;

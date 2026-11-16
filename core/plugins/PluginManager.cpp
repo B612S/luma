@@ -499,10 +499,10 @@ void PluginManager::runMenuAction(const QString &actionId, const QVariantMap &co
     }
 }
 
-void PluginManager::closeWindow(QObject *object)
+void PluginManager::closeWindow(QObject *window)
 {
-    if (auto *window = qobject_cast<PluginWindow *>(object))
-        window->close();
+    if (auto *pluginWindow = qobject_cast<PluginWindow *>(window))
+        pluginWindow->close();
 }
 
 bool PluginManager::handleShortcut(int key, Qt::KeyboardModifiers modifiers)
@@ -704,9 +704,7 @@ void PluginManager::scan()
     if (disabledChanged) {
         saveDisabled(QStringList(m_disabled.cbegin(), m_disabled.cend()));
     }
-    if (known.size() != before)
-        saveKnown(known);
-    else if (disabledChanged)
+    if (known.size() != before || disabledChanged)
         saveKnown(known);
 }
 

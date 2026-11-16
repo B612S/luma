@@ -22,6 +22,7 @@
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrentRun>
 #include <memory>
+#include <utility>
 
 const QString PlaylistManager::DEFAULT_ID = "__default__";
 
@@ -45,10 +46,12 @@ static bool isMediaFile(const QString &path)
     return allowed.contains(QFileInfo(path).suffix().toLower());
 }
 
+namespace {
 struct FolderScanResult {
     QStringList files;
     QStringList dirs;
 };
+} // namespace
 
 // Recursively lists media files and directories under the given roots. Runs
 // off the GUI thread for the folder watcher; also used synchronously by
@@ -94,7 +97,7 @@ static QStringList mediaFilesInFolder(const QString &folder)
 static QStringList foldersFromJson(const QJsonArray &array)
 {
     QStringList folders;
-    for (const QJsonValue &value : array) {
+    for (const auto &value : array) {
         if (value.isString() && !value.toString().isEmpty())
             folders << value.toString();
     }
@@ -320,7 +323,7 @@ void PlaylistManager::reloadExternalPlaylists()
     // Deletions: wait one recheck so an atomic save cannot look like one.
     QStringList missing;
     for (auto it = m_models.constBegin(); it != m_models.constEnd(); ++it) {
-        const QString id = it.key();
+        const QString &id = it.key();
         if (id != DEFAULT_ID && !present.contains(id))
             missing << id;
     }
@@ -449,7 +452,7 @@ void PlaylistManager::rebuildFolderWatcher()
         if (!m_folderWatcher->directories().contains(dir))
             m_folderWatcher->addPath(dir);
     }
-    m_folderDirOwners = owners;
+    m_folderDirOwners = std::move(owners);
 }
 
 void PlaylistManager::scheduleWatchScan(const QString &id)
@@ -521,7 +524,7 @@ void PlaylistManager::startWatchScan(const QString &id)
             scheduleWatchScan(id);
     });
     future->setFuture(QtConcurrent::run([roots]() { return scanFolderTree(roots); }));
-}
+} // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks): watcher is deleted in finished()
 
 void PlaylistManager::stopWatchingPlaylist(const QString &id)
 {
@@ -877,7 +880,7 @@ void PlaylistManager::renamePlaylist(const QString &id, const QString &newName) 
     if (id == DEFAULT_ID) return;
     QString clean = sanitizeName(newName);
     if (clean.isEmpty()) return;
-    m_names[id] = clean;
+    m_names[id] = std::move(clean);
     savePlaylist(id);
     emit playlistsChanged();
 }

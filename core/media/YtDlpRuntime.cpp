@@ -383,7 +383,7 @@ void YtDlpRuntime::refreshYtdlpRuntime()
 }
 
 void YtDlpRuntime::runWheelInstall(const QString &package, const QString &dir,
-                                   std::function<void(bool, const QString &)> done)
+                                   const std::function<void(bool, const QString &)> &done)
 {
     const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
     if (python.isEmpty()) {
@@ -474,7 +474,7 @@ void YtDlpRuntime::installYtdlpEjs()
                     });
 }
 
-void YtDlpRuntime::runDenoInstall(std::function<void(bool, const QString &)> done)
+void YtDlpRuntime::runDenoInstall(const std::function<void(bool, const QString &)> &done)
 {
     const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
     if (python.isEmpty()) {

@@ -5,7 +5,7 @@ namespace {
 constexpr int kTemporaryOsdMs = 2500;
 }
 
-Q_LOGGING_CATEGORY(lumaOsd, "luma.osd")
+Q_STATIC_LOGGING_CATEGORY(lumaOsd, "luma.osd")
 
 OsdManager::OsdManager(MpvItem *mpv, QObject *parent) : QObject(parent), m_mpv(mpv) {
     m_hideTimer = new QTimer(this);

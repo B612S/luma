@@ -55,7 +55,5 @@ bool TagManager::write(const QString &path, const QVariantMap &tags)
     const int track = tags.value("track").toString().toInt(&ok);
     tag->setTrack(ok && track > 0 ? track : 0);
 
-    if (!file.save()) return false;
-
-    return true;
+    return file.save();
 }

@@ -114,7 +114,7 @@ QString cacheDirectory()
 
 QString writeScript(const QString &name, const QString &source)
 {
-    const QString path = cacheDirectory() + QLatin1Char('/') + name + QStringLiteral(".js");
+    QString path = cacheDirectory() + QLatin1Char('/') + name + QStringLiteral(".js");
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return QString();

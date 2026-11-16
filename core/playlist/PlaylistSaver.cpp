@@ -57,12 +57,11 @@ void PlaylistSaver::save(const QString &filePath, const QString &id, const QStri
                          const QStringList &watchFolders)
 {
     QVector<PlaylistModel::Entry> snapshot = entries;
-    const QStringList folders = watchFolders;
     QMetaObject::invokeMethod(
         m_writer,
         [saver = this, writer = m_writer, filePath, id, name, mode,
-         snapshot = std::move(snapshot), folders]() {
-            writer->write(filePath, id, name, mode, snapshot, folders);
+         snapshot = std::move(snapshot), watchFolders]() {
+            writer->write(filePath, id, name, mode, snapshot, watchFolders);
             QMetaObject::invokeMethod(
                 saver, [saver, filePath]() { emit saver->saved(filePath); },
                 Qt::QueuedConnection);

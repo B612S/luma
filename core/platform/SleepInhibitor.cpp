@@ -11,7 +11,7 @@
 #include <QLoggingCategory>
 #include <QVariantMap>
 
-Q_LOGGING_CATEGORY(lumaSleep, "luma.sleep")
+Q_STATIC_LOGGING_CATEGORY(lumaSleep, "luma.sleep")
 
 namespace {
 
@@ -189,7 +189,7 @@ void SleepInhibitor::handleInhibitReply(QDBusPendingCallWatcher *watcher)
     QString handle;
     const QList<QVariant> arguments = watcher->reply().arguments();
     if (!arguments.isEmpty()) {
-        const QVariant value = arguments.constFirst();
+        const QVariant &value = arguments.constFirst();
         if (value.metaType() == QMetaType::fromType<QDBusObjectPath>())
             handle = value.value<QDBusObjectPath>().path();
         else

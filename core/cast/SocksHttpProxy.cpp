@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QDebug>
+#include <utility>
 
 namespace {
 const int kMaxHttpHeader = 64 * 1024;
@@ -121,7 +122,7 @@ private:
                 rewritten += header + "\r\n";
             }
             rewritten += "\r\n";
-            m_forwardRequest = rewritten;
+            m_forwardRequest = std::move(rewritten);
         }
 
         beginProxy();
@@ -393,7 +394,7 @@ private:
 
     static bool splitHostPort(const QString &target, QString &host, quint16 &port, quint16 defaultPort)
     {
-        QString value = target;
+        const QString &value = target;
         if (value.startsWith(QLatin1Char('['))) {
             const int close = value.indexOf(QLatin1Char(']'));
             if (close < 0) return false;

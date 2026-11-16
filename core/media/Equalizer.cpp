@@ -526,7 +526,7 @@ void Equalizer::load()
     m_customPresets.clear();
     const QJsonDocument document = QJsonDocument::fromJson(
         m_config->value(QStringLiteral("equalizer/custom_presets")).toString().toUtf8());
-    for (const QJsonValue &value : document.array()) {
+    for (const auto &value : document.array()) {
         const QJsonObject object = value.toObject();
         CustomPreset preset;
         preset.name = object.value(QStringLiteral("name")).toString().trimmed();

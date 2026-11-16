@@ -68,7 +68,7 @@ QString translatedPluginText(const QVariantMap &translations, const QString &key
     if (key.isEmpty())
         return fallback;
 
-    const QString translated = translations.value(key).toString();
+    QString translated = translations.value(key).toString();
     if (!translated.isEmpty())
         return translated;
 

@@ -352,7 +352,7 @@ void CastV2Client::onReadyRead() {
         if (type == "RECEIVER_STATUS") {
             QJsonObject status = obj["status"].toObject();
             QJsonArray apps = status["applications"].toArray();
-            for (const QJsonValue &appVal : apps) {
+            for (const auto &appVal : apps) {
                 QJsonObject app = appVal.toObject();
                 if (app["appId"].toString() == "CC1AD845") {
                     m_transportId = app["transportId"].toString();

@@ -23,6 +23,7 @@
 #include <expected>
 #include <functional>
 #include <cstring>
+#include <utility>
 #ifdef Q_OS_LINUX
 #include <sys/prctl.h>
 #include <sys/resource.h>
@@ -63,7 +64,7 @@ std::expected<ProbeResult, QString> parseProbe(const QByteArray &data)
                             .value(QStringLiteral("format_name")).toString();
     result.duration = root.value(QStringLiteral("format")).toObject()
                           .value(QStringLiteral("duration")).toString().toDouble();
-    for (const QJsonValue &value : streamArray) {
+    for (const auto &value : streamArray) {
         const QJsonObject stream = value.toObject();
         result.streams.append({stream.value(QStringLiteral("codec_type")).toString(),
                                stream.value(QStringLiteral("codec_name")).toString(),
@@ -302,7 +303,7 @@ bool CastMemoryHlsServer::startEncoding(QString *error)
                         .arg(i % (kChunkSeconds / kSegmentSeconds), 5, 10, QLatin1Char('0'));
     }
     playlist += QStringLiteral("#EXT-X-ENDLIST\n");
-    m_playlist = playlist;
+    m_playlist = std::move(playlist);
 
     const QString ramRoot = QDir(QStringLiteral("/dev/shm")).exists()
                                 ? QStringLiteral("/dev/shm") : QDir::tempPath();
@@ -859,8 +860,8 @@ void CastMemoryHlsServer::handleClient(QTcpSocket *socket)
         // The receiver may prefetch the next chunk while the current one is
         // still being encoded. Do not let that request kill the encoder: wait
         // for it to finish. A real jump to another chunk still preempts.
-        if (!(m_chunkProcess && m_generatingChunk >= 0
-              && chunk == m_generatingChunk + 1))
+        if (!m_chunkProcess || m_generatingChunk < 0
+                || chunk != m_generatingChunk + 1)
             startChunk(chunk);
         maybePrefetch();
     });

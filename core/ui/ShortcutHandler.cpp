@@ -5,7 +5,6 @@
 #include "platform/GlobalShortcuts.hpp"
 #include <QKeyEvent>
 #include <QMouseEvent>
-#include <QKeySequence>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QDir>
@@ -465,7 +464,7 @@ void ShortcutHandler::clearPluginBindingKey(quint32 keycode,
 
 QString ShortcutHandler::matchPluginBinding(QKeyEvent *event) const
 {
-    const quint32 keycode = static_cast<quint32>(event->nativeScanCode());
+    const quint32 keycode = event->nativeScanCode();
     const Qt::KeyboardModifiers mods = event->modifiers()
         & ~Qt::GroupSwitchModifier
         & ~Qt::KeypadModifier;
@@ -672,7 +671,7 @@ void ShortcutHandler::saveShortcuts()
 
 ShortcutAction ShortcutHandler::matchAction(QKeyEvent *event) const
 {
-    const quint32 keycode = static_cast<quint32>(event->nativeScanCode());
+    const quint32 keycode = event->nativeScanCode();
     const Qt::KeyboardModifiers mods = event->modifiers()
         & ~Qt::GroupSwitchModifier
         & ~Qt::KeypadModifier;
@@ -1428,8 +1427,8 @@ void ShortcutHandler::cycleAspectRatio() {
     QStringList aspects = {"original", "16:9", "4:3", "21:9", "1:1", "9:16"};
     QStringList labels  = {"Original", "16:9", "4:3", "21:9", "1:1", "9:16"};
     m_aspectIndex = (m_aspectIndex + 1) % aspects.size();
-    QString mode = aspects[m_aspectIndex];
-    QString label = labels[m_aspectIndex];
+    const QString &mode = aspects[m_aspectIndex];
+    const QString &label = labels[m_aspectIndex];
     if (mode == "original") m_mpv->setProperty("video-aspect-override", "no");
     else m_mpv->setProperty("video-aspect-override", mode);
     if (m_osd) m_osd->showInfo(tr("osd_aspect").arg(label));

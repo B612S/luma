@@ -173,8 +173,8 @@ void MediaNotifier::send(const QString &summary, const QString &body, const QStr
     if (!coverPath.isEmpty())
         hints.insert(QStringLiteral("image-path"), coverPath);
 
-    m_interface->asyncCall("Notify", "Luma", (uint)0, "luma", summary, body, QStringList(),
-                           hints, (int)-1);
+    m_interface->asyncCall("Notify", "Luma", 0u, "luma", summary, body, QStringList(),
+                           hints, -1);
 }
 
 void MediaNotifier::notify(const QString &summary, const QString &body)
@@ -236,4 +236,4 @@ void MediaNotifier::notifyForFile(const QString &path)
         result.ok = readTrackTags(path, result.tags);
         return result;
     }));
-}
+} // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks): watcher is deleted in finished()

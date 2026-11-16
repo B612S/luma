@@ -20,7 +20,7 @@ class CastMemoryHlsServer : public QObject {
     Q_OBJECT
 public:
     explicit CastMemoryHlsServer(QObject *parent = nullptr);
-    ~CastMemoryHlsServer();
+    ~CastMemoryHlsServer() override;
 
     // audioInput is the separate audio-only URL of a yt-dlp DASH stream; it is
     // empty for local files and muxed streams.

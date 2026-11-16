@@ -21,8 +21,6 @@
 #include <QProcess>
 #include <QPointer>
 #include <memory>
-#include <QTimer>
-#include <QStandardPaths>
 #include <QDebug>
 
 // ---------------------------------------------------------------- helpers
@@ -260,7 +258,7 @@ int PluginPlaylistApi::remove(const QString &id, const QVariantList &indices)
         if (row >= 0 && row < model->rowCount() && !rows.contains(row))
             rows.append(row);
     }
-    std::sort(rows.begin(), rows.end(), std::greater<int>());
+    std::sort(rows.begin(), rows.end(), std::greater<>());
     for (int row : rows)
         model->removeItem(row);
     return rows.size();
