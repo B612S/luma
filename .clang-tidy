@@ -1,0 +1,52 @@
+---
+# Luma's clang-tidy profile: correctness and low-noise diagnostics.
+#
+# Run it through the optional `lint` CMake target, which analyzes every
+# translation unit in the compilation database exactly once:
+#
+#   cmake -B build -S . -DLUMA_CLANG_TIDY=ON
+#   cmake --build build --target lint
+#
+# Qt's API is idiomatic but not particularly clang-tidy-friendly. Checks that
+# mostly restate Qt conventions are disabled below instead of forcing noise
+# into every run; enable them explicitly when doing a style sweep (see
+# docs/LINTING.md).
+Checks: >
+  -*,
+  clang-analyzer-*,
+  clang-diagnostic-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  modernize-use-equals-delete,
+  modernize-use-equals-default,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-transparent-functors,
+  misc-explicit-constructor,
+  misc-override-with-different-visibility,
+  misc-use-internal-linkage,
+  readability-duplicate-include,
+  readability-inconsistent-declaration-parameter-name,
+  readability-redundant-casting,
+  readability-simplify-boolean-expr,
+  readability-static-accessed-through-instance,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-narrowing-conversions,
+  -bugprone-signed-bitwise,
+  -bugprone-throwing-static-initialization,
+  -portability-avoid-pragma-once,
+  -performance-enum-size,
+  -modernize-use-integer-sign-comparison
+
+# Only project headers, never Qt/FFmpeg/system headers. Vendored mpvqt/ is
+# exempt through mpvqt/.clang-tidy.
+HeaderFilterRegex: '(^|/)(core|tests)/.*\.(hpp|h)$'
+
+# There is no .clang-format in this repository.
+FormatStyle: none
+
+# Warnings do not fail the target; pass -warnings-as-errors to run-clang-tidy
+# explicitly when a zero-warning gate is wanted.
+WarningsAsErrors: ''

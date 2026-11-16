@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
 
+# Declared before project(): the generator reads CMAKE_EXPORT_COMPILE_COMMANDS
+# during the first configure too, and the lint target needs the database then.
+option(LUMA_CLANG_TIDY "Add a 'lint' target that runs clang-tidy" OFF)
+if(LUMA_CLANG_TIDY)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL
+        "Write compile_commands.json for the lint target and IDE tooling" FORCE)
+endif()
+
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" LUMA_VERSION LIMIT_COUNT 1)
 string(STRIP "${LUMA_VERSION}" LUMA_VERSION)
 if(NOT LUMA_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
@@ -296,4 +304,53 @@ if (LUMA_BUILD_CAST_TEST)
         ${CMAKE_CURRENT_SOURCE_DIR}/mpvqt)
     target_link_libraries(cast_tv_smoke PRIVATE Qt6::Core Qt6::Network Qt6::Concurrent)
     set_target_properties(cast_tv_smoke PROPERTIES AUTOMOC ON)
+endif()
+
+# ---- Optional clang-tidy linting ----
+# `lint` is deliberately opt-in (LUMA_CLANG_TIDY is declared at the top so the
+# first configure writes the compilation database): it needs clang-tidy and
+# run-clang-tidy, which are not build-time dependencies of Luma. Vendored
+# mpvqt/ is excluded through mpvqt/.clang-tidy and the source filter below.
+if(LUMA_CLANG_TIDY)
+    find_program(LUMA_CLANG_TIDY_EXECUTABLE
+        NAMES clang-tidy clang-tidy-23 clang-tidy-22 clang-tidy-21
+              clang-tidy-20 clang-tidy-19 clang-tidy-18 clang-tidy-17)
+    find_program(LUMA_RUN_CLANG_TIDY_EXECUTABLE
+        NAMES run-clang-tidy run-clang-tidy-23 run-clang-tidy-22
+              run-clang-tidy-21 run-clang-tidy-20 run-clang-tidy-19
+              run-clang-tidy-18 run-clang-tidy-17)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+
+    if(NOT LUMA_CLANG_TIDY_EXECUTABLE
+       OR NOT LUMA_RUN_CLANG_TIDY_EXECUTABLE
+       OR NOT Python3_Interpreter_FOUND)
+        message(FATAL_ERROR
+            "LUMA_CLANG_TIDY=ON requires clang-tidy, run-clang-tidy and Python 3")
+    endif()
+
+    set(LUMA_LINT_JOBS 0 CACHE STRING
+        "Parallel clang-tidy processes for the lint target (0 = all CPUs)")
+
+    # Several targets compile the same core sources; analyze each file once.
+    add_custom_target(lint
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/tidy
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/prepare-tidy-db.py
+                ${CMAKE_BINARY_DIR}/compile_commands.json
+                ${CMAKE_BINARY_DIR}/tidy/compile_commands.json
+        COMMAND ${LUMA_RUN_CLANG_TIDY_EXECUTABLE}
+                -p ${CMAKE_BINARY_DIR}/tidy
+                -j ${LUMA_LINT_JOBS}
+                -quiet
+                -hide-progress
+                -clang-tidy-binary ${LUMA_CLANG_TIDY_EXECUTABLE}
+                # GCC is the default compiler here; Qt adds a GCC-only flag
+                # that clang-tidy's frontend rejects.
+                -removed-arg=-mno-direct-extern-access
+                "^${CMAKE_SOURCE_DIR}/(main\\.cpp|core/)"
+        COMMENT "Running clang-tidy on main.cpp and core/"
+        USES_TERMINAL
+        VERBATIM)
+
+    # main.cpp includes generated QML type registration headers.
+    add_dependencies(lint luma)
 endif()

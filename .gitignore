@@ -22,6 +22,8 @@ build-appimage.log
 
 # Local build/tooling files
 compile_commands.json
+__pycache__/
+*.pyc
 CMakeUserPresets.json
 moc_*.cpp
 qrc_*.cpp

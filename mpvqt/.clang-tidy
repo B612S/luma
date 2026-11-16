@@ -1,0 +1,7 @@
+---
+# Vendored KDE mpvqt: no style or modernization checks, only the static
+# analyzer and compiler diagnostics. Luma-specific edits are kept to the
+# minimum described in mpvqt/README.md.
+Checks: '-*,clang-analyzer-*'
+InheritParentConfig: false
+HeaderFilterRegex: ''

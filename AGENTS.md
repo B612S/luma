@@ -25,7 +25,7 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` to a temp dir.
   `wayland_only` runs the
   built binary with no Wayland environment and asserts the startup refusal (exit 1 plus the
-  expected message). There is no lint/format config at the repo root.
+  expected message).
   `tst_media_open` is a separate libmpv integration test: it runs
   headless with `vo=null`/`ao=null`, uses the fixtures in `tests/data/`, and is labelled
   `integration;libmpv`. `cast_stream_test` is a manual, opt-in LAN HLS test
@@ -53,6 +53,23 @@ cmake --build build -j$(nproc)          # single-target: --target luma
 - Translations: `.qm` files are generated during the build from `locales/*.ts`
   (`en`, `ru`; Japanese/Chinese are temporarily disabled) and installed to
   `share/luma/translations`; keep the TS list in `CMakeLists.txt` in sync when adding a language.
+
+### Linting
+
+clang-tidy is opt-in and needs `clang-tidy`, `run-clang-tidy` and Python 3:
+
+```bash
+cmake -B build -S . -DLUMA_CLANG_TIDY=ON
+cmake --build build --target lint
+```
+
+- The `lint` target builds `luma` first, then analyzes `main.cpp` and `core/`;
+  tests and vendored `mpvqt/` are excluded. It generates and deduplicates
+  `build/tidy/compile_commands.json` itself.
+- `-DLUMA_LINT_JOBS=8` limits parallelism (0, the default, uses all CPUs).
+- The profile is in [`.clang-tidy`](.clang-tidy). A clean run is expected; the
+  documented `NOLINT` false positives and stricter-sweep instructions are in
+  [`docs/LINTING.md`](docs/LINTING.md).
 
 ### Single-instance and multi-instance verification
 
