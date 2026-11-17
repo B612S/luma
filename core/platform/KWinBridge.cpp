@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTimer>
@@ -31,14 +32,22 @@ var lumaService = "%2";
 
 function isLumaWindow(window) {
     return window.pid === lumaPid &&
-           (window.resourceClass === "luma" || window.resourceName === "luma");
+           (window.resourceClass === "luma" || window.resourceName === "luma" ||
+            window.resourceClass === "luma-pip" || window.resourceName === "luma-pip");
+}
+
+// The PiP window is created with its own Wayland app id, so KWin already knows
+// the mode when the re-created window appears. The caption stays free for the
+// media title.
+function isPipWindow(window) {
+    return window.resourceClass === "luma-pip" ||
+           window.resourceName === "luma-pip";
 }
 
 function geometryKey(window) {
-    // A normal window's caption carries the current media title ("Luma - ..."),
-    // so key the remembered geometry by window kind: the key has to survive
-    // track changes, or the window forgets its position.
-    return window.caption.indexOf("Luma PiP") === 0 ? "Luma PiP" : "Luma";
+    // Key the remembered geometry by window kind; the key has to survive track
+    // changes, or the window forgets its position.
+    return isPipWindow(window) ? "Luma PiP" : "Luma";
 }
 
 var savedGeometries = {};
@@ -58,7 +67,7 @@ function restore(window) {
 }
 
 function savePip(window) {
-    if (!isLumaWindow(window) || window.caption.indexOf("Luma PiP") !== 0)
+    if (!isLumaWindow(window) || !isPipWindow(window))
         return;
     if (window.hidden || window.minimized)
         return;
@@ -70,7 +79,7 @@ function savePip(window) {
 function update(window) {
     if (!isLumaWindow(window))
         return;
-    const keepAbove = window.caption.indexOf("Luma PiP") === 0;
+    const keepAbove = isPipWindow(window);
     if (window.keepAbove !== keepAbove)
         window.keepAbove = keepAbove;
 }
@@ -228,7 +237,9 @@ void KWinBridge::restorePipGeometry()
 var targetPid = %1;
 var targetGeometry = { x: %2, y: %3, width: %4, height: %5 };
 workspace.windowList().forEach(function (window) {
-    if (window.pid !== targetPid || window.caption.indexOf("Luma PiP") !== 0)
+    if (window.pid !== targetPid)
+        return;
+    if (window.resourceClass !== "luma-pip" && window.resourceName !== "luma-pip")
         return;
     var g = Object.assign({}, window.frameGeometry);
     g.x = targetGeometry.x;
@@ -301,6 +312,15 @@ void KWinBridge::setPipActive(bool active)
 {
     if (active)
         loadWatcher();
+}
+
+void KWinBridge::setWindowClass(bool pip)
+{
+    // The window is re-created on every PiP/Normal transition, and Qt sends
+    // the current desktop file name as the app id of the new Wayland surface.
+    // The caller switches this before the window is re-created.
+    QGuiApplication::setDesktopFileName(
+        pip ? QStringLiteral("luma-pip") : QStringLiteral("luma"));
 }
 
 bool KWinBridge::loadWatcher()

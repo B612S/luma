@@ -18,8 +18,9 @@ All notable changes to Luma are documented here. The format is based on
 - The window title shows what is playing, as `Luma - <media title>`. The title
   comes from the same extension-free name the desktop audio mixer shows, so a
   local file no longer appears with its extension; with nothing loaded the
-  title stays `Luma`. The PiP window keeps its exact `Luma PiP` title, which
-  the KWin geometry script matches on.
+  title stays `Luma`. The title stays the same in picture-in-picture as well:
+  the PiP window is created with its own Wayland app id (`luma-pip`), which the
+  KWin geometry script uses instead of matching a separate `Luma PiP` caption.
 
 - Plugin translations use stable keys instead of English source text. The host
   derives keys from `plugin.json` (`name`, `description`, `info`,

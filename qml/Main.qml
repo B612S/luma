@@ -16,14 +16,12 @@ ApplicationWindow {
     minimumWidth: pipMode ? 320 : 640
     minimumHeight: pipMode ? 180 : 480
     // What the desktop mixer shows for the current stream: mpv's media-title
-    // without the file extension (see MpvItem::streamTitle).
+    // without the file extension (see MpvItem::streamTitle). The title stays
+    // the same in PiP: the KWin helper recognizes the PiP window by its own
+    // Wayland app id (see KWinBridge), not by the caption.
     readonly property string nowPlayingTitle: mpv ? mpv.streamTitle : ""
-    // The "PiP" title is what the KWin keep-above script looks for (see KWinBridge),
-    // so it stays exactly "Luma PiP" — unlike the normal window, it is not
-    // decorated with the media title.
-    title: root.pipMode ? "Luma PiP"
-                        : (Media.hasMedia && root.nowPlayingTitle.length > 0
-                           ? "Luma - " + root.nowPlayingTitle : "Luma")
+    title: Media.hasMedia && root.nowPlayingTitle.length > 0
+           ? "Luma - " + root.nowPlayingTitle : "Luma"
     // Windowed PiP is a frameless card with no transparent border. The video is
     // overscanned by one pixel and the FBO texture is clamped, so the window
     // edge never samples outside the frame. A single semi-transparent pixel
@@ -139,6 +137,8 @@ ApplicationWindow {
 
     function enterPip() {
         if (pipMode) return;
+        // Switch the app id before the window is re-created for PiP.
+        KWinBridge.setWindowClass(true);
         pipSavedGeometry = Qt.rect(root.x, root.y, root.width, root.height);
         pipWasFullscreen = (root.visibility === Window.FullScreen);
 
@@ -181,6 +181,8 @@ ApplicationWindow {
 
     function exitPip() {
         if (!pipMode) return;
+        // Switch the app id before the window is re-created for the normal mode.
+        KWinBridge.setWindowClass(false);
         root.savePipGeometry();
         pipMode = false;
         if (root.visibility === Window.FullScreen) root.showNormal();

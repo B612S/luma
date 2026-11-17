@@ -31,6 +31,8 @@ public:
     // Loads the watcher when PiP starts; it stays loaded for the rest of the
     // run so normal-window show/hide also keeps its runtime geometry.
     Q_INVOKABLE void setPipActive(bool active);
+    // Selects the Wayland app id of the window that is about to be re-created.
+    Q_INVOKABLE void setWindowClass(bool pip);
     // Applies the PiP geometry remembered during this run.
     Q_INVOKABLE void restorePipGeometry();
 
