@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 // Resource Monitor: samples this Luma process (CPU/RSS), the system GPU, and
 // draws three SVG charts on its own statistics page. The page is preferred on
 // key 3, but the host may place it on the next free numeric key.

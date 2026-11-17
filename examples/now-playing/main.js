@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 // A small example plugin: add an item to the main context menu that opens a
 // host-rendered window with the current media information and a Play/Pause
 // action. The plugin never draws QML itself.

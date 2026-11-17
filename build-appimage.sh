@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 # Build a portable Luma AppImage.
 #
 # The result is a self-contained x86_64/aarch64 AppImage for glibc-based

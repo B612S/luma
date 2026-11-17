@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 // HDR Output: request HDR signalling from mpv. The compositor, display and
 // driver must support HDR; Luma cannot force it on unsupported hardware.
 

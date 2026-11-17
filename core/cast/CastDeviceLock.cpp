@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 #include "cast/CastDeviceLock.hpp"
 
 #include <QDebug>

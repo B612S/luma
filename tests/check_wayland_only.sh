@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 # Wayland-only policy check: the binary must exit with status 1 and explain
 # that a Wayland session is required when no Wayland session is available.
 #

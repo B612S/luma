@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 """Write a de-duplicated compilation database for the `lint` target.
 
 Several CMake targets compile the same core sources (luma, luma_testcore,

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 // Manual cast streaming test. Not part of ctest: build with
 //   cmake -B build -S . -DLUMA_BUILD_CAST_TEST=ON
 // and run:

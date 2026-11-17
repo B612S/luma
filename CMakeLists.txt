@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 B612S <sem.alimov@inbox.ru>
+
 cmake_minimum_required(VERSION 3.20)
 
 # Declared before project(): the generator reads CMAKE_EXPORT_COMPILE_COMMANDS
