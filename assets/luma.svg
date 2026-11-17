@@ -1,11 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <!-- Luma icon in the Papirus idiom, without a plate: the brand-orange play
        mark alone on a transparent 64x64 grid. The mark keeps the Papirus drop
-       shadow (black at 20%, one unit down). Its tip is rounded and its
-       bounding box is centred, so the triangle reads as centred instead of
-       crowding the right edge. -->
-  <g transform="translate(0 1)" opacity="0.2">
-    <path d="M 18.16 12.17 L 47.59 28.69 Q 53.5 32 47.59 35.31 L 18.16 51.83 Q 12.5 55 12.5 48.51 L 12.5 15.49 Q 12.5 9 18.16 12.17 Z" fill="#000000"/>
+       shadow (black at 20%, one unit down) and carries a white rim that is
+       3 units wide on the final 64x64 grid (2.4 units in the scaled
+       geometry). Its silhouette matches the 56-unit body of a Papirus
+       application icon. Its tip is rounded and its bounding box is centred,
+       so the triangle reads as centred instead of crowding the right edge. -->
+  <g transform="translate(32 32) scale(1.25) translate(-31.55 -32.5)">
+    <g transform="translate(0 1)" opacity="0.2">
+      <path d="M 18.16 12.17 L 47.59 28.69 Q 53.5 32 47.59 35.31 L 18.16 51.83 Q 12.5 55 12.5 48.51 L 12.5 15.49 Q 12.5 9 18.16 12.17 Z" fill="#000000" stroke="#000000" stroke-width="2.4" stroke-linejoin="round"/>
+    </g>
+    <path d="M 18.16 12.17 L 47.59 28.69 Q 53.5 32 47.59 35.31 L 18.16 51.83 Q 12.5 55 12.5 48.51 L 12.5 15.49 Q 12.5 9 18.16 12.17 Z" fill="#FF8A44" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"/>
   </g>
-  <path d="M 18.16 12.17 L 47.59 28.69 Q 53.5 32 47.59 35.31 L 18.16 51.83 Q 12.5 55 12.5 48.51 L 12.5 15.49 Q 12.5 9 18.16 12.17 Z" fill="#FF8A44"/>
 </svg>
