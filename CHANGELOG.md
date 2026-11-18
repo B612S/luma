@@ -18,11 +18,11 @@ All notable changes to Luma are documented here. The format is based on
 ### Changed
 
 - The Arch package now depends on the repositories' `mpv` 0.42, which
-  provides libmpv and its headers, instead of the temporary
-  `packaging/libmpv` package built against a static libplacebo. That
-  PKGBUILD and its patch are removed; `packaging/libmpv` keeps only the
-  `build-libmpv.sh` builder the AppImage bundles. The CI no longer builds the
-  temporary package before the Arch one.
+  provides libmpv and its headers, instead of a temporary `libmpv` package
+  built against a static libplacebo. That packaging and its `build-libmpv.sh`
+  helper are gone: `build-appimage.sh` builds the libmpv/libplacebo pair it
+  bundles itself. The CI no longer builds the temporary package before the
+  Arch one.
 
 - The keyboard shortcuts help no longer disappears as soon as `?` is
   released: it now opens on the key press and stays until `?` is pressed

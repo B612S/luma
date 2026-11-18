@@ -92,7 +92,137 @@ if [[ ! -x "$RUNTIME" ]]; then
 fi
 
 # Build the libmpv/libplacebo pair bundled into the image. Distributions can
-# lag behind the mpv release Luma requires, so build both from pinned sources.
+# lag behind the mpv release Luma requires, so both come from pinned sources.
+MPV_VERSION=0.42.0
+LIBPLACEBO_VERSION=7.387.0
+MPV_SHA256=bcfebbfa2b65a6d88dc97ea18117831072373e38b5785a2afb874ed4df5070dd
+LIBPLACEBO_SHA256=f9e62d3774a9c4cfd198ec3abaa88294aaade2e31c04d5ab02bcf4abc98b1df5
+MPV_URL="https://github.com/mpv-player/mpv/archive/refs/tags/v${MPV_VERSION}.tar.gz"
+LIBPLACEBO_URL="https://github.com/haasn/libplacebo/archive/refs/tags/v${LIBPLACEBO_VERSION}.tar.gz"
+
+fetch_source() {
+    local url="$1" dest="$2" sha="$3"
+    if [[ ! -f "$dest" ]]; then
+        echo "Downloading $(basename "$dest")..."
+        curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 \
+            -o "$dest.part" "$url"
+        mv "$dest.part" "$dest"
+    fi
+    printf '%s  %s\n' "$sha" "$dest" | sha256sum -c - >/dev/null || {
+        echo "Checksum mismatch: $dest" >&2
+        exit 1
+    }
+}
+
+# build_libmpv PREFIX BUILD_DIR [SOURCES_DIR] JOBS
+build_libmpv() {
+    local prefix build sources jobs
+    local src_dir mpv_tarball placebo_tarball placebo_src mpv_src
+    prefix="$(realpath -m "$1")"
+    build="$(realpath -m "$2")"
+    sources="${3:-}"
+    if [[ -n "$sources" ]]; then
+        sources="$(realpath -m "$sources")"
+    else
+        sources="$build/sources"
+    fi
+    jobs="$4"
+
+    for tool in meson tar sha256sum; do
+        command -v "$tool" >/dev/null 2>&1 || {
+            echo "Missing required tool: $tool" >&2
+            exit 1
+        }
+    done
+
+    mkdir -p "$sources" "$build"
+
+    mpv_tarball="$sources/mpv-${MPV_VERSION}.tar.gz"
+    placebo_tarball="$sources/libplacebo-${LIBPLACEBO_VERSION}.tar.gz"
+    fetch_source "$MPV_URL" "$mpv_tarball" "$MPV_SHA256"
+    fetch_source "$LIBPLACEBO_URL" "$placebo_tarball" "$LIBPLACEBO_SHA256"
+
+    src_dir="$build/src"
+    rm -rf "$src_dir"
+    mkdir -p "$src_dir"
+    tar -xf "$mpv_tarball" -C "$src_dir"
+    tar -xf "$placebo_tarball" -C "$src_dir"
+
+    placebo_src="$src_dir/libplacebo-${LIBPLACEBO_VERSION}"
+    mpv_src="$src_dir/mpv-${MPV_VERSION}"
+    [[ -d "$placebo_src" && -d "$mpv_src" ]] || {
+        echo "Unexpected source tree layout in $src_dir" >&2
+        exit 1
+    }
+
+    echo "Building libplacebo ${LIBPLACEBO_VERSION} (shared)..."
+    rm -rf "$build/libplacebo"
+    meson setup "$build/libplacebo" "$placebo_src" \
+        --prefix="$prefix" \
+        --libdir=lib \
+        --buildtype=release \
+        -Ddefault_library=shared \
+        -Ddemos=false \
+        -Dtests=false \
+        -Dbench=false \
+        -Dfuzz=false \
+        -Dvulkan=enabled \
+        -Dopengl=enabled \
+        -Dglslang=enabled \
+        -Dshaderc=enabled \
+        -Dlcms=enabled \
+        -Ddovi=enabled \
+        -Dlibdovi=enabled \
+        -Dunwind=enabled \
+        -Dxxhash=enabled
+    meson compile -C "$build/libplacebo" -j "$jobs"
+    meson install -C "$build/libplacebo" --no-rebuild
+
+    echo "Building mpv ${MPV_VERSION} (libmpv)..."
+    rm -rf "$build/mpv"
+    export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    meson setup "$build/mpv" "$mpv_src" \
+        --prefix="$prefix" \
+        --libdir=lib \
+        --buildtype=release \
+        --auto-features=auto \
+        -Dgpl=true \
+        -Dcplayer=false \
+        -Dlibmpv=true \
+        -Dbuild-date=false \
+        -Dtests=false \
+        -Dfuzzers=false \
+        -Dgl-x11=enabled \
+        -Dcaca=disabled \
+        -Dcdda=enabled \
+        -Ddvbin=enabled \
+        -Ddvdnav=enabled \
+        -Dlibarchive=enabled \
+        -Dopenal=enabled \
+        -Dhtml-build=disabled \
+        -Dmanpage-build=disabled \
+        -Dpdf-build=disabled
+    meson compile -C "$build/mpv" -j "$jobs"
+    meson install -C "$build/mpv" --no-rebuild
+
+    # libmpv is shared here, so private static dependencies are irrelevant and
+    # can confuse consumers that use pkg-config --static.
+    sed -i -e '/Requires\.private/d' -e '/Libs\.private/d' \
+        "$prefix/lib/pkgconfig/mpv.pc"
+
+    [[ -f "$prefix/lib/libmpv.so" ]] || {
+        echo "libmpv was not installed into $prefix/lib" >&2
+        exit 1
+    }
+    [[ -f "$prefix/lib/libplacebo.so" ]] || {
+        echo "libplacebo was not installed into $prefix/lib" >&2
+        exit 1
+    }
+
+    echo "libmpv $(PKG_CONFIG_PATH="$prefix/lib/pkgconfig" pkg-config --modversion mpv) installed in $prefix"
+    echo "libplacebo $(PKG_CONFIG_PATH="$prefix/lib/pkgconfig" pkg-config --modversion libplacebo) installed in $prefix"
+}
+
 if [[ "$BUILD_DIR" = /* ]]; then
     LIBMPV_PREFIX="${LIBMPV_PREFIX:-$BUILD_DIR/libmpv-prefix}"
     LIBMPV_BUILD_DIR="${LIBMPV_BUILD_DIR:-$BUILD_DIR/libmpv-build}"
@@ -100,11 +230,7 @@ else
     LIBMPV_PREFIX="${LIBMPV_PREFIX:-$SCRIPT_DIR/$BUILD_DIR/libmpv-prefix}"
     LIBMPV_BUILD_DIR="${LIBMPV_BUILD_DIR:-$SCRIPT_DIR/$BUILD_DIR/libmpv-build}"
 fi
-LIBMPV_ARGS=(--prefix "$LIBMPV_PREFIX" --build-dir "$LIBMPV_BUILD_DIR" --jobs "$JOBS")
-if [[ -n "${LIBMPV_SOURCES:-}" ]]; then
-    LIBMPV_ARGS+=(--sources "$LIBMPV_SOURCES")
-fi
-"$SCRIPT_DIR/packaging/libmpv/build-libmpv.sh" "${LIBMPV_ARGS[@]}"
+build_libmpv "$LIBMPV_PREFIX" "$LIBMPV_BUILD_DIR" "${LIBMPV_SOURCES:-}" "$JOBS"
 export PKG_CONFIG_PATH="$LIBMPV_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export CMAKE_PREFIX_PATH="$LIBMPV_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
 export LD_LIBRARY_PATH="$LIBMPV_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

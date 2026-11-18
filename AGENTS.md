@@ -189,9 +189,8 @@ settings/menu behavior.
   key is the desktop-entry spec version, not the app version.
 - Packaging: `PKGBUILD` (Arch, local) copies the working tree and installs
   `luma.desktop`, `assets/luma.png` (256x256) and `assets/luma.svg`
-  (hicolor/scalable); the AppImage script builds and bundles
-  libmpv/libplacebo from pinned sources through
-  `packaging/libmpv/build-libmpv.sh`; the Arch package depends on the
+  (hicolor/scalable); the AppImage script itself builds and bundles
+  libmpv/libplacebo from pinned sources; the Arch package depends on the
   repositories' `mpv>=0.42`, which provides libmpv and its headers.
   `.github/workflows/packages.yml` builds the
   AppImage and Arch package on release/manual request. `.gitignore` covers
