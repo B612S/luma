@@ -66,7 +66,7 @@ jobs:
           pacman -Syu --noconfirm --needed \
             base-devel git cmake ninja pkgconf curl \
             qt6-base qt6-declarative qt6-svg qt6-wayland qt6-tools \
-            wayland libxkbcommon ffmpeg taglib kirigami \
+            wayland libxkbcommon ffmpeg taglib kirigami mpv \
             hicolor-icon-theme plasma-integration qqc2-desktop-style \
             avahi patchelf github-cli \
             meson ladspa vulkan-headers wayland-protocols ffnvcodec-headers \
@@ -86,16 +86,11 @@ jobs:
           git fetch --depth 1 origin "${GITHUB_REF}"
           git checkout --detach FETCH_HEAD
 
-      - name: Build temporary libmpv package
+      - name: Prepare Arch build user
         if: matrix.package == 'arch'
         run: |
           useradd -m -s /bin/bash builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
-          su - builder -c "cd '$GITHUB_WORKSPACE/packaging/libmpv' && makepkg -f --nodeps"
-          pacman -U --noconfirm "$GITHUB_WORKSPACE"/packaging/libmpv/libmpv-*.pkg.tar.zst
-          rm -rf "$GITHUB_WORKSPACE/packaging/libmpv/src" \
-                 "$GITHUB_WORKSPACE/packaging/libmpv/pkg" \
-                 "$GITHUB_WORKSPACE"/packaging/libmpv/libmpv-*.pkg.tar.zst
 
       - name: Build Arch package
         if: matrix.package == 'arch'

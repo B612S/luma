@@ -131,12 +131,8 @@ Arch Linux:
 
 ```bash
 sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-wayland \
-    kirigami qqc2-desktop-style ffmpeg taglib
+    kirigami qqc2-desktop-style ffmpeg taglib mpv
 ```
-
-libmpv 0.42 ещё нет в репозиториях; соберите его из
-[`packaging/libmpv`](packaging/libmpv/) перед конфигурацией Luma (см.
-[Пакет для Arch Linux](#пакет-для-arch-linux)).
 
 ## Сборка
 
@@ -157,14 +153,10 @@ sudo cmake --install build
 
 ## Пакет для Arch Linux
 
-В репозитории есть `PKGBUILD`. Ему нужен libmpv 0.42, которого пока нет в
-репозиториях, поэтому сначала соберите временный пакет из `packaging/libmpv`
-(он статически линкует libplacebo 7.387):
+В репозитории есть `PKGBUILD`. Ему нужен пакет `mpv` 0.42 или новее из
+репозиториев — он предоставляет libmpv и его заголовочные файлы:
 
 ```bash
-cd packaging/libmpv
-makepkg -si
-cd ../..
 makepkg -si
 ```
 

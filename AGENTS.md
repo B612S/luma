@@ -190,8 +190,9 @@ settings/menu behavior.
 - Packaging: `PKGBUILD` (Arch, local) copies the working tree and installs
   `luma.desktop`, `assets/luma.png` (256x256) and `assets/luma.svg`
   (hicolor/scalable); the AppImage script builds and bundles
-  libmpv/libplacebo from pinned sources; the Arch package depends on
-  `libmpv>=0.42`, built from the temporary `packaging/libmpv` PKGBUILD until
-  the repositories catch up. `.github/workflows/packages.yml` builds the
+  libmpv/libplacebo from pinned sources through
+  `packaging/libmpv/build-libmpv.sh`; the Arch package depends on the
+  repositories' `mpv>=0.42`, which provides libmpv and its headers.
+  `.github/workflows/packages.yml` builds the
   AppImage and Arch package on release/manual request. `.gitignore` covers
   `src/`, `pkg/`, `AppDir/`, and package artifacts.

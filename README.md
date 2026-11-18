@@ -132,12 +132,8 @@ On Arch Linux:
 
 ```bash
 sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-wayland \
-    kirigami qqc2-desktop-style ffmpeg taglib
+    kirigami qqc2-desktop-style ffmpeg taglib mpv
 ```
-
-libmpv 0.42 is not in the repositories yet; build it from
-[`packaging/libmpv`](packaging/libmpv/) before configuring Luma (see
-[Arch Linux package](#arch-linux-package)).
 
 ## Build
 
@@ -158,14 +154,10 @@ sudo cmake --install build
 
 ## Arch Linux package
 
-A `PKGBUILD` is included. It needs libmpv 0.42, which is not in the
-repositories yet, so build the temporary package from `packaging/libmpv`
-first (it links libplacebo 7.387 statically):
+A `PKGBUILD` is included. It depends on the repositories' `mpv` 0.42 (or newer),
+which provides libmpv and its headers:
 
 ```bash
-cd packaging/libmpv
-makepkg -si
-cd ../..
 makepkg -si
 ```
 
@@ -175,10 +167,6 @@ makepkg -si
 AppImage and Arch package on every published GitHub release and can also be
 started manually from the Actions tab; a manual run requires an existing
 release tag so the built files can be attached to it.
-
-CI builds the temporary libmpv package before the Arch package with
-`makepkg -f --nodeps` and attaches the result to the release. For a local
-build, build `packaging/libmpv` first and then use `makepkg -si` on request.
 
 ## AppImage
 
