@@ -7,7 +7,8 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 // Keyboard shortcuts help. Styled like SettingsDialog/MediaInfoDialog and
-// shown while "?" is held. The list is generated from the configured bindings
+// toggled with "?"; "?" or Escape closes it. The list is
+// generated from the configured bindings
 // (local and global), so changing a shortcut updates it immediately.
 Dialog {
     id: root

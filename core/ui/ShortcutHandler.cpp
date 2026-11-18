@@ -1177,8 +1177,16 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
         if (!m_mpv) return false;
         // The help dialog is modal for the player: let QML handle Tab, Space,
-        // Escape and its close button; only the ? key is handled on release.
-        if (m_helpVisible) return false;
+        // Escape and its close button. "?" toggles it here, on press, so a
+        // tap opens it and it stays until the next "?" (or Escape/click).
+        if (m_helpVisible) {
+            if (!key->isAutoRepeat()
+                    && matchAction(key) == ShortcutAction::ShowShortcutsHelp) {
+                emit shortcutsHelpVisibleChanged(false);
+                return true;
+            }
+            return false;
+        }
 
         // Ignore when focus is in a visible text field (TextField, TextInput,
         // etc.); hidden fields must not block playback shortcuts.
@@ -1242,13 +1250,6 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
     }
     else if (event->type() == QEvent::KeyRelease) {
         QKeyEvent *key = static_cast<QKeyEvent*>(event);
-        if (m_helpVisible) {
-            if (matchAction(key) == ShortcutAction::ShowShortcutsHelp) {
-                emit shortcutsHelpVisibleChanged(false);
-                return true;
-            }
-            return false;
-        }
         if (!key->isAutoRepeat()) {
             ShortcutAction action = matchAction(key);
             switch (action) {
@@ -1267,10 +1268,6 @@ bool ShortcutHandler::eventFilter(QObject *obj, QEvent *event) {
 
                 case ShortcutAction::FrameBackward:
                 case ShortcutAction::FrameForward:
-                    return true;
-
-                case ShortcutAction::ShowShortcutsHelp:
-                    emit shortcutsHelpVisibleChanged(false);
                     return true;
 
                 case ShortcutAction::VolumeUp:

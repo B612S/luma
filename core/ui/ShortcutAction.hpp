@@ -160,7 +160,7 @@ inline const QList<ShortcutDef>& defaultShortcuts() {
         { ShortcutAction::TogglePip,         "P",      33,  Qt::NoModifier },
         { ShortcutAction::FitWindowToVideo,  "W",      25,  Qt::NoModifier },
 
-        // Holding "?" (Shift+/) or "." on the Russian layout shows the help.
+        // Pressing "?" (Shift+/) or "." on the Russian layout toggles the help.
         { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::NoModifier },
         { ShortcutAction::ShowShortcutsHelp, "/",      61,  Qt::ShiftModifier },
 

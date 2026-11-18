@@ -427,7 +427,7 @@
 <message><source>sc_deinterlace</source><translation>Switch deinterlacing</translation></message>
 <message><source>sc_aspect</source><translation>Switch aspect ratio</translation></message>
 <message><source>sc_crop</source><translation>Detect and crop black bars</translation></message>
-<message><source>sc_help</source><translation>Hold to show this help</translation></message>
+<message><source>sc_help</source><translation>Press ? to show or hide this help</translation></message>
 <message><source>sc_space_key</source><translation>Space</translation></message>
 <message><source>shortcuts_global</source><translation>global</translation></message>
 </context>

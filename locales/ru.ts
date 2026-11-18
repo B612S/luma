@@ -427,7 +427,7 @@
 <message><source>sc_deinterlace</source><translation>Переключить чересстрочность</translation></message>
 <message><source>sc_aspect</source><translation>Переключить соотношение сторон</translation></message>
 <message><source>sc_crop</source><translation>Определить и обрезать чёрные поля</translation></message>
-<message><source>sc_help</source><translation>Удерживайте для этой подсказки</translation></message>
+<message><source>sc_help</source><translation>Нажмите ?, чтобы показать или скрыть подсказку</translation></message>
 <message><source>sc_space_key</source><translation>Пробел</translation></message>
 <message><source>shortcuts_global</source><translation>глобальная</translation></message>
 </context>

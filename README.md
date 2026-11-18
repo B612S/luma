@@ -78,8 +78,8 @@
 - **Chapters** — previous/next chapter with `PageUp` / `PageDown` or the Playback menu,
   and chapter ticks on the seek bar (hidden in **Settings → Interface**). Chapters from
   YouTube links are supported as well.
-- **Shortcut cheat sheet** — hold `?` (`Shift+/`) to see
-  all hotkeys while the key is held.
+- **Shortcut cheat sheet** — press `?` (`Shift+/`) to see all hotkeys; press it
+  again or `Escape` to close.
 - **Keyboard-first** — playback, seeking, volume, tracks, aspect ratio, crop.
 - **MPRIS2** — control from the desktop's media widget and media keys.
 - **English and Russian UI** — switchable at runtime or follows the system language.
@@ -322,7 +322,7 @@ intentionally fixed.
 | `T` | Pin the time counter on screen |
 | `P` | Picture in picture |
 | `W` | Fit the window to the video (one-shot, no aspect lock) |
-| `?` (hold) | Show the keyboard shortcuts |
+| `?` (toggle) | Show the keyboard shortcuts; press again to hide |
 | `C` | Cycle subtitles |
 | `A` | Cycle audio tracks |
 | `D` | Cycle deinterlacing (`auto` / `yes` / `no`) |

@@ -71,7 +71,8 @@ ApplicationWindow {
         root.controlsVisible = false;
     }
 
-    // If the window loses focus, the key release may not arrive — hide the help.
+    // Hide the help when the window loses focus so it does not reappear as a
+    // stale overlay after switching back.
     onActiveChanged: if (!active) root.shortcutsHelpVisible = false;
 
     // ---- Picture in picture (small window above the others) ----

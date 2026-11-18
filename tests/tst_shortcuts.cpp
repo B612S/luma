@@ -112,7 +112,7 @@ void TestShortcuts::unknownKeyGivesNone()
 
 void TestShortcuts::helpKeyWorksWithAndWithoutShift()
 {
-    // "?" is Shift+/, so both combinations must open the help.
+    // "?" is Shift+/, so both combinations must map to the help toggle.
     QCOMPARE(static_cast<int>(actionFor(61, Qt::NoModifier)),
              static_cast<int>(ShortcutAction::ShowShortcutsHelp));
     QCOMPARE(static_cast<int>(actionFor(61, Qt::ShiftModifier)),
