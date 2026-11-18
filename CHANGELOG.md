@@ -6,6 +6,8 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-18
+
 ### Added
 
 - A `LICENSE` file with the unmodified GPL-3.0 text. The project was already
@@ -14,6 +16,18 @@ All notable changes to Luma are documented here. The format is based on
   redistributors had nothing to ship.
 
 ### Changed
+
+- The Arch package now depends on the repositories' `mpv` 0.42, which
+  provides libmpv and its headers, instead of the temporary
+  `packaging/libmpv` package built against a static libplacebo. That
+  PKGBUILD and its patch are removed; `packaging/libmpv` keeps only the
+  `build-libmpv.sh` builder the AppImage bundles. The CI no longer builds the
+  temporary package before the Arch one.
+
+- The keyboard shortcuts help no longer disappears as soon as `?` is
+  released: it now opens on the key press and stays until `?` is pressed
+  again or `Escape` closes it, so the whole list can be read after a normal
+  tap.
 
 - The window title shows what is playing, as `Luma - <media title>`. The title
   comes from the same extension-free name the desktop audio mixer shows, so a
