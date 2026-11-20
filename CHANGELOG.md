@@ -6,6 +6,29 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Cast audio no longer drifts out of sync with the video during a long
+  Chromecast session. The cast is now produced by one continuous FFmpeg run
+  instead of a new encoder every 20 seconds: the MPEG-TS continuity counters
+  and the AAC encoder state no longer restart at every chunk boundary, which
+  was adding a priming/padding gap to the audio (and resetting the transport
+  stream) every 20 seconds. The run is restarted only when the TV seeks, is
+  throttled about half a minute ahead of the receiver, and old segments are
+  evicted as before, so memory use stays bounded. Segment timestamps now match
+  the playlist positions exactly (the transport stream's 1.4 s mux delay is
+  gone) and a recording whose timestamps do not start at zero is seeked by its
+  playback position, so seeking lands on the right frame.
+- The cast server answers each pending segment request on its own connection.
+  Previously, when the TV asked for several segments at once (at the start of a
+  cast or after a seek), a response could be written to another request's
+  socket, so the receiver could get a segment out of order and glitch or jump.
+- The cast's in-memory segment window no longer grows without bound. After a
+  seek the receiver can ask for segments well past the encoder's position;
+  eviction used to advance past segments that had not been written yet, and the
+  encoder's later copies were then never removed. It now stops at the first
+  segment that does not exist yet.
+
 ## [1.0.2] - 2026-11-18
 
 ### Added

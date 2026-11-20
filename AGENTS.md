@@ -28,7 +28,12 @@ cmake --build build -j$(nproc)          # single-target: --target luma
   expected message).
   `tst_media_open` is a separate libmpv integration test: it runs
   headless with `vo=null`/`ao=null`, uses the fixtures in `tests/data/`, and is labelled
-  `integration;libmpv`. `cast_stream_test` is a manual, opt-in LAN HLS test
+  `integration;libmpv`. `tst_castserver` is an automated cast HLS test
+  (`integration;ffmpeg`): it generates a marker source with ffmpeg/ffprobe,
+  casts it, fetches the segments over HTTP and checks the playlist, segment
+  timeline, MPEG-TS continuity, concurrent requests, seeking, A/V sync and the
+  bounded RAM window; it skips itself when ffmpeg/ffprobe are missing.
+  `cast_stream_test` is a manual, opt-in LAN HLS test
   (`-DLUMA_BUILD_CAST_TEST=ON`) and is deliberately not registered with ctest. Its YouTube case uses the real `yt-dlp`, network and
   `~/.config/luma/yt-dlp.conf` (including the proxy); it runs only when
   `LUMA_TEST_YOUTUBE_URL` is set, and can be disabled with `LUMA_TEST_NO_NETWORK=1`.
@@ -112,8 +117,11 @@ settings/menu behavior.
   stored in `mpv.conf` in mpv syntax (`hwdec=...`, `ao=...`); legacy `[playback]` keys
   from `luma.conf` are migrated there and removed.
 - Casting shells out to external `avahi-browse` (discovery) and `ffmpeg` (an
-  on-demand VOD HLS server: a full playlist, two-second segments generated in 20-second RAM
-  chunks and evicted); it silently fails if they are not on `PATH`. No cast
+  on-demand VOD HLS server: a full playlist and two-second segments produced by
+  one continuous encoder run that is throttled ahead of the receiver and evicted
+  behind it; a seek restarts the encoder at the requested segment so the
+  MPEG-TS timeline, continuity counters and AAC encoder state stay continuous);
+  it silently fails if they are not on `PATH`. No cast
   media is written to disk. A per-device `QLockFile` lease in
   `$XDG_RUNTIME_DIR/luma/` (cache-dir fallback) keeps two instances from casting
   to the same TV; if the lease cannot be created at all, casting still proceeds.
@@ -121,9 +129,10 @@ settings/menu behavior.
   (`castSourceFor`), not the page URL. Network inputs go through the configured
   proxy: HTTP(S) directly, SOCKS5 through the loopback `SocksHttpProxy` (FFmpeg
   cannot speak SOCKS; the TV still gets plain HLS on the LAN). The receiver
-  starts once the first two-second segment is complete (the rest of the chunk
-  streams while it buffers); yt-dlp's duration is passed in to skip ffprobe.
-  The next HLS chunk is prefetched one chunk ahead of the receiver.
+  starts once the first two-second segment is complete (the following segments
+  stream while it buffers); yt-dlp's duration is passed in to skip ffprobe.
+  The encoder runs ahead of the receiver until it is throttled; old segments are
+  evicted, so the RAM window stays bounded for a long cast.
 - `KWinBridge` writes helper scripts under `~/.cache/luma/kwin/` and loads them
   through KWin's D-Bus scripting interface. They are unloaded and deleted on a
   normal exit; stale per-PID scripts from a crashed run are cleaned at startup.

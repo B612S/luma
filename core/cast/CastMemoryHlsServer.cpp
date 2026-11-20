@@ -25,7 +25,6 @@
 #include <cmath>
 #include <expected>
 #include <functional>
-#include <cstring>
 #include <utility>
 #ifdef Q_OS_LINUX
 #include <sys/prctl.h>
@@ -50,6 +49,12 @@ struct ProbeResult {
     double duration = 0.0;
 };
 
+double jsonNumber(const QJsonValue &value)
+{
+    // ffprobe prints these as strings by default but may emit plain numbers.
+    return value.isString() ? value.toString().toDouble() : value.toDouble();
+}
+
 std::expected<ProbeResult, QString> parseProbe(const QByteArray &data)
 {
     QJsonParseError error;
@@ -63,10 +68,9 @@ std::expected<ProbeResult, QString> parseProbe(const QByteArray &data)
         return std::unexpected(QStringLiteral("No media streams found"));
 
     ProbeResult result;
-    result.formatName = root.value(QStringLiteral("format")).toObject()
-                            .value(QStringLiteral("format_name")).toString();
-    result.duration = root.value(QStringLiteral("format")).toObject()
-                          .value(QStringLiteral("duration")).toString().toDouble();
+    const QJsonObject format = root.value(QStringLiteral("format")).toObject();
+    result.formatName = format.value(QStringLiteral("format_name")).toString();
+    result.duration = jsonNumber(format.value(QStringLiteral("duration")));
     for (const auto &value : streamArray) {
         const QJsonObject stream = value.toObject();
         result.streams.append({stream.value(QStringLiteral("codec_type")).toString(),
@@ -86,9 +90,12 @@ void setParentDeathSignal(QProcess *process)
 {
 #ifdef Q_OS_LINUX
     process->setChildProcessModifier([]() {
-        ::prctl(PR_SET_PDEATHSIG, SIGTERM);
-        // Cast encoding must not make the GUI unresponsive while a chunk is
-        // generated. Lower priority and cap the thread count below.
+        // SIGKILL, not SIGTERM: the encoder is throttled with SIGSTOP, and a
+        // stopped process keeps a SIGTERM pending instead of exiting, which
+        // would leave it behind if the player crashes.
+        ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+        // Cast encoding must not make the GUI unresponsive while the encoder
+        // runs. Lower priority and cap the thread count below.
         ::setpriority(PRIO_PROCESS, 0, 19);
         // SCHED_IDLE is allowed for an unprivileged process lowering its own
         // priority and guarantees the GUI/compositor preempts chunk encoding.
@@ -104,34 +111,34 @@ void setParentDeathSignal(QProcess *process)
 
 CastMemoryHlsServer::CastMemoryHlsServer(QObject *parent) : QObject(parent)
 {
-    // ffmpeg finalizes a segment before creating the next file; poll while a
-    // chunk is being written so the receiver can start with the first segment
-    // instead of waiting for the whole 20-second chunk.
+    // ffmpeg closes a segment before it starts writing the next one, so a
+    // segment is complete as soon as the following file appears. Poll while the
+    // encoder runs so the receiver can start with the first segment instead of
+    // waiting for the whole cast.
     m_segmentTimer = new QTimer(this);
-    m_segmentTimer->setInterval(150);
-    connect(m_segmentTimer, &QTimer::timeout, this, &CastMemoryHlsServer::serveReadyPending);
+    m_segmentTimer->setInterval(100);
+    connect(m_segmentTimer, &QTimer::timeout, this, &CastMemoryHlsServer::pollSegments);
 }
 CastMemoryHlsServer::~CastMemoryHlsServer() { stop(); }
 
-QString CastMemoryHlsServer::chunkDir(int chunk) const
+QString CastMemoryHlsServer::segmentPath(int segment) const
 {
-    return m_tempDir ? m_tempDir->path() + QStringLiteral("/c%1").arg(chunk) : QString();
+    if (!m_tempDir || segment < 0)
+        return QString();
+    return m_tempDir->path()
+        + QStringLiteral("/seg%1.ts").arg(segment, 5, 10, QLatin1Char('0'));
 }
 
-QString CastMemoryHlsServer::chunkMarker(int chunk) const
+QString CastMemoryHlsServer::segmentFilePattern() const
 {
-    return chunkDir(chunk) + QStringLiteral("/.ready");
+    if (!m_tempDir) return QString();
+    return m_tempDir->path() + QStringLiteral("/seg%05d.ts");
 }
 
 int CastMemoryHlsServer::segmentCount() const
 {
     if (!(m_duration > 0.0)) return 0;
     return qMax(1, int(std::ceil(m_duration / double(kSegmentSeconds))));
-}
-
-int CastMemoryHlsServer::chunkForSegment(int segment) const
-{
-    return segment / qMax(1, kChunkSeconds / kSegmentSeconds);
 }
 
 QString CastMemoryHlsServer::detectLocalIP(const QString &targetIP) const
@@ -188,13 +195,12 @@ bool CastMemoryHlsServer::start(const QString &inputFile, const QString &targetI
     m_audioInput = audioInput;
     m_audioFilter = audioFilter;
     m_targetIP = targetIP;
-    m_lastRequestedChunk = -1;
     if (!prepareProxy(inputFile))
         return false;
     const quint64 generation = ++m_startGeneration;
 
     // yt-dlp already knows the duration: skip the network ffprobe and start
-    // encoding immediately. Optional -map arguments in chunkArgs tolerate a
+    // encoding immediately. Optional -map arguments in encoderArgs tolerate a
     // source that has only video or only audio.
     if (knownDuration > 0.0) {
         m_duration = knownDuration;
@@ -287,9 +293,8 @@ void CastMemoryHlsServer::applyProbe(quint64 generation, const QByteArray &data)
 
 bool CastMemoryHlsServer::startEncoding(QString *error)
 {
-    // The full VOD playlist is known once the duration is known. Segments are
-    // produced in 20-second chunks on demand; the receiver can seek anywhere
-    // immediately because every segment is listed up front.
+    // The full VOD playlist is known once the duration is known, so the
+    // receiver can seek anywhere immediately.
     const int segments = segmentCount();
     QString playlist = QStringLiteral(
         "#EXTM3U\n"
@@ -300,10 +305,9 @@ bool CastMemoryHlsServer::startEncoding(QString *error)
     for (int i = 0; i < segments; ++i) {
         const double remaining = m_duration - i * kSegmentSeconds;
         const double duration = qMin(double(kSegmentSeconds), qMax(0.001, remaining));
-        playlist += QStringLiteral("#EXTINF:%1,\nc%2/seg%3.ts\n")
+        playlist += QStringLiteral("#EXTINF:%1,\nseg%2.ts\n")
                         .arg(duration, 0, 'f', 6)
-                        .arg(chunkForSegment(i))
-                        .arg(i % (kChunkSeconds / kSegmentSeconds), 5, 10, QLatin1Char('0'));
+                        .arg(i, 5, 10, QLatin1Char('0'));
     }
     playlist += QStringLiteral("#EXT-X-ENDLIST\n");
     m_playlist = std::move(playlist);
@@ -337,14 +341,14 @@ bool CastMemoryHlsServer::startEncoding(QString *error)
                                          ? m_inputFile : inputUrl.host();
     qInfo() << "CastMemoryHlsServer: VOD" << m_localIP << m_port
             << "duration" << m_duration << "segments" << segments
-            << "chunks" << qCeil(m_duration / kChunkSeconds)
             << "input" << inputDescription
             << "audio" << (m_audioInput.isEmpty() ? QStringLiteral("muxed")
                                                   : QStringLiteral("separate"));
     qInfo() << "CastMemoryHlsServer: URL" << url();
 
-    // Warm the first chunk; the receiver will request it immediately.
-    startChunk(0);
+    // One continuous encoder run for the whole cast (restarted only on a seek)
+    // keeps the transport stream and the AAC encoder state continuous.
+    startEncoderAt(0);
     return true;
 }
 
@@ -371,23 +375,12 @@ void CastMemoryHlsServer::stop()
         m_probe->deleteLater();
         m_probe = nullptr;
     }
-    if (m_chunkProcess) {
-        m_chunkProcess->disconnect(this);
-        if (m_chunkProcess->state() != QProcess::NotRunning) {
-            m_chunkProcess->kill();
-            m_chunkProcess->waitForFinished(100);
-        }
-        m_chunkProcess->deleteLater();
-        m_chunkProcess = nullptr;
-    }
-    m_generatingChunk = -1;
-    m_lastRequestedChunk = -1;
+    stopEncoder();
     if (m_segmentTimer) m_segmentTimer->stop();
     for (const PendingRequest &request : m_pending) {
         if (request.socket) request.socket->disconnectFromHost();
     }
     m_pending.clear();
-    m_recentChunks.clear();
     if (m_server) {
         m_server->close();
         m_server->deleteLater();
@@ -412,6 +405,14 @@ void CastMemoryHlsServer::stop()
     m_port = 0;
     m_duration = 0.0;
     m_hasVideo = m_hasAudio = true;
+    m_encoderFirstSegment = 0;
+    m_highestComplete = -1;
+    m_lastRequestedSegment = -1;
+    m_lowestKeptSegment = 0;
+    m_encoderDone = false;
+    m_encoderFailed = false;
+    m_encoderPaused = false;
+    m_playlistReady = false;
 }
 
 bool CastMemoryHlsServer::prepareProxy(const QString &inputFile)
@@ -456,10 +457,12 @@ QString CastMemoryHlsServer::url() const
         .arg(m_localIP).arg(m_port).arg(m_token);
 }
 
-QStringList CastMemoryHlsServer::chunkArgs(int chunk) const
+QStringList CastMemoryHlsServer::encoderArgs(int firstSegment) const
 {
-    const double start = chunk * double(kChunkSeconds);
-    const double duration = qBound(0.1, m_duration - start, double(kChunkSeconds));
+    const double position = firstSegment * double(kSegmentSeconds);
+    const double remaining = qMax(0.1, m_duration - position);
+    // FFmpeg's -ss counts from the start of the media, which is exactly the
+    // position the playlist names, regardless of the input's first timestamp.
     const bool hasAudio = m_hasAudio || !m_audioInput.isEmpty();
 
     QStringList args;
@@ -473,17 +476,18 @@ QStringList CastMemoryHlsServer::chunkArgs(int chunk) const
     if (!m_ffmpegProxy.isEmpty())
         args << QStringLiteral("-http_proxy") << m_ffmpegProxy;
     args << QStringLiteral("-threads") << QString::number(encoderThreads)
-         << QStringLiteral("-ss") << QString::number(start, 'f', 3)
+         << QStringLiteral("-ss") << QString::number(position, 'f', 3)
          << QStringLiteral("-i") << m_inputFile;
     if (!m_audioInput.isEmpty()) {
-        // The same -ss on both inputs keeps the separately resolved audio
-        // aligned with the video when a chunk starts mid-stream.
+        // The directly resolved audio stream is normally zero-based, so it is
+        // seeked by the playlist position. Both inputs land on the same
+        // presentation time.
         if (!m_ffmpegProxy.isEmpty())
             args << QStringLiteral("-http_proxy") << m_ffmpegProxy;
-        args << QStringLiteral("-ss") << QString::number(start, 'f', 3)
+        args << QStringLiteral("-ss") << QString::number(position, 'f', 3)
              << QStringLiteral("-i") << m_audioInput;
     }
-    args << QStringLiteral("-t") << QString::number(duration, 'f', 3)
+    args << QStringLiteral("-t") << QString::number(remaining, 'f', 3)
          << QStringLiteral("-threads") << QString::number(encoderThreads);
 
     if (m_hasVideo) {
@@ -517,226 +521,265 @@ QStringList CastMemoryHlsServer::chunkArgs(int chunk) const
         if (!m_audioFilter.isEmpty())
             args << QStringLiteral("-af") << m_audioFilter;
     }
-    args << QStringLiteral("-output_ts_offset") << QString::number(start, 'f', 3)
+    // The MPEG-TS muxer otherwise adds a default 1.4 s mux delay, which makes
+    // the transport-stream timestamps disagree with the playlist positions.
+    // Every segment must start exactly where the playlist says it does.
+    args << QStringLiteral("-muxdelay") << QStringLiteral("0")
+         << QStringLiteral("-muxpreload") << QStringLiteral("0")
+         << QStringLiteral("-output_ts_offset") << QString::number(position, 'f', 3)
          << QStringLiteral("-f") << QStringLiteral("hls")
          << QStringLiteral("-hls_time") << QString::number(kSegmentSeconds)
          << QStringLiteral("-hls_list_size") << QStringLiteral("0")
          << QStringLiteral("-hls_playlist_type") << QStringLiteral("vod")
-         << QStringLiteral("-hls_segment_filename")
-         << chunkDir(chunk) + QStringLiteral("/seg%05d.ts")
-         << chunkDir(chunk) + QStringLiteral("/playlist.m3u8");
+         << QStringLiteral("-start_number") << QString::number(firstSegment)
+         << QStringLiteral("-hls_segment_filename") << segmentFilePattern()
+         << m_tempDir->path() + QStringLiteral("/ffmpeg.m3u8");
     return args;
 }
 
-void CastMemoryHlsServer::startChunk(int chunk)
+void CastMemoryHlsServer::startEncoderAt(int segment)
 {
-    if (!m_tempDir || chunk < 0 || chunk >= qCeil(m_duration / kChunkSeconds)) return;
-    if (m_chunkProcess) {
-        if (m_generatingChunk == chunk) return;
-        m_chunkProcess->disconnect(this);
-        if (m_chunkProcess->state() != QProcess::NotRunning) {
-            m_chunkProcess->kill();
-            m_chunkProcess->waitForFinished(100);
-        }
-        m_chunkProcess->deleteLater();
-        m_chunkProcess = nullptr;
-        QDir(chunkDir(m_generatingChunk)).removeRecursively();
-        m_generatingChunk = -1;
-    }
-    if (QFile::exists(chunkMarker(chunk))) return;
+    if (!m_tempDir || segment < 0 || segment >= segmentCount()) return;
+    stopEncoder();
 
-    QDir().mkpath(chunkDir(chunk));
-    qInfo() << "CastMemoryHlsServer: generating chunk" << chunk;
-    m_generatingChunk = chunk;
-    m_chunkProcess = new QProcess(this);
-    m_chunkProcess->setProcessChannelMode(QProcess::SeparateChannels);
-    setParentDeathSignal(m_chunkProcess);
-    connect(m_chunkProcess, &QProcess::readyReadStandardError, this, [this]() {
-        const QByteArray err = m_chunkProcess->readAllStandardError().trimmed();
+    // A new encoder run has its own transport-stream continuity counters, AAC
+    // encoder priming and timestamp base. Drop the segments of the previous run
+    // from here on so the receiver never mixes two runs in one playback.
+    const int lastStale = qMin(qMax(m_highestComplete, segment), segmentCount() - 1);
+    for (int i = segment; i <= lastStale; ++i) {
+        const QString path = segmentPath(i);
+        if (QFile::exists(path)) QFile::remove(path);
+    }
+
+    // Requests for the old position cannot be served from the new run; the
+    // requests at and after the new first segment stay queued and are filled as
+    // the encoder reaches them. This matters for the burst of segment requests
+    // a receiver sends around a seek.
+    for (int i = m_pending.size() - 1; i >= 0; --i) {
+        if (m_pending.at(i).segment >= segment) continue;
+        PendingRequest &request = m_pending[i];
+        if (request.socket) {
+            request.socket->write(
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            request.socket->disconnectFromHost();
+        }
+        m_pending.removeAt(i);
+    }
+
+    m_encoderFirstSegment = segment;
+    m_highestComplete = segment - 1;
+    m_lowestKeptSegment = qMin(m_lowestKeptSegment, segment);
+    m_encoderDone = false;
+    m_encoderFailed = false;
+    m_encoderPaused = false;
+
+    m_encoder = new QProcess(this);
+    m_encoder->setProcessChannelMode(QProcess::SeparateChannels);
+    setParentDeathSignal(m_encoder);
+    QProcess *process = m_encoder;
+    connect(m_encoder, &QProcess::readyReadStandardError, this, [this, process]() {
+        if (m_encoder != process) return;
+        const QByteArray err = process->readAllStandardError().trimmed();
         if (!err.isEmpty()) qWarning().noquote() << "[cast ffmpeg]" << err;
     });
-    connect(m_chunkProcess, &QProcess::errorOccurred, this,
-            [this, chunk](QProcess::ProcessError error) {
-        if (m_generatingChunk != chunk || error != QProcess::FailedToStart)
-            return;
-        if (m_chunkProcess) {
-            m_chunkProcess->disconnect(this);
-            m_chunkProcess->deleteLater();
-            m_chunkProcess = nullptr;
-        }
-        m_generatingChunk = -1;
-        finishChunk(chunk, false);
+    connect(m_encoder, &QProcess::errorOccurred, this,
+            [this, process, segment](QProcess::ProcessError error) {
+        if (m_encoder != process || error != QProcess::FailedToStart) return;
+        m_encoder = nullptr;
+        m_encoderDone = true;
+        m_encoderFailed = true;
+        m_encoderPaused = false;
+        process->disconnect(this);
+        process->deleteLater();
+        // start() may report this synchronously; never tear the server down
+        // from inside it.
+        QTimer::singleShot(0, this, [this, segment]() {
+            if (segment == 0 && !m_playlistReady) {
+                emit startFailed(QStringLiteral("FFmpeg could not start"));
+                return;
+            }
+            failPending(QStringLiteral("FFmpeg could not start"));
+        });
     });
-    connect(m_chunkProcess, &QProcess::finished, this,
-            [this, chunk](int code, QProcess::ExitStatus status) {
-        if (m_generatingChunk != chunk) return;
-        const bool ok = status == QProcess::NormalExit && code == 0
-            && QFile::exists(chunkDir(chunk) + QStringLiteral("/seg00000.ts"));
-        QProcess *process = m_chunkProcess;
-        m_chunkProcess = nullptr;
-        m_generatingChunk = -1;
-        if (process) process->deleteLater();
-        finishChunk(chunk, ok);
+    connect(m_encoder, &QProcess::finished, this,
+            [this, process](int code, QProcess::ExitStatus status) {
+        if (m_encoder != process) return;
+        onEncoderFinished(code, status);
     });
-    m_chunkProcess->start(QStringLiteral("ffmpeg"), chunkArgs(chunk));
+    qInfo() << "CastMemoryHlsServer: encoding from segment" << segment
+            << "at" << (segment * kSegmentSeconds) << "seconds";
+    m_encoder->start(QStringLiteral("ffmpeg"), encoderArgs(segment));
     if (m_segmentTimer) m_segmentTimer->start();
 }
 
-void CastMemoryHlsServer::finishChunk(int chunk, bool ok)
+void CastMemoryHlsServer::stopEncoder()
 {
-    if (m_segmentTimer) m_segmentTimer->stop();
-    if (!ok) {
-        // Without a probe in the fast path, an expired/blocked source is only
-        // discovered here. Fail the cast immediately instead of waiting for
-        // the preparation timeout.
-        if (chunk == 0 && !segmentReady(0, 0)) {
-            qWarning() << "CastMemoryHlsServer: ffmpeg could not read the cast source";
-            emit startFailed(QStringLiteral("FFmpeg could not read the cast stream"));
-            return;
-        }
-        qWarning() << "CastMemoryHlsServer: chunk generation failed" << chunk;
-        QDir(chunkDir(chunk)).removeRecursively();
-        for (int i = m_pending.size() - 1; i >= 0; --i) {
-            int c = -1, seg = -1;
-            if (parseSegmentPath(m_pending[i].fileName, &c, &seg) && c == chunk
-                    && m_pending[i].socket) {
-                m_pending[i].socket->write(
-                    "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-                m_pending[i].socket->disconnectFromHost();
-                m_pending.removeAt(i);
-            }
-        }
-        // Retry any request that was waiting for a different chunk.
-        for (const PendingRequest &request : m_pending) {
-            if (request.socket && request.fileName.startsWith(QStringLiteral("c"))) {
-                int c = -1, s = -1;
-                if (parseSegmentPath(request.fileName, &c, &s) && c != chunk) {
-                    startChunk(c);
-                    break;
-                }
-            }
-        }
-        return;
+    if (!m_encoder) return;
+    QProcess *process = m_encoder;
+    m_encoder = nullptr;
+    m_encoderPaused = false;
+    process->disconnect(this);
+    if (process->state() != QProcess::NotRunning) {
+#ifdef Q_OS_LINUX
+        // A throttled (SIGSTOPped) process needs to run again to notice the
+        // termination signal.
+        if (process->processId() > 0)
+            ::kill(pid_t(process->processId()), SIGCONT);
+#endif
+        process->kill();
+        process->waitForFinished(100);
     }
-    QFile marker(chunkMarker(chunk));
-    if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        marker.close();
-    qInfo() << "CastMemoryHlsServer: chunk ready" << chunk;
-    m_recentChunks.removeAll(chunk);
-    m_recentChunks.prepend(chunk);
-    evictChunks();
-    servePending(chunk);
-    bool startedPending = false;
-    for (const PendingRequest &request : m_pending) {
-        if (!request.socket) continue;
-        int c = -1, s = -1;
-        if (parseSegmentPath(request.fileName, &c, &s) && c != chunk) {
-            startChunk(c);
-            startedPending = true;
-            break;
-        }
-    }
-    // Warm the next chunk while the receiver plays this one. Encoding a remote
-    // source takes many seconds, so waiting for the receiver to request the
-    // next chunk would stall playback at every chunk boundary.
-    if (!startedPending)
-        maybePrefetch();
+    process->deleteLater();
 }
 
-void CastMemoryHlsServer::maybePrefetch()
+void CastMemoryHlsServer::onEncoderFinished(int exitCode, QProcess::ExitStatus status)
 {
-    if (!m_tempDir || m_chunkProcess || m_lastRequestedChunk < 0)
+    QProcess *process = m_encoder;
+    m_encoder = nullptr;
+    m_encoderPaused = false;
+    if (process) process->deleteLater();
+    m_encoderDone = true;
+    if (status != QProcess::NormalExit || exitCode != 0) {
+        m_encoderFailed = true;
+        qWarning() << "CastMemoryHlsServer: encoder stopped with" << exitCode << status;
+    } else {
+        qInfo() << "CastMemoryHlsServer: encoder finished";
+    }
+    // Everything the run wrote is final now.
+    pollSegments();
+    serveReadyPending();
+    if (m_encoderFailed && !m_playlistReady) {
+        // Nothing usable was produced (the yt-dlp path skips ffprobe).
+        emit startFailed(QStringLiteral("FFmpeg could not read the cast stream"));
         return;
-    const int target = m_lastRequestedChunk + 1;
-    if (target >= qCeil(m_duration / kChunkSeconds))
-        return;
-    if (QFile::exists(chunkMarker(target)))
-        return;
-    startChunk(target);
+    }
+    failPending(m_encoderFailed ? QStringLiteral("cast encoder failed")
+                                : QStringLiteral("cast stream ended"));
 }
 
-bool CastMemoryHlsServer::segmentReady(int chunk, int segment) const
+bool CastMemoryHlsServer::segmentComplete(int segment) const
 {
-    if (!m_tempDir || segment < 0 || segment >= kChunkSeconds / kSegmentSeconds)
-        return false;
-    const QString dir = chunkDir(chunk);
-    const QString path = dir + QStringLiteral("/seg%1.ts")
-                                  .arg(segment, 5, 10, QLatin1Char('0'));
-    const QFileInfo file(path);
-    if (!file.isFile() || file.size() <= 0)
-        return false;
-    if (QFile::exists(chunkMarker(chunk)))
-        return true;
-    // ffmpeg closes a segment before it creates the next one. The last
-    // segment of a chunk becomes ready with the chunk marker.
-    const int next = segment + 1;
-    if (next >= kChunkSeconds / kSegmentSeconds)
-        return false;
-    const QFileInfo nextFile(dir + QStringLiteral("/seg%1.ts")
-                                     .arg(next, 5, 10, QLatin1Char('0')));
-    return nextFile.isFile() && nextFile.size() > 0;
+    if (!m_tempDir || segment < 0 || segment >= segmentCount()) return false;
+    const QFileInfo file(segmentPath(segment));
+    if (!file.isFile() || file.size() <= 0) return false;
+    // A finished encoder run has closed every file it wrote.
+    if (m_encoderDone || segment < m_encoderFirstSegment) return true;
+    // ffmpeg closes a segment before it creates the next one; the last segment
+    // of the file only becomes ready when the encoder exits.
+    return QFileInfo::exists(segmentPath(segment + 1));
+}
+
+void CastMemoryHlsServer::pollSegments()
+{
+    if (!m_tempDir) return;
+    bool changed = false;
+    for (;;) {
+        const int next = m_highestComplete + 1;
+        if (next < m_encoderFirstSegment || next >= segmentCount()) break;
+        if (!segmentComplete(next)) break;
+        m_highestComplete = next;
+        changed = true;
+    }
+    if (m_encoderDone) {
+        while (m_highestComplete + 1 < segmentCount()
+               && QFileInfo::exists(segmentPath(m_highestComplete + 1))) {
+            ++m_highestComplete;
+            changed = true;
+        }
+    }
+    if (!m_playlistReady && m_highestComplete >= 0) {
+        m_playlistReady = true;
+        qInfo() << "CastMemoryHlsServer: playlist ready";
+    }
+    if (changed)
+        serveReadyPending();
+    throttleEncoder();
+    evictSegments();
+}
+
+void CastMemoryHlsServer::throttleEncoder()
+{
+    if (!m_encoder || m_encoderDone || m_encoderFailed) return;
+    const int reference = m_lastRequestedSegment < 0
+                              ? m_encoderFirstSegment : m_lastRequestedSegment;
+    const bool pause = m_highestComplete - reference > kMaxAheadSegments;
+    if (pause == m_encoderPaused) return;
+#ifdef Q_OS_LINUX
+    const qint64 pid = m_encoder->processId();
+    if (pid <= 0) return;
+    m_encoderPaused = pause;
+    ::kill(pid_t(pid), pause ? SIGSTOP : SIGCONT);
+    qInfo() << "CastMemoryHlsServer:" << (pause ? "paused" : "resumed")
+            << "encoder at segment" << m_highestComplete;
+#else
+    Q_UNUSED(pause)
+#endif
+}
+
+void CastMemoryHlsServer::evictSegments()
+{
+    if (!m_tempDir || m_lastRequestedSegment < 0) return;
+    const int cutoff = m_lastRequestedSegment - kKeepBehindSegments;
+    while (m_lowestKeptSegment < cutoff && m_lowestKeptSegment < segmentCount()) {
+        // The receiver can run ahead of the encoder after a seek. Never skip a
+        // segment that has not been written yet: the encoder would create it
+        // later and it would never be evicted, leaking the RAM window.
+        const QString path = segmentPath(m_lowestKeptSegment);
+        if (!QFileInfo::exists(path)) break;
+        if (!QFile::remove(path)) break;
+        ++m_lowestKeptSegment;
+    }
 }
 
 void CastMemoryHlsServer::serveReadyPending()
 {
-    if (!m_tempDir || m_generatingChunk < 0) return;
-    const int chunk = m_generatingChunk;
-    const int perChunk = kChunkSeconds / kSegmentSeconds;
+    if (!m_tempDir) return;
     for (int i = m_pending.size() - 1; i >= 0; --i) {
         PendingRequest &request = m_pending[i];
-        int c = -1, segment = -1;
-        if (!parseSegmentPath(request.fileName, &c, &segment) || c != chunk)
-            continue;
         if (!request.socket) {
             m_pending.removeAt(i);
             continue;
         }
-        const int local = segment % perChunk;
-        if (!segmentReady(chunk, local))
-            continue;
-        const QString path = chunkDir(chunk) + QStringLiteral("/seg%1.ts")
-                                  .arg(local, 5, 10, QLatin1Char('0'));
+        if (!segmentComplete(request.segment)) continue;
+        const QString path = segmentPath(request.segment);
         const qint64 size = QFileInfo(path).size();
+        // removeAt() shifts the list, so copy everything out of the entry
+        // before it goes away. Reading request.socket after removeAt() would
+        // send this segment on the next pending request's socket.
+        const QPointer<QTcpSocket> socketPtr = request.socket;
         const qint64 start = request.start;
         const qint64 end = request.end < 0 ? size - 1 : qMin(request.end, size - 1);
+        const bool partial = request.partial;
+        const bool head = request.head;
         m_pending.removeAt(i);
-        serveFile(request.socket, path, start, end, request.partial,
-                  request.head, request.contentType);
+        serveFile(socketPtr, path, start, end, partial, head);
     }
 }
 
-void CastMemoryHlsServer::evictChunks()
+void CastMemoryHlsServer::failPending(const QString &reason)
 {
-    while (m_recentChunks.size() > 2) {
-        const int old = m_recentChunks.takeLast();
-        if (old == m_generatingChunk) continue;
-        bool needed = false;
-        for (const PendingRequest &request : m_pending) {
-            int c = -1, s = -1;
-            if (parseSegmentPath(request.fileName, &c, &s) && c == old) {
-                needed = true;
-                break;
-            }
-        }
-        if (needed) continue;
-        QDir(chunkDir(old)).removeRecursively();
-        qInfo() << "CastMemoryHlsServer: evicted chunk" << old;
+    if (m_pending.isEmpty()) return;
+    if (!reason.isEmpty())
+        qInfo() << "CastMemoryHlsServer: dropping pending requests:" << reason;
+    for (const PendingRequest &request : m_pending) {
+        if (!request.socket) continue;
+        request.socket->write(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        request.socket->disconnectFromHost();
     }
+    m_pending.clear();
 }
 
-bool CastMemoryHlsServer::parseSegmentPath(const QString &name, int *chunk, int *segment) const
+bool CastMemoryHlsServer::parseSegmentPath(const QString &name, int *segment) const
 {
-    if (!name.startsWith(QLatin1Char('c'))) return false;
-    const int slash = name.indexOf(QLatin1Char('/'));
-    if (slash < 2) return false;
-    const int chunkValue = name.mid(1, slash - 1).toInt();
-    const QString leaf = name.mid(slash + 1);
-    if (!leaf.startsWith(QStringLiteral("seg")) || !leaf.endsWith(QStringLiteral(".ts")))
+    if (!name.startsWith(QStringLiteral("seg")) || !name.endsWith(QStringLiteral(".ts")))
         return false;
-    const int segmentValue = leaf.mid(3, leaf.size() - 6).toInt();
-    if (chunkValue < 0 || segmentValue < 0) return false;
-    *chunk = chunkValue;
-    *segment = segmentValue;
+    const QString number = name.mid(3, name.size() - 6);
+    if (number.isEmpty()) return false;
+    bool ok = false;
+    const int value = number.toInt(&ok);
+    if (!ok || value < 0) return false;
+    *segment = value;
     return true;
 }
 
@@ -746,7 +789,9 @@ void CastMemoryHlsServer::handleClient(QTcpSocket *socket)
     connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
     auto buffer = QSharedPointer<QByteArray>::create();
     auto handled = QSharedPointer<bool>::create(false);
-    connect(socket, &QTcpSocket::readyRead, this, [this, socket, buffer, handled]() {
+    auto process = QSharedPointer<std::function<void()>>::create();
+    *process = [this, socket, buffer, handled]() -> void
+    {
         if (*handled) return;
         if (!m_server) { socket->close(); return; }
         buffer->append(socket->readAll());
@@ -801,18 +846,13 @@ void CastMemoryHlsServer::handleClient(QTcpSocket *socket)
             servePlaylist(socket, method == "HEAD");
             return;
         }
-        int chunk = -1, segment = -1;
-        if (!parseSegmentPath(fileName, &chunk, &segment)
-                || chunk >= qCeil(m_duration / kChunkSeconds)
-                || segment >= segmentCount()) {
+        int segment = -1;
+        if (!parseSegmentPath(fileName, &segment) || segment >= segmentCount()) {
             socket->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             socket->disconnectFromHost();
             return;
         }
 
-        qint64 fileSize = 0;
-        const QString filePath = chunkDir(chunk) + QStringLiteral("/seg%1.ts")
-                                     .arg(segment % (kChunkSeconds / kSegmentSeconds), 5, 10, QLatin1Char('0'));
         qint64 start = 0, end = -1;
         bool partial = false;
         const int rangePos = request.toLower().indexOf("\r\nrange:");
@@ -833,41 +873,50 @@ void CastMemoryHlsServer::handleClient(QTcpSocket *socket)
             }
         }
 
-        m_lastRequestedChunk = chunk;
-        const int localSegment = segment % (kChunkSeconds / kSegmentSeconds);
-        if (segmentReady(chunk, localSegment)) {
-            // Only a finished chunk may be evicted; an incomplete one is still
-            // being written and is not in m_recentChunks yet.
-            if (QFile::exists(chunkMarker(chunk))) {
-                m_recentChunks.removeAll(chunk);
-                m_recentChunks.prepend(chunk);
-                evictChunks();
-            }
-            fileSize = QFileInfo(filePath).size();
-            if (end < 0 || end >= fileSize) end = fileSize - 1;
-            serveFile(socket, filePath, start, end, partial,
-                      method == "HEAD", QByteArray("video/mp2t"));
-            maybePrefetch();
+        const int previousRequested = m_lastRequestedSegment;
+        if (segment > m_lastRequestedSegment)
+            m_lastRequestedSegment = segment;
+        const bool fileExists = QFileInfo::exists(segmentPath(segment));
+        // The running encoder covers this segment if it starts at or before it
+        // and has not finished (a finished run never writes anything again).
+        const bool covered = m_encoder && !m_encoderFailed
+                             && segment >= m_encoderFirstSegment
+                             && segment >= m_lowestKeptSegment
+                             && (!m_encoderDone || fileExists);
+        // A request far past the last one is a seek, not receiver prefetch.
+        const bool forwardSeek = previousRequested >= 0 && !fileExists
+                                 && segment > previousRequested + kSeekJumpSegments;
+        if (!fileExists && (!covered || forwardSeek)) {
+            qInfo() << "CastMemoryHlsServer: restarting encoder at segment" << segment;
+            startEncoderAt(segment);
+        }
+        throttleEncoder();
+        if (segmentComplete(segment)) {
+            const QString path = segmentPath(segment);
+            const qint64 size = QFileInfo(path).size();
+            const qint64 serveEnd = end < 0 ? size - 1 : qMin(end, size - 1);
+            serveFile(socket, path, start, serveEnd, partial, method == "HEAD");
+            evictSegments();
             return;
         }
 
         PendingRequest pending;
         pending.socket = socket;
-        pending.fileName = fileName;
+        pending.segment = segment;
         pending.start = start;
         pending.end = end;
         pending.partial = partial;
         pending.head = method == "HEAD";
-        pending.contentType = QByteArray("video/mp2t");
         m_pending.append(pending);
-        // The receiver may prefetch the next chunk while the current one is
-        // still being encoded. Do not let that request kill the encoder: wait
-        // for it to finish. A real jump to another chunk still preempts.
-        if (!m_chunkProcess || m_generatingChunk < 0
-                || chunk != m_generatingChunk + 1)
-            startChunk(chunk);
-        maybePrefetch();
-    });
+        serveReadyPending();
+    };
+    connect(socket, &QTcpSocket::readyRead, this, [process]() { (*process)(); });
+    // The receiver sends a request immediately after connecting. That data can
+    // already be buffered here, and readyRead is only emitted for data that
+    // arrives after the connection above; handle the buffered request now
+    // instead of waiting for a signal that will never come.
+    if (socket->bytesAvailable() > 0)
+        (*process)();
 }
 
 void CastMemoryHlsServer::servePlaylist(QTcpSocket *socket, bool head)
@@ -885,8 +934,7 @@ void CastMemoryHlsServer::servePlaylist(QTcpSocket *socket, bool head)
 }
 
 void CastMemoryHlsServer::serveFile(QTcpSocket *socket, const QString &path,
-                                    qint64 start, qint64 end, bool partial,
-                                    bool head, const QByteArray &contentType)
+                                    qint64 start, qint64 end, bool partial, bool head)
 {
     QFile infoFile(path);
     const qint64 fileSize = infoFile.size();
@@ -898,7 +946,7 @@ void CastMemoryHlsServer::serveFile(QTcpSocket *socket, const QString &path,
     }
     const qint64 contentLength = end - start + 1;
     QByteArray header = "HTTP/1.1 " + QByteArray(partial ? "206 Partial Content" : "200 OK")
-        + "\r\nContent-Type: " + contentType
+        + "\r\nContent-Type: video/mp2t"
         + "\r\nContent-Length: " + QByteArray::number(contentLength)
         + "\r\nAccept-Ranges: bytes\r\n"
           "Access-Control-Allow-Origin: *\r\n"
@@ -939,32 +987,4 @@ void CastMemoryHlsServer::serveFile(QTcpSocket *socket, const QString &path,
     };
     connect(socket, &QTcpSocket::bytesWritten, socket, [pump]() { (*pump)(); });
     (*pump)();
-}
-
-void CastMemoryHlsServer::servePending(int chunk)
-{
-    for (int i = m_pending.size() - 1; i >= 0; --i) {
-        PendingRequest &request = m_pending[i];
-        int c = -1, s = -1;
-        if (!parseSegmentPath(request.fileName, &c, &s) || c != chunk)
-            continue;
-        if (!request.socket) {
-            m_pending.removeAt(i);
-            continue;
-        }
-        const QString path = chunkDir(chunk) + QStringLiteral("/seg%1.ts")
-                                 .arg(s % (kChunkSeconds / kSegmentSeconds), 5, 10, QLatin1Char('0'));
-        if (!QFileInfo(path).isFile()) {
-            m_pending.removeAt(i);
-            request.socket->write("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-            request.socket->disconnectFromHost();
-            continue;
-        }
-        m_pending.removeAt(i);
-        const qint64 size = QFileInfo(path).size();
-        qint64 start = request.start;
-        qint64 end = request.end < 0 ? size - 1 : qMin(request.end, size - 1);
-        serveFile(request.socket, path, start, end, request.partial,
-                  request.head, request.contentType);
-    }
 }

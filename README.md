@@ -41,16 +41,17 @@
   notification and playlist. SOCKS proxies are passed directly to mpv's libcurl backend, so
   seeking and Range requests work without a local bridge.
 - **Chromecast** — cast to a TV on the local network (discovery via `avahi-browse`;
-  the receiver gets a complete VOD HLS playlist, so native seeking works. HLS
-  segments are generated on demand in 20-second RAM chunks and old chunks are
-  evicted; nothing large is cached on disk. Changing files or playlist entries
-  while casting sends the new file to the same TV. YouTube and other yt-dlp
-  links are cast too: the cast takes the direct video/audio URLs the player has
-  already resolved and fetches them through the configured proxy (a SOCKS proxy
-  via a loopback bridge, because the cast encoder cannot use SOCKS itself). The
-  TV still receives plain HLS from the LAN. A network cast starts once its first
-  two-second segment is ready; the receiver buffers while the rest of the chunk
-  is encoded, and the next chunk is prepared ahead.
+  the receiver gets a complete VOD HLS playlist, so native seeking works. One
+  FFmpeg run encodes the cast into two-second RAM segments; it is throttled a
+  little ahead of the TV, old segments are evicted, and seeking restarts the
+  encoder at the requested position, so nothing large is cached on disk.
+  Changing files or playlist entries while casting sends the new file to the
+  same TV. YouTube and other yt-dlp links are cast too: the cast takes the
+  direct video/audio URLs the player has already resolved and fetches them
+  through the configured proxy (a SOCKS proxy via a loopback bridge, because the
+  cast encoder cannot use SOCKS itself). The TV still receives plain HLS from
+  the LAN. A cast starts once its first two-second segment is ready; the
+  receiver buffers while the following segments are encoded.
 - **10/20-band equalizer** — graphic EQ with a preamp, builtin curves and your own
   presets (only the custom ones can be reset). Right-click a slider to reset it to
   0 dB. It applies to everything mpv plays (files, links and radio) and is also applied

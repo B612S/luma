@@ -85,6 +85,30 @@ foreach(test_name IN LISTS LUMA_TESTS)
     )
 endforeach()
 
+# End-to-end cast HLS server test: playlist, segment timeline, MPEG-TS
+# continuity, concurrent and seek requests, A/V sync and the bounded RAM
+# segment window. It needs ffmpeg/ffprobe on PATH at runtime and skips itself
+# when they are missing.
+add_executable(tst_castserver
+    tst_castserver.cpp
+    ${CMAKE_SOURCE_DIR}/core/cast/CastMemoryHlsServer.cpp
+    ${CMAKE_SOURCE_DIR}/core/cast/CastMemoryHlsServer.hpp
+    ${CMAKE_SOURCE_DIR}/core/cast/SocksHttpProxy.cpp
+)
+target_include_directories(tst_castserver PRIVATE ${CMAKE_SOURCE_DIR}/core)
+target_link_libraries(tst_castserver PRIVATE
+    Qt6::Test
+    Qt6::Core
+    Qt6::Network
+    Qt6::Concurrent
+)
+add_test(NAME tst_castserver COMMAND tst_castserver)
+set_tests_properties(tst_castserver PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 300
+    LABELS "integration;ffmpeg"
+)
+
 # The bundled plugins' locale files must stay in sync with their manifests.
 target_compile_definitions(tst_pluginmanifest PRIVATE
     LUMA_PLUGINS_DIR="${CMAKE_SOURCE_DIR}/plugins")
