@@ -457,15 +457,6 @@ LumaMenu {
                 isEnabled: false
             }
 
-            LumaMenuSeparator { visible: CastManager.casting }
-
-            LumaMenuButton {
-                visible: CastManager.casting
-                text: qsTr("menu_casting")
-                checked: true
-                isEnabled: false
-            }
-
             LumaMenuSeparator {}
 
             LumaMenuButton { text: qsTr("menu_back"); onClicked: menu.showPage("playback") }

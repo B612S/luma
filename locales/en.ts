@@ -39,7 +39,6 @@
 <message><source>menu_refresh_devices</source><translation>Search for devices</translation></message>
 <message><source>menu_stop_cast</source><translation>Stop casting</translation></message>
 <message><source>menu_no_devices</source><translation>No devices found</translation></message>
-<message><source>menu_casting</source><translation>Casting</translation></message>
 <message><source>osd_cast_started</source><translation>Casting to %1</translation></message>
 <message><source>osd_cast_stopped</source><translation>Casting stopped</translation></message>
 <message><source>osd_cast_no_file</source><translation>Open a file first</translation></message>

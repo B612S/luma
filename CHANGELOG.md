@@ -6,6 +6,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- The Chromecast menu no longer shows a greyed-out “Casting” row while a cast is
+  running: the cast overlay already names the TV and “Stop casting” stays at the
+  top of the menu, so the disabled entry was only noise. The device list stays
+  available for switching to another TV.
+
 ### Fixed
 
 - Cast audio no longer drifts out of sync with the video during a long

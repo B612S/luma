@@ -39,7 +39,6 @@
 <message><source>menu_refresh_devices</source><translation>Найти устройства</translation></message>
 <message><source>menu_stop_cast</source><translation>Прекратить трансляцию</translation></message>
 <message><source>menu_no_devices</source><translation>Устройства не найдены</translation></message>
-<message><source>menu_casting</source><translation>Трансляция</translation></message>
 <message><source>osd_cast_started</source><translation>Трансляция на %1</translation></message>
 <message><source>osd_cast_stopped</source><translation>Трансляция остановлена</translation></message>
 <message><source>osd_cast_no_file</source><translation>Сначала откройте файл</translation></message>
