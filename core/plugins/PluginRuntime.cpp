@@ -12,6 +12,33 @@
 #include <QJSValueIterator>
 #include <QDebug>
 
+namespace {
+
+// Events carry player state, so they follow the same permission boundaries as
+// the query APIs. A plugin without the permission still receives the event as
+// a trigger, but the payload contains only pluginId.
+QString eventPermission(const QString &event)
+{
+    static const QStringList mediaEvents = {
+        QStringLiteral("fileOpened"), QStringLiteral("mediaChanged"),
+        QStringLiteral("positionChanged"), QStringLiteral("liveStreamChanged"),
+        QStringLiteral("pausedChanged"), QStringLiteral("volumeChanged"),
+        QStringLiteral("fileEnded")
+    };
+    static const QStringList playlistEvents = {
+        QStringLiteral("playModeChanged"), QStringLiteral("playlistChanged"),
+        QStringLiteral("playlistActivated"), QStringLiteral("playingChanged"),
+        QStringLiteral("playlistModeChanged")
+    };
+    if (mediaEvents.contains(event))
+        return QStringLiteral("media:read");
+    if (playlistEvents.contains(event))
+        return QStringLiteral("playlists:read");
+    return {};
+}
+
+} // namespace
+
 PluginRuntime::PluginRuntime(PluginManager *manager, const PluginManifest &manifest,
                              QObject *parent)
     : QObject(parent), m_manager(manager), m_manifest(manifest)
@@ -321,7 +348,13 @@ void PluginRuntime::dispatch(const QString &event, const QVariantMap &payload)
     auto it = m_handlers.find(event);
     if (it == m_handlers.end())
         return;
-    QVariantMap data = payload;
+    const QString permission = eventPermission(event);
+    const QByteArray required = permission.toLatin1();
+    QVariantMap data;
+    if (permission.isEmpty()
+            || (m_api && m_api->hasPermission(required.constData()))) {
+        data = payload;
+    }
     data.insert(QStringLiteral("pluginId"), m_manifest.id);
     const QJSValue argument = m_engine->toScriptValue(data);
     QVector<EventHandler> handlers = it.value();

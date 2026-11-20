@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <QDesktopServices>
 #include <QDir>
+#include <QCryptographicHash>
+#include <QDirIterator>
 #include <QFileDialog>
 #include <QFile>
 #include <QFileInfo>
@@ -127,8 +129,17 @@ bool PluginManager::isMpvApproved(const PluginManifest &manifest) const
     if (!manifest.permissions.contains(QStringLiteral("mpv:raw")))
         return true;
     QSettings settings(settingsPath(), QSettings::IniFormat);
-    return settings.value(QStringLiteral("plugins/approved/mpv/") + manifest.id)
-               .toString() == QLatin1String("1");
+    if (settings.value(QStringLiteral("plugins/approved/mpv/") + manifest.id)
+            .toString() != QLatin1String("1"))
+        return false;
+    // Bundled plugins live in the read-only system directory and are updated
+    // with the application. User plugins are mutable, so their approval is
+    // bound to the exact code that was reviewed.
+    if (manifest.system)
+        return true;
+    const QString approved = settings.value(
+        QStringLiteral("plugins/approved/hash/") + manifest.id).toString();
+    return !approved.isEmpty() && approved == approvalHash(manifest);
 }
 
 bool PluginManager::isProcessApproved(const PluginManifest &manifest) const
@@ -145,23 +156,90 @@ bool PluginManager::isProcessApproved(const PluginManifest &manifest) const
         if (!approved.contains(permission))
             return false;
     }
-    return true;
+    if (manifest.system)
+        return true;
+    const QString approvedHash = settings.value(
+        QStringLiteral("plugins/approved/hash/") + manifest.id).toString();
+    return !approvedHash.isEmpty() && approvedHash == approvalHash(manifest);
 }
 
 void PluginManager::saveMpvApproval(const PluginManifest &manifest)
 {
+    m_approvalHashes.remove(manifest.directory);
     QSettings settings(settingsPath(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("plugins/approved/mpv/") + manifest.id,
                       QStringLiteral("1"));
+    settings.setValue(QStringLiteral("plugins/approved/hash/") + manifest.id,
+                      approvalHash(manifest));
     settings.sync();
 }
 
 void PluginManager::saveProcessApproval(const PluginManifest &manifest)
 {
+    m_approvalHashes.remove(manifest.directory);
     QSettings settings(settingsPath(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("plugins/approved/process/") + manifest.id,
                       processPermissions(manifest).join(QLatin1Char(',')));
+    settings.setValue(QStringLiteral("plugins/approved/hash/") + manifest.id,
+                      approvalHash(manifest));
     settings.sync();
+}
+
+QString PluginManager::approvalHash(const PluginManifest &manifest) const
+{
+    const auto cached = m_approvalHashes.constFind(manifest.directory);
+    if (cached != m_approvalHashes.cend())
+        return cached.value();
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    QStringList files;
+    const auto addFile = [&files](const QString &path) {
+        if (!path.isEmpty())
+            files.append(path);
+    };
+    const auto addTree = [&files, &manifest](const QString &directory) {
+        const QFileInfo root(directory);
+        if (!root.isDir())
+            return;
+        const QString canonicalRoot = root.canonicalFilePath();
+        if (canonicalRoot.isEmpty()
+                || !canonicalRoot.startsWith(manifest.directory + QLatin1Char('/')))
+            return;
+        QDirIterator iterator(canonicalRoot,
+                              QDir::Files | QDir::NoSymLinks | QDir::Hidden,
+                              QDirIterator::Subdirectories);
+        while (iterator.hasNext()) {
+            const QString path = iterator.next();
+            const QString canonical = QFileInfo(path).canonicalFilePath();
+            if (canonical.startsWith(canonicalRoot + QLatin1Char('/')))
+                files.append(canonical);
+        }
+    };
+
+    // Only files the host can actually load or execute are covered: the
+    // manifest, the main entry point, assets (readAsset/loadScript/shaders)
+    // and locales. Unrelated files such as README or .git metadata must not
+    // force a re-approval or make startup hash a whole repository.
+    addFile(QFileInfo(manifest.directory + QStringLiteral("/plugin.json"))
+                .canonicalFilePath());
+    addFile(manifest.entry);
+    addTree(manifest.directory + QStringLiteral("/assets"));
+    addTree(manifest.directory + QStringLiteral("/locales"));
+    files.removeDuplicates();
+    files.sort();
+    for (const QString &path : files) {
+        hash.addData(QDir(manifest.directory).relativeFilePath(path).toUtf8());
+        hash.addData(QByteArray(1, '\0'));
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly))
+            hash.addData(file.readAll());
+        else
+            hash.addData(QByteArrayLiteral("unreadable"));
+        hash.addData(QByteArray(1, '\0'));
+    }
+    const QString result = QString::fromLatin1(hash.result().toHex());
+    m_approvalHashes.insert(manifest.directory, result);
+    return result;
 }
 
 void PluginManager::removeDangerousApproval(const QString &id)
@@ -169,6 +247,7 @@ void PluginManager::removeDangerousApproval(const QString &id)
     QSettings settings(settingsPath(), QSettings::IniFormat);
     settings.remove(QStringLiteral("plugins/approved/mpv/") + id);
     settings.remove(QStringLiteral("plugins/approved/process/") + id);
+    settings.remove(QStringLiteral("plugins/approved/hash/") + id);
     settings.remove(QStringLiteral("plugins/approved/") + id); // pre-split key
     settings.sync();
 }
@@ -653,6 +732,7 @@ void PluginManager::setPluginSetting(const QString &id, const QString &key,
 
 void PluginManager::scan()
 {
+    m_approvalHashes.clear();
     m_manifests.clear();
 
     auto scanRoot = [this](const QString &root, bool system) {

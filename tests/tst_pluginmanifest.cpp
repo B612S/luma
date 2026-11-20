@@ -21,6 +21,8 @@ private slots:
     void rejectsEntryOutsideDirectory();
     void rejectsMissingEntry();
     void rejectsReservedDataId();
+    void rejectsManifestSymlinkOutside();
+    void rejectsLocaleSymlinkOutside();
     void acceptsProcessPermission();
     void acceptsPluginSettings();
     void rejectsInvalidPluginSetting();
@@ -131,6 +133,44 @@ void TestPluginManifest::rejectsReservedDataId()
     const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
     QVERIFY(!manifest.valid);
     QVERIFY(manifest.error.contains(QStringLiteral("id")));
+}
+
+void TestPluginManifest::rejectsManifestSymlinkOutside()
+{
+    QTemporaryDir dir;
+    QTemporaryDir outside;
+    QVERIFY(dir.isValid());
+    QVERIFY(outside.isValid());
+    writeFile(outside.path() + "/plugin.json", R"({
+        "id": "com.example.leak", "apiVersion": 1, "main": "main.js"
+    })");
+    writeFile(dir.path() + "/main.js", "function activate() {}\n");
+    if (!QFile::link(outside.path() + "/plugin.json",
+                     dir.path() + "/plugin.json"))
+        QSKIP("symbolic links are not supported by this filesystem");
+    const PluginManifest manifest = PluginManifest::fromDirectory(dir.path(), false);
+    QVERIFY(!manifest.valid);
+    QVERIFY(manifest.error.contains(QStringLiteral("inside")));
+}
+
+void TestPluginManifest::rejectsLocaleSymlinkOutside()
+{
+    QTemporaryDir dir;
+    QTemporaryDir outside;
+    QVERIFY(dir.isValid());
+    QVERIFY(outside.isValid());
+    writeFile(dir.path() + "/plugin.json", R"({
+        "id": "com.example.locale-leak", "apiVersion": 1, "main": "main.js"
+    })");
+    writeFile(dir.path() + "/main.js", "function activate() {}\n");
+    QVERIFY(QDir().mkpath(dir.path() + "/locales"));
+    writeFile(outside.path() + "/en.json", R"({"name":"secret"})");
+    if (!QFile::link(outside.path() + "/en.json",
+                     dir.path() + "/locales/en.json"))
+        QSKIP("symbolic links are not supported by this filesystem");
+    const QVariantMap translations = loadPluginTranslations(dir.path(),
+                                                            QStringLiteral("en"));
+    QVERIFY(translations.isEmpty());
 }
 
 void TestPluginManifest::acceptsProcessPermission()

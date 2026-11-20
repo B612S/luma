@@ -46,7 +46,18 @@ PluginManifest PluginManifest::fromDirectory(const QString &directory, bool syst
         return manifest;
     }
 
-    QFile file(manifest.directory + QStringLiteral("/plugin.json"));
+    const QString manifestPath = QFileInfo(manifest.directory
+                                           + QStringLiteral("/plugin.json"))
+                                     .canonicalFilePath();
+    if (manifestPath.isEmpty()) {
+        manifest.error = QStringLiteral("plugin.json is missing");
+        return manifest;
+    }
+    if (!manifestPath.startsWith(manifest.directory + QLatin1Char('/'))) {
+        manifest.error = QStringLiteral("plugin.json must be inside the plugin directory");
+        return manifest;
+    }
+    QFile file(manifestPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         manifest.error = QStringLiteral("plugin.json is missing");
         return manifest;

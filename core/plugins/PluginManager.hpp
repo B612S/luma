@@ -104,6 +104,7 @@ private:
     bool hasDangerousPermissions(const PluginManifest &manifest) const;
     bool isMpvApproved(const PluginManifest &manifest) const;
     bool isProcessApproved(const PluginManifest &manifest) const;
+    QString approvalHash(const PluginManifest &manifest) const;
     void saveMpvApproval(const PluginManifest &manifest);
     void saveProcessApproval(const PluginManifest &manifest);
     void removeDangerousApproval(const QString &id);
@@ -118,5 +119,6 @@ private:
     QSet<QString> m_disabled;
     QString m_statsPage = QStringLiteral("luma");
     QHash<QString, int> m_statsPageSlots;
+    mutable QHash<QString, QString> m_approvalHashes;
     QVector<PluginWindow *> m_windows;
 };

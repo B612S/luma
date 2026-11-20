@@ -33,6 +33,19 @@ static bool isCallable(const QJSValue &value)
     return value.isCallable();
 }
 
+// QSettings must never follow a symlink planted in the plugin data directory:
+// that would let a local link redirect the plugin's config file outside it.
+static QString pluginConfigPath(const QString &dataDir)
+{
+    const QString path = dataDir + QStringLiteral("/config.ini");
+    if (!QFileInfo(path).isSymLink())
+        return path;
+    QFile::remove(path);
+    if (!QFileInfo(path).isSymLink())
+        return path;
+    return dataDir + QStringLiteral("/config.ini.safe");
+}
+
 // Raw mpv access must not become a way to execute a shell or load a script.
 // Normal playback commands (seek, loadfile, set volume, ...) remain available.
 static bool isDangerousMpvProperty(const QString &name)
@@ -194,7 +207,16 @@ void PluginMediaApi::stop()
 
 bool PluginMediaApi::open(const QString &path)
 {
-    if (!allowed("media:control") || !m_runtime->manager()->media()) return false;
+    if (!allowed("media:control") || !m_runtime->manager()->media())
+        return false;
+    // A media URL makes mpv/yt-dlp use the network, so it needs the network
+    // permission in addition to media control. Local files and file:// stay a
+    // normal player-open operation.
+    const QUrl target(path);
+    if (target.isValid() && !target.scheme().isEmpty()
+            && target.scheme() != QLatin1String("file")
+            && !allowed("network"))
+        return false;
     return m_runtime->manager()->media()->pluginOpen(path);
 }
 
@@ -289,7 +311,7 @@ bool PluginPlaylistApi::setMode(const QString &id, const QString &mode)
 PluginConfigApi::PluginConfigApi(PluginRuntime *runtime, const QString &dataDir,
                                  QObject *parent)
     : QObject(parent), m_runtime(runtime), m_dataDir(dataDir),
-      m_settings(dataDir + QStringLiteral("/config.ini"), QSettings::IniFormat)
+      m_settings(pluginConfigPath(dataDir), QSettings::IniFormat)
 {
 }
 
@@ -329,16 +351,46 @@ PluginStorageApi::PluginStorageApi(PluginRuntime *runtime, const QString &dataDi
 bool PluginStorageApi::validName(const QString &name) const
 {
     return !name.isEmpty() && !name.contains(QLatin1Char('/'))
-            && !name.contains(QLatin1Char('\\')) && !name.contains(QStringLiteral(".."));
+            && !name.contains(QLatin1Char('\\'))
+            && !name.contains(QStringLiteral(".."))
+            && !name.contains(QChar(0));
+}
+
+QString PluginStorageApi::dataPath(const QString &name) const
+{
+    if (!validName(name))
+        return {};
+    const QString root = QFileInfo(m_dataDir).canonicalFilePath();
+    if (root.isEmpty())
+        return {};
+    const QString target = m_dataDir + QLatin1Char('/') + name;
+    const QFileInfo info(target);
+    // Never follow a symlink, and never accept a file whose canonical path
+    // leaves the plugin data directory.
+    if (info.isSymLink())
+        return {};
+    if (info.exists()) {
+        const QString canonical = info.canonicalFilePath();
+        if (canonical.isEmpty()
+                || !canonical.startsWith(root + QLatin1Char('/')))
+            return {};
+        return canonical;
+    }
+    const QString parent = QFileInfo(target).absolutePath();
+    if (QFileInfo(parent).canonicalFilePath() != root)
+        return {};
+    return target;
 }
 
 QString PluginStorageApi::readText(const QString &name) const
 {
     if (!m_runtime->api()
-            || !m_runtime->api()->hasPermission("filesystem:plugin")
-            || !validName(name))
+            || !m_runtime->api()->hasPermission("filesystem:plugin"))
         return {};
-    QFile file(m_dataDir + QLatin1Char('/') + name);
+    const QString path = dataPath(name);
+    if (path.isEmpty())
+        return {};
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
         return {};
     return QString::fromUtf8(file.readAll());
@@ -347,11 +399,13 @@ QString PluginStorageApi::readText(const QString &name) const
 bool PluginStorageApi::writeText(const QString &name, const QString &text)
 {
     if (!m_runtime->api()
-            || !m_runtime->api()->hasPermission("filesystem:plugin")
-            || !validName(name))
+            || !m_runtime->api()->hasPermission("filesystem:plugin"))
         return false;
     QDir().mkpath(m_dataDir);
-    QFile file(m_dataDir + QLatin1Char('/') + name);
+    const QString path = dataPath(name);
+    if (path.isEmpty())
+        return false;
+    QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
         return false;
     return file.write(text.toUtf8()) >= 0;
@@ -360,17 +414,18 @@ bool PluginStorageApi::writeText(const QString &name, const QString &text)
 bool PluginStorageApi::exists(const QString &name) const
 {
     if (!m_runtime->api()
-            || !m_runtime->api()->hasPermission("filesystem:plugin")
-            || !validName(name))
+            || !m_runtime->api()->hasPermission("filesystem:plugin"))
         return false;
-    return QFileInfo::exists(m_dataDir + QLatin1Char('/') + name);
+    const QString path = dataPath(name);
+    return !path.isEmpty() && QFileInfo::exists(path);
 }
 
 bool PluginStorageApi::validAssetName(const QString &name) const
 {
     if (name.isEmpty() || name.startsWith(QLatin1Char('/'))
             || name.contains(QLatin1Char('\\'))
-            || name.contains(QStringLiteral("..")))
+            || name.contains(QStringLiteral(".."))
+            || name.contains(QChar(0)))
         return false;
     // Nested paths are allowed ("lib/helpers.js"), but only in canonical
     // relative form: no empty segments, no "." components, no trailing slash.

@@ -126,6 +126,10 @@ Implemented events:
 | `languageChanged` | `{ language }` — the player's language changed; rebuild labels created with `luma.i18n.t()` |
 
 Callbacks run from host signals; keep them short and use the API for work.
+`fileOpened`, `mediaChanged`, `positionChanged`, `liveStreamChanged`,
+`pausedChanged` and `volumeChanged` require `media:read`; the playlist events
+require `playlists:read`. Without the permission the callback still runs as a
+trigger, but the payload contains only `pluginId`.
 
 ### Media
 
@@ -146,6 +150,10 @@ luma.media.previous();
 luma.media.stop();
 luma.media.open(pathOrUrl); // true when opening started
 ```
+
+Opening an `http`/`https` (or any non-`file`) URL also requires the `network`
+permission, because mpv or yt-dlp would fetch it. Local files and `file://`
+URLs only need `media:control`.
 
 ### Playlists
 
@@ -592,14 +600,19 @@ The host treats plugins as untrusted input:
   then about external programs; each warning explains the requested access.
   The plugin stays disabled unless the user agrees to every requested category.
   Approvals are tied to the requested permissions and are asked again if a
-  plugin adds new ones.
+  plugin adds new ones. For user-installed plugins they are also bound to a
+  SHA-256 of the plugin files, so editing or updating the plugin requires a
+  fresh approval; bundled system plugins are read-only and trusted with the
+  application.
 - Raw mpv blocks `run`, `subprocess`, `loadfile`, `loadlist` and
   script/input command paths. `luma.media.open()` remains the way to open
   media through Luma.
 - `luma.storage` writes are confined to the plugin data directory; paths with
-  `/`, `\` or `..` are rejected. `luma.storage.readAsset()` and
+  `/`, `\`, NUL or `..` are rejected, and an existing symlink in that
+  directory is never followed. `luma.storage.readAsset()` and
   `luma.storage.loadScript()` only read files from the plugin's own
-  `assets/` directory and reject paths or symlinks outside it.
+  `assets/` directory and reject paths or symlinks outside it. Locale files
+  and `plugin.json` are likewise resolved inside the plugin directory.
 - There is no native C++ plugin loading.
 - Permissions are declared in `plugin.json` and enforced by the host. Review a
   plugin's manifest before enabling it. `mpv:raw` and `process` are deliberately
@@ -616,7 +629,7 @@ plugin.
 | Permission | Grants |
 | --- | --- |
 | `media:read` | `luma.media.state()` |
-| `media:control` | play/pause/seek/volume/next/previous/stop/open |
+| `media:control` | play/pause/seek/volume/next/previous/stop/open (network URLs also need `network`) |
 | `playlists:read` | list playlists and entries |
 | `playlists:write` | add/remove entries, create playlists, change mode |
 | `osd` | OSD messages |

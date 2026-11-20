@@ -31,6 +31,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Plugin sandbox hardening: state events now require `media:read` or
+  `playlists:read` and otherwise carry only `pluginId`; opening a network media
+  URL requires `network` in addition to `media:control`; storage and config files, plugin
+  assets, locale files and `plugin.json` reject symlinks/paths outside their
+  directory; and approvals for user-installed plugins with `mpv:raw` or
+  `process` are bound to a hash of the plugin files, so changing them requires
+  a fresh approval.
 - Temporary OSD messages now stay visible for the full 2.5 s. Reusing one hide
   timer could leave a shortened interval or a queued timeout behind, so a
   later message (for example a plugin's on/off toast) disappeared almost

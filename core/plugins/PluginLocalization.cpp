@@ -5,6 +5,7 @@
 #include "app/ConfigManager.hpp"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
@@ -42,8 +43,20 @@ QVariantMap loadPluginTranslations(const QString &pluginDirectory,
                                    const QString &language)
 {
     auto load = [&pluginDirectory](const QString &code) -> QVariantMap {
-        QFile file(pluginDirectory + QStringLiteral("/locales/") + code
-                   + QStringLiteral(".json"));
+        const QString pluginRoot = QFileInfo(pluginDirectory).canonicalFilePath();
+        const QString localesRoot = QFileInfo(pluginDirectory
+                                              + QStringLiteral("/locales"))
+                                        .canonicalFilePath();
+        if (pluginRoot.isEmpty() || localesRoot.isEmpty()
+                || !localesRoot.startsWith(pluginRoot + QLatin1Char('/')))
+            return {};
+        const QString filePath = QFileInfo(localesRoot + QLatin1Char('/') + code
+                                           + QStringLiteral(".json"))
+                                     .canonicalFilePath();
+        if (filePath.isEmpty()
+                || !filePath.startsWith(localesRoot + QLatin1Char('/')))
+            return {};
+        QFile file(filePath);
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
             return {};
         const QJsonDocument document = QJsonDocument::fromJson(file.readAll());

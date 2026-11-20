@@ -109,6 +109,7 @@ public:
 private:
     bool validName(const QString &name) const;
     bool validAssetName(const QString &name) const;
+    QString dataPath(const QString &name) const;
     QString assetPath(const QString &name) const;
     PluginRuntime *m_runtime;
     QString m_dataDir;
