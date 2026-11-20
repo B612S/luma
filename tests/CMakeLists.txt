@@ -85,6 +85,29 @@ foreach(test_name IN LISTS LUMA_TESTS)
     )
 endforeach()
 
+# Reused OSD hide-timer regression test. OsdManager only uses MpvItem's inline
+# getters here, so a null player is enough.
+add_executable(tst_osd
+    tst_osd.cpp
+    ${CMAKE_SOURCE_DIR}/core/ui/OsdManager.cpp
+)
+target_include_directories(tst_osd PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/core
+)
+target_link_libraries(tst_osd PRIVATE
+    Qt6::Test
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
+    PkgConfig::MPV
+)
+add_test(NAME tst_osd COMMAND tst_osd)
+set_tests_properties(tst_osd PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 60
+)
+
 # End-to-end cast HLS server test: playlist, segment timeline, MPEG-TS
 # continuity, concurrent and seek requests, A/V sync and the bounded RAM
 # segment window. It needs ffmpeg/ffprobe on PATH at runtime and skips itself

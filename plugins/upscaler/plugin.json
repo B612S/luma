@@ -1,0 +1,135 @@
+{
+  "id": "com.luma.upscaler",
+  "name": "Upscaler",
+  "version": "1.1.0",
+  "apiVersion": 1,
+  "main": "main.js",
+  "description": "Improves compressed and low-resolution video: removes blocking, noise and banding, then upscales with a high-quality scaler or optional CNN shaders.",
+  "permissions": [
+    "mpv:raw",
+    "media:read",
+    "stats",
+    "shortcuts",
+    "osd",
+    "filesystem:plugin"
+  ],
+  "settings": [
+    {
+      "key": "upscaler",
+      "type": "select",
+      "label": "Upscaler",
+      "options": [
+        {
+          "label": "Sharp (EWA)",
+          "value": "sharp"
+        },
+        {
+          "label": "Balanced",
+          "value": "balanced"
+        },
+        {
+          "label": "Off",
+          "value": "off"
+        }
+      ],
+      "default": "sharp",
+      "description": "Sharp uses EWA Lanczos Sharp with antiringing for clean edges. Balanced uses the cheaper spline36 scaler. Off leaves the player's scaler untouched."
+    },
+    {
+      "key": "cleanup",
+      "type": "select",
+      "label": "Artifact removal",
+      "options": [
+        {
+          "label": "Off",
+          "value": "off"
+        },
+        {
+          "label": "Light",
+          "value": "light"
+        },
+        {
+          "label": "Strong",
+          "value": "strong"
+        }
+      ],
+      "default": "light",
+      "description": "Deblocking and denoising before scaling. Fixes blocking and analogue noise in compressed video, DVDs and TV recordings. Hardware decoding switches to copy mode while this is on; live streams skip it."
+    },
+    {
+      "key": "deband",
+      "type": "select",
+      "label": "Debanding",
+      "options": [
+        {
+          "label": "Off",
+          "value": "off"
+        },
+        {
+          "label": "Light",
+          "value": "light"
+        },
+        {
+          "label": "Strong",
+          "value": "strong"
+        }
+      ],
+      "default": "light",
+      "description": "Removes banding in gradients, skies and dark scenes with the GPU debanding step."
+    },
+    {
+      "key": "sharpening",
+      "type": "select",
+      "label": "Sharpening",
+      "options": [
+        {
+          "label": "Off",
+          "value": "off"
+        },
+        {
+          "label": "Light",
+          "value": "light"
+        },
+        {
+          "label": "Medium",
+          "value": "medium"
+        },
+        {
+          "label": "Strong",
+          "value": "strong"
+        }
+      ],
+      "default": "medium",
+      "description": "Unsharp masking after scaling. Medium is a good match for cleaned-up compressed sources; Strong can add visible halos."
+    },
+    {
+      "key": "shaders",
+      "type": "select",
+      "label": "Neural upscale",
+      "options": [
+        {
+          "label": "Off",
+          "value": "off"
+        },
+        {
+          "label": "Restore (A)",
+          "value": "restore"
+        },
+        {
+          "label": "Denoise (C)",
+          "value": "denoise"
+        }
+      ],
+      "default": "off",
+      "description": "Optional real-time CNN shaders that restore edges and upscale the image. Restore (A) suits blurry or heavily compressed sources; Denoise (C) suits clean low-resolution sources. They run on the GPU, can be slow, are intended for SDR video, and can over-smooth live-action. Lower the Upscaler setting if edges become over-sharpened."
+    }
+  ],
+  "shortcuts": [
+    {
+      "id": "toggle",
+      "label": "Upscaler processing on / off",
+      "default": "F10"
+    }
+  ],
+  "info": "Upscaler combines artifact cleanup with high-quality scaling.\nDeblocking and denoising remove compression artifacts, GPU debanding removes banding, and EWA Lanczos or optional CNN shaders scale the result.\nCleanup switches hardware decoding to copy mode; live streams skip it. GPU steps and CNN shaders still run on the GPU.\nThe chain is applied when a file opens, so playback starts without a reconfiguration hitch.\nSettings: upscaler, artifact removal, debanding, sharpening and neural upscale; open Statistics (I) to inspect the active chain.\nF10 temporarily bypasses processing; the Plugins page switch disables the plugin completely."
+}

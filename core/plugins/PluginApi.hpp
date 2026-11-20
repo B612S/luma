@@ -100,9 +100,16 @@ public:
     Q_INVOKABLE QString readText(const QString &name) const;
     Q_INVOKABLE bool writeText(const QString &name, const QString &text);
     Q_INVOKABLE bool exists(const QString &name) const;
+    // Read-only files from the plugin's own assets/ directory.
+    Q_INVOKABLE QString readAsset(const QString &name) const;
+    Q_INVOKABLE bool assetExists(const QString &name) const;
+    // Evaluate a JavaScript file from assets/ and return its result.
+    Q_INVOKABLE QJSValue loadScript(const QString &name);
 
 private:
     bool validName(const QString &name) const;
+    bool validAssetName(const QString &name) const;
+    QString assetPath(const QString &name) const;
     PluginRuntime *m_runtime;
     QString m_dataDir;
 };

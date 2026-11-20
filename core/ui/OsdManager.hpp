@@ -71,7 +71,7 @@ private:
     MpvItem *m_mpv;
     QTimer *m_hideTimer;
     QTimer *m_updateTimer;
-    QElapsedTimer m_seekOsdShown;
+    QElapsedTimer m_osdShown;
 
     QString m_message;
     bool m_visible = false;

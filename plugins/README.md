@@ -11,6 +11,12 @@ root `locales/`.
 
 Current bundled plugins:
 
+- `upscaler` — deblocks and denoises compressed, low-resolution sources,
+  debands gradients on the GPU, and upscales with EWA Lanczos Sharp or optional
+  CNN shaders. Hardware decoding switches to copy mode while cleanup is on, and
+  live streams skip the CPU cleanup. Settings choose the scaler, cleanup,
+  debanding, sharpening and neural upscale; `F10` temporarily bypasses
+  processing and a stats page shows the active chain.
 - `smooth-motion` — Smooth Motion: generate frames for the display refresh rate
   or a fixed target frame rate. The host assigns the first free statistics key
   to its generated/source/display FPS page; numeric keys are reserved and only

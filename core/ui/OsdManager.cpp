@@ -15,14 +15,19 @@ OsdManager::OsdManager(MpvItem *mpv, QObject *parent) : QObject(parent), m_mpv(m
     m_hideTimer->setSingleShot(true);
     m_hideTimer->setInterval(kTemporaryOsdMs);
     connect(m_hideTimer, &QTimer::timeout, this, [this]() {
-        if (m_state == StateTimeTemporary && m_seekOsdShown.isValid()) {
-            const qint64 elapsed = m_seekOsdShown.elapsed();
-            if (elapsed < kTemporaryOsdMs) {
-                m_hideTimer->start(int(kTemporaryOsdMs - elapsed));
-                return;
+        if (m_state == StateTimeTemporary || m_state == StateOverlayVolume
+                || m_state == StateOverlayInfo) {
+            // A timeout can already be queued when another OSD restarts the
+            // timer. Never hide an overlay before it has been visible for a
+            // full interval; the guard also covers a stale timeout left over
+            // from a previous seek/volume toast.
+            if (m_osdShown.isValid()) {
+                const qint64 elapsed = m_osdShown.elapsed();
+                if (elapsed < kTemporaryOsdMs) {
+                    m_hideTimer->start(int(kTemporaryOsdMs - elapsed));
+                    return;
+                }
             }
-        }
-        if (m_state == StateTimeTemporary || m_state == StateOverlayVolume || m_state == StateOverlayInfo) {
             restoreTimeMode();
         }
     });
@@ -121,8 +126,8 @@ void OsdManager::requestTimeOsd() {
     m_visible = true;
     emit messageChanged();
     emit visibleChanged();
-    m_seekOsdShown.start();
-    m_hideTimer->start();
+    m_osdShown.start();
+    m_hideTimer->start(kTemporaryOsdMs);
     if (!m_updateTimer->isActive()) m_updateTimer->start();
 }
 
@@ -138,8 +143,8 @@ void OsdManager::requestTimeOsd(double pos, double dur) {
     m_visible = true;
     emit messageChanged();
     emit visibleChanged();
-    m_seekOsdShown.start();
-    m_hideTimer->start();
+    m_osdShown.start();
+    m_hideTimer->start(kTemporaryOsdMs);
     if (!m_updateTimer->isActive()) m_updateTimer->start();
 }
 
@@ -148,8 +153,8 @@ void OsdManager::requestSeekOsd(double pos, double dur) {
 
     // Seeking always shows the time temporarily
     m_state = StateTimeTemporary;
-    m_seekOsdShown.start();
-    m_hideTimer->start();
+    m_osdShown.start();
+    m_hideTimer->start(kTemporaryOsdMs);
 
     if (m_seekTarget < 0.0) m_seekStartPos = m_mpv->position();
     m_seekTarget = pos;
@@ -189,7 +194,7 @@ void OsdManager::endTemporaryOsd() {
     if (m_state == StateTimeTemporary) {
         // Restart the full interval from the release; the elapsed-time guard
         // above also prevents an older timer from shortening it.
-        m_seekOsdShown.start();
+        m_osdShown.start();
         m_hideTimer->start(kTemporaryOsdMs);
     }
 }
@@ -203,7 +208,7 @@ void OsdManager::hideOsd() {
     m_seekStartPos = -1.0;
     m_updateTimer->stop();
     m_hideTimer->stop();
-    m_seekOsdShown.invalidate();
+    m_osdShown.invalidate();
     hideOsdInternal();
 }
 
@@ -211,7 +216,16 @@ void OsdManager::onFileChanged() {
     m_seekTarget = -1.0;
     m_seekTargetDuration = -1.0;
     m_seekStartPos = -1.0;
-    m_seekOsdShown.invalidate();
+
+    // An info toast can be the "Opening ..." message shown just before
+    // sourceChanged. Let its normal timer finish instead of hiding it as soon
+    // as the stream URL is resolved. This comes before the pinned-time branch:
+    // a pinned counter is restored by restoreTimeMode() when the toast's
+    // timer expires.
+    if (m_state == StateOverlayInfo) {
+        m_updateTimer->stop();
+        return;
+    }
 
     // A pinned time counter must survive track changes; hideOsd() used to
     // clear it together with the seek overlay.
@@ -229,18 +243,11 @@ void OsdManager::onFileChanged() {
         return;
     }
 
-    // An info toast can be the "Opening ..." message shown just before
-    // sourceChanged. Let its normal timer finish instead of hiding it as soon
-    // as the stream URL is resolved.
-    if (m_state == StateOverlayInfo) {
-        m_updateTimer->stop();
-        return;
-    }
-
     if (m_state == StateTimeTemporary || m_state == StateOverlayVolume) {
         m_state = StateHidden;
         m_hideTimer->stop();
         m_updateTimer->stop();
+        m_osdShown.invalidate();
         hideOsdInternal();
     }
 }
@@ -260,9 +267,10 @@ void OsdManager::showVolume(double vol, bool muted) {
     m_message = (muted || volInt <= 0) ? tr("osd_muted") : QString::number(volInt) + "%";
 
     m_visible = true;
+    m_osdShown.start();
     emit messageChanged();
     emit visibleChanged();
-    m_hideTimer->start();
+    m_hideTimer->start(kTemporaryOsdMs);
 }
 
 void OsdManager::showVolume() {
@@ -277,9 +285,10 @@ void OsdManager::showInfo(const QString &text) {
     m_state = StateOverlayInfo;
     m_message = text;
     m_visible = true;
+    m_osdShown.start();
     emit messageChanged();
     emit visibleChanged();
-    m_hideTimer->start();
+    m_hideTimer->start(kTemporaryOsdMs);
 }
 
 void OsdManager::hideOsdInternal() {

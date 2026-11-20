@@ -6,6 +6,22 @@ All notable changes to Luma are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Bundled Upscaler plugin: deblocks and denoises compressed, low-resolution
+  video before scaling, debands gradients on the GPU and upscales with EWA
+  Lanczos Sharp, antiringing or optional CNN shaders. Settings choose the
+  scaler, cleanup, debanding, sharpening and neural upscale; `F10` temporarily
+  bypasses processing, hardware decoding switches to copy mode while cleanup is
+  on, live streams skip CPU cleanup, and a stats page shows the source and the
+  active chain.
+- Plugins can read read-only files bundled in their `assets/` directory through
+  `luma.storage.readAsset()` and `luma.storage.assetExists()`, and evaluate a
+  JavaScript asset explicitly with `luma.storage.loadScript()`. Nested asset
+  paths are supported, and loaded code has exactly the permissions declared in
+  the plugin manifest. The Upscaler uses this for its optional CNN shader
+  sources instead of embedding them in `main.js`.
+
 ### Changed
 
 - The Chromecast menu no longer shows a greyed-out “Casting” row while a cast is
@@ -15,6 +31,13 @@ All notable changes to Luma are documented here. The format is based on
 
 ### Fixed
 
+- Temporary OSD messages now stay visible for the full 2.5 s. Reusing one hide
+  timer could leave a shortened interval or a queued timeout behind, so a
+  later message (for example a plugin's on/off toast) disappeared almost
+  immediately. Every temporary overlay now resets the full interval, and
+  hiding waits for the actual on-screen time. The Upscaler also shows its
+  on/off toast after applying the filter/hardware-decoding change, so the
+  reconfiguration cannot eat the toast's display time.
 - Cast audio no longer drifts out of sync with the video during a long
   Chromecast session. The cast is now produced by one continuous FFmpeg run
   instead of a new encoder every 20 seconds: the MPEG-TS continuity counters

@@ -275,9 +275,10 @@ plays, then seeks to 60 s, 1 h and 5 s, and optionally switches to a second file
   Properties also contains the “append files” switch.
 - **Subtitles** — the context menu selects subtitle/audio tracks, or use the hotkeys.
 - **Casting** — *Playback → Screen output* in the context menu.
-- **Plugins** — JavaScript integrations (including a bundled resource monitor
-  that draws CPU/RAM/GPU charts in its own SVG stats page) are loaded from
-  `~/.local/share/luma/plugins/<id>/` and the bundled read-only
+- **Plugins** — JavaScript integrations (including a bundled Upscaler that
+  cleans up and upscales compressed, low-resolution video, and a resource
+  monitor that draws CPU/RAM/GPU charts in its own SVG stats page) are loaded
+  from `~/.local/share/luma/plugins/<id>/` and the bundled read-only
   `/usr/share/luma/plugins/<id>/` directory. They can add native menu actions,
   OSD messages, playlist/media controls, host-rendered windows and native
   settings. New plugins start disabled; manage them in **Settings → Plugins**:

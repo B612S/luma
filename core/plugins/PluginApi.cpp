@@ -366,6 +366,81 @@ bool PluginStorageApi::exists(const QString &name) const
     return QFileInfo::exists(m_dataDir + QLatin1Char('/') + name);
 }
 
+bool PluginStorageApi::validAssetName(const QString &name) const
+{
+    if (name.isEmpty() || name.startsWith(QLatin1Char('/'))
+            || name.contains(QLatin1Char('\\'))
+            || name.contains(QStringLiteral("..")))
+        return false;
+    // Nested paths are allowed ("lib/helpers.js"), but only in canonical
+    // relative form: no empty segments, no "." components, no trailing slash.
+    return QDir::cleanPath(name) == name && name != QLatin1String(".");
+}
+
+QString PluginStorageApi::assetPath(const QString &name) const
+{
+    if (!m_runtime->api()
+            || !m_runtime->api()->hasPermission("filesystem:plugin")
+            || !validAssetName(name))
+        return {};
+    // Only files inside <plugin>/assets are reachable, and a symlinked assets
+    // directory or asset that points outside the plugin is rejected.
+    const QString pluginRoot = QFileInfo(m_runtime->manifest().directory)
+                                   .canonicalFilePath();
+    const QString assetsRoot = QFileInfo(m_runtime->manifest().directory
+                                         + QStringLiteral("/assets"))
+                                   .canonicalFilePath();
+    if (pluginRoot.isEmpty() || assetsRoot.isEmpty()
+            || !assetsRoot.startsWith(pluginRoot + QLatin1Char('/')))
+        return {};
+    const QFileInfo asset(assetsRoot + QLatin1Char('/') + name);
+    if (!asset.isFile())
+        return {};
+    const QString canonical = asset.canonicalFilePath();
+    if (canonical.isEmpty() || !canonical.startsWith(assetsRoot + QLatin1Char('/')))
+        return {};
+    return canonical;
+}
+
+QString PluginStorageApi::readAsset(const QString &name) const
+{
+    const QString path = assetPath(name);
+    if (path.isEmpty())
+        return {};
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+    return QString::fromUtf8(file.readAll());
+}
+
+bool PluginStorageApi::assetExists(const QString &name) const
+{
+    return !assetPath(name).isEmpty();
+}
+
+QJSValue PluginStorageApi::loadScript(const QString &name)
+{
+    if (!m_runtime->api()
+            || !m_runtime->api()->hasPermission("filesystem:plugin"))
+        return {};
+    QJSEngine *engine = m_runtime->engine();
+    const QString path = assetPath(name);
+    if (!engine || path.isEmpty())
+        return {};
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+    const QString source = QString::fromUtf8(file.readAll());
+    const QJSValue result = engine->evaluate(source, path);
+    if (result.isError()) {
+        qWarning().noquote() << "[plugin:" << m_runtime->manifest().id
+                             << "] asset script" << path << ":"
+                             << result.toString();
+        return {};
+    }
+    return result;
+}
+
 // ---------------------------------------------------------------- network
 
 PluginNetApi::PluginNetApi(PluginRuntime *runtime, QObject *parent)

@@ -512,6 +512,42 @@ luma.storage.exists("notes.txt");
 Storage names are single file names inside `luma.dataDir`
 (`~/.local/share/luma/plugins/data/<id>/`); slashes and `..` are rejected.
 
+Read-only files shipped with the plugin live in its `assets/` directory and
+are read with the same permission. Nested paths such as `lib/helpers.js` are
+allowed:
+
+```js
+const text = luma.storage.readAsset("data/table.txt");
+luma.storage.assetExists("data/table.txt");
+```
+
+Asset paths are relative to `<plugin>/assets/`; absolute paths, `..`,
+backslashes and symlinks that point outside that directory are rejected.
+Assets are never written by the host; plugins can copy an asset into their own
+data directory when another tool needs a real path.
+
+A JavaScript asset can be evaluated explicitly from `main.js` (or from code
+`main.js` already loaded). The result of the file's last expression is
+returned, so a module can export an object:
+
+```js
+// assets/lib/math.js
+({
+    double: (value) => value * 2
+})
+```
+
+```js
+const math = luma.storage.loadScript("lib/math.js");
+math.double(21); // 42
+```
+
+`loadScript()` is never called automatically: a plugin runs exactly the files
+its own code asks for. The evaluated code runs in the plugin's private
+QJSEngine and has exactly the permissions declared in `plugin.json`; loading a
+script grants no additional access. Syntax/runtime errors are logged and the
+call returns `undefined`.
+
 ### Network
 
 Permission: `network`.
@@ -560,8 +596,10 @@ The host treats plugins as untrusted input:
 - Raw mpv blocks `run`, `subprocess`, `loadfile`, `loadlist` and
   script/input command paths. `luma.media.open()` remains the way to open
   media through Luma.
-- `luma.storage` is confined to the plugin data directory; paths with `/`,
-  `\` or `..` are rejected.
+- `luma.storage` writes are confined to the plugin data directory; paths with
+  `/`, `\` or `..` are rejected. `luma.storage.readAsset()` and
+  `luma.storage.loadScript()` only read files from the plugin's own
+  `assets/` directory and reject paths or symlinks outside it.
 - There is no native C++ plugin loading.
 - Permissions are declared in `plugin.json` and enforced by the host. Review a
   plugin's manifest before enabling it. `mpv:raw` and `process` are deliberately
@@ -585,7 +623,7 @@ plugin.
 | `menus` | native menu actions |
 | `windows` | host-rendered plugin windows |
 | `network` | `luma.net.fetch` |
-| `filesystem:plugin` | `luma.storage` |
+| `filesystem:plugin` | `luma.storage` (data files, read-only assets and asset script loading) |
 | `mpv:raw` | raw mpv properties and commands (requires approval warning) |
 | `stats` | publish extra rows in the Stats panel and read a stats snapshot |
 | `shortcuts` | register non-numeric shortcuts for otherwise unhandled keys |
